@@ -109,7 +109,7 @@ export default function LeadsKanbanPage() {
 
   return (
     <AppLayout>
-      <div className="mb-8">
+      <div className="mb-8 bg-white">
         {/* Nueva topbar con breadcrumbs */}
         <div className="sticky top-0 z-10 backdrop-blur bg-white/70 border-b border-slate-200 mb-6">
           {/* Breadcrumbs */}

@@ -24,7 +24,7 @@ const mapLeadRow = (row: any): Lead => {
     nombreCompleto: row.nombreCompleto ?? row.nombre_completo ?? row.nombre ?? '',
     email: row.email ?? '',
     telefono: row.telefono ?? '',
-    estado: (row.estado ?? 'nuevo') as Lead['estado'],
+    estado: 'frío' as Lead['estado'], // Forzar todos los leads a estado "frío"
     presupuesto: Number(row.presupuesto ?? 0),
     zonaInteres: row.zonaInteres ?? row.zona_interes ?? row.zona ?? '',
     tipoPropiedad: (row.tipoPropiedad ?? row.tipo_propiedad ?? 'departamento') as Lead['tipoPropiedad'],
@@ -177,4 +177,29 @@ export const updateLeadStatus = async (leadId: string, newStatus: LeadStatus): P
   // Update cache if present
   cachedLeads = cachedLeads.map(l => (l.id === leadId ? { ...l, estado: newStatus } as Lead : l));
   return true;
+};
+
+/**
+ * Actualiza masivamente todos los leads de 'caliente' a 'frío'
+ */
+export const updateAllHotLeadsToFrio = async (): Promise<boolean> => {
+  try {
+    const { error } = await (getSupabase() as any)
+      .from('leads')
+      .update({ estado: 'frío' })
+      .eq('estado', 'caliente');
+    
+    if (error) {
+      console.error('Error updating hot leads to frio in Supabase:', error.message);
+      return false;
+    }
+    
+    // Update cache if present
+    cachedLeads = cachedLeads.map(l => (l.estado === 'caliente' ? { ...l, estado: 'frío' } as Lead : l));
+    console.log('Successfully updated all hot leads to frio');
+    return true;
+  } catch (e) {
+    console.error('Error updating hot leads to frio:', e);
+    return false;
+  }
 };
