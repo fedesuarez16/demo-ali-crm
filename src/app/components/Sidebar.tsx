@@ -13,6 +13,11 @@ interface MenuItem {
   icon: React.ReactNode;
 }
 
+interface MenuCategory {
+  name: string;
+  items: MenuItem[];
+}
+
 interface SidebarProps {
   onCollapse?: (collapsed: boolean) => void;
 }
@@ -21,24 +26,103 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
 
-  const menuItems: MenuItem[] = [
+  const menuCategories: MenuCategory[] = [
     {
-         name: 'Leads pauta',
-         path: '/leads',
-         icon: (
-           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-        ),
-       },
+      name: 'Dashboard',
+      items: [
+        {
+          name: 'Dashboard',
+          path: '/dashboard',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+          ),
+        },
+      ]
+    },
     {
-      name: 'Chats',
-      path: '/chat',
-      icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-        </svg>
-      ),
+      name: 'Captaciones',
+      items: [
+        {
+          name: 'Leads',
+          path: '/leads',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          ),
+        },
+        {
+          name: 'Chats',
+          path: '/chat',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+          ),
+        },
+        {
+          name: 'Coincidencias',
+          path: '/coincidencias',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          ),
+        },
+      ]
+    },
+    {
+      name: 'Propiedades',
+      items: [
+        {
+          name: 'Propiedades',
+          path: '/propiedades',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          ),
+        },
+        {
+          name: 'Cotizaciones',
+          path: '/cotizaciones',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+          ),
+        },
+      ]
+    },
+    {
+      name: 'Comunicación',
+      items: [
+        {
+          name: 'Mensajes Programados',
+          path: '/mensajes-programados',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          ),
+        },
+      ]
+    },
+    {
+      name: 'Herramientas',
+      items: [
+        {
+          name: 'Documentación',
+          path: '/documentacion',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          ),
+        },
+      ]
     },
   ];
 
@@ -85,30 +169,46 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
 
       {/* Navigation */}
       <ScrollArea className="flex-1 px-3 py-4">
-        <nav className="space-y-1">
-          {menuItems.map((item) => {
-            const isActive = pathname === item.path;
-            return (
-              <Link
-                key={item.path}
-                href={item.path}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                  "hover:bg-accent hover:text-accent-foreground",
-                  isActive 
-                    ? "bg-accent text-accent-foreground font-medium" 
-                    : "text-muted-foreground"
-                )}
-              >
-                <div className="flex h-4 w-4 items-center justify-center">
-                  {item.icon}
+        <nav className="space-y-4">
+          {menuCategories.map((category) => (
+            <div key={category.name} className="space-y-2">
+              {/* Category Label */}
+              {!collapsed && (
+                <div className="px-3 py-1">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    {category.name}
+                  </h3>
                 </div>
-                {!collapsed && (
-                  <span className="truncate">{item.name}</span>
-                )}
-              </Link>
-            );
-          })}
+              )}
+              
+              {/* Category Items */}
+              <div className="space-y-1">
+                {category.items.map((item) => {
+                  const isActive = pathname === item.path;
+                  return (
+                    <Link
+                      key={item.path}
+                      href={item.path}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                        "hover:bg-accent hover:text-accent-foreground",
+                        isActive 
+                          ? "bg-accent text-accent-foreground font-medium" 
+                          : "text-muted-foreground"
+                      )}
+                    >
+                      <div className="flex h-4 w-4 items-center justify-center">
+                        {item.icon}
+                      </div>
+                      {!collapsed && (
+                        <span className="truncate">{item.name}</span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
       </ScrollArea>
 
@@ -122,7 +222,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
               </svg>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">Usuario Demo</p>
+              <p className="text-sm font-medium text-foreground truncate">Usuario admin</p>
               <p className="text-xs text-muted-foreground">Admin</p>
             </div>
             <Button variant="ghost" size="icon" className="h-8 w-8">

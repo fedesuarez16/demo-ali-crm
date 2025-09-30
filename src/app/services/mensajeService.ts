@@ -30,7 +30,7 @@ export const programarMensaje = async (mensajeData: Omit<MensajeProgramado, 'id'
   try {
     console.log('Programando mensaje:', mensajeData);
     
-    const { data, error } = await getSupabase()
+    const { data, error } = await (getSupabase() as any)
       .from('mensajes_programados')
       .insert({
         remote_jid: mensajeData.remote_jid,
@@ -58,7 +58,7 @@ export const programarMensaje = async (mensajeData: Omit<MensajeProgramado, 'id'
  */
 export const getMensajesProgramados = async (): Promise<MensajeProgramado[]> => {
   try {
-    const { data, error } = await getSupabase()
+    const { data, error } = await (getSupabase() as any)
       .from('mensajes_programados')
       .select('*')
       .order('scheduled_at', { ascending: true });
@@ -80,7 +80,7 @@ export const getMensajesProgramados = async (): Promise<MensajeProgramado[]> => 
  */
 export const marcarMensajeEnviado = async (mensajeId: number): Promise<boolean> => {
   try {
-    const { error } = await getSupabase()
+    const { error } = await (getSupabase() as any)
       .from('mensajes_programados')
       .update({ 
         enviado: true, 
