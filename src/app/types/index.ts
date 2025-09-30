@@ -1,4 +1,4 @@
-export type LeadStatus = 'frío' | 'tibio' | 'caliente' | 'nuevo' | 'contactado' | 'cerrado' | 'descartado';
+export type LeadStatus = 'frío' | 'tibio' | 'caliente' | 'llamada' | 'visita';
 
 export type PropertyType = 'departamento' | 'casa' | 'PH' | 'terreno' | 'local';
 
@@ -28,6 +28,7 @@ export interface Lead {
   caracteristicas_buscadas?: string;
   caracteristicas_venta?: string;
   propiedades_mostradas?: string;
+  propiedad_interes?: string;
   ultima_interaccion?: string;
   created_at?: string;
   updated_at?: string;

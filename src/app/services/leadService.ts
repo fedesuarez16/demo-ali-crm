@@ -24,7 +24,7 @@ const mapLeadRow = (row: any): Lead => {
     nombreCompleto: row.nombreCompleto ?? row.nombre_completo ?? row.nombre ?? '',
     email: row.email ?? '',
     telefono: row.telefono ?? '',
-    estado: 'frío' as Lead['estado'], // Forzar todos los leads a estado "frío"
+    estado: (['frío', 'tibio', 'caliente', 'llamada', 'visita'].includes(row.estado) ? row.estado : 'frío') as Lead['estado'], // Solo estados válidos, nuevos van a frío
     presupuesto: Number(row.presupuesto ?? 0),
     zonaInteres: row.zonaInteres ?? row.zona_interes ?? row.zona ?? '',
     tipoPropiedad: (row.tipoPropiedad ?? row.tipo_propiedad ?? 'departamento') as Lead['tipoPropiedad'],
@@ -43,6 +43,7 @@ const mapLeadRow = (row: any): Lead => {
     caracteristicas_buscadas: row.caracteristicas_buscadas ?? undefined,
     caracteristicas_venta: row.caracteristicas_venta ?? undefined,
     propiedades_mostradas: row.propiedades_mostradas ?? undefined,
+    propiedad_interes: row.propiedad_interes ?? undefined,
     ultima_interaccion: row.ultima_interaccion ?? undefined,
     created_at: row.created_at ?? undefined,
     updated_at: row.updated_at ?? undefined,
@@ -126,8 +127,8 @@ export const getUniqueZones = (): string[] => {
  * Obtiene estados únicos para los filtros
  */
 export const getUniqueStatuses = (): string[] => {
-  // Definir todos los estados posibles
-  const allStatuses: LeadStatus[] = ['nuevo', 'contactado', 'caliente', 'tibio', 'frío', 'cerrado', 'descartado'];
+  // Definir todos los estados válidos del sistema
+  const allStatuses: LeadStatus[] = ['frío', 'tibio', 'caliente', 'llamada', 'visita'];
   
   // Añadir cualquier estado adicional que pueda existir en los datos
   const dataStatuses = new Set<string>();
@@ -137,7 +138,7 @@ export const getUniqueStatuses = (): string[] => {
   const combinedStatuses = new Set<string>([...allStatuses, ...dataStatuses]);
   
   // Ordenar los estados en un orden lógico de flujo de trabajo
-  const orderedStatuses: LeadStatus[] = ['nuevo', 'contactado', 'caliente', 'tibio', 'frío', 'cerrado', 'descartado'];
+  const orderedStatuses: LeadStatus[] = ['frío', 'tibio', 'caliente', 'llamada', 'visita'];
   
   // Devolver los estados en el orden definido
   return orderedStatuses.filter(status => combinedStatuses.has(status));
@@ -165,18 +166,32 @@ export const getUniqueInterestReasons = (): string[] => {
  * Actualiza el estado de un lead
  */
 export const updateLeadStatus = async (leadId: string, newStatus: LeadStatus): Promise<boolean> => {
-  // Cast table typing loosely to avoid TS inference issues without generated types
-  const { error } = await (getSupabase() as any)
-    .from('leads')
-    .update({ estado: newStatus })
-    .eq('id', leadId);
-  if (error) {
-    console.error('Error updating lead status in Supabase:', error.message);
+  try {
+    console.log(`Updating lead ${leadId} to status ${newStatus} in Supabase`);
+    
+    // Cast table typing loosely to avoid TS inference issues without generated types
+    const { data, error } = await (getSupabase() as any)
+      .from('leads')
+      .update({ estado: newStatus })
+      .eq('id', leadId)
+      .select();
+    
+    if (error) {
+      console.error('Error updating lead status in Supabase:', error.message, error);
+      return false;
+    }
+    
+    console.log('Supabase update result:', data);
+    
+    // Update cache if present
+    cachedLeads = cachedLeads.map(l => (l.id === leadId ? { ...l, estado: newStatus } as Lead : l));
+    
+    console.log(`Successfully updated lead ${leadId} to ${newStatus}`);
+    return true;
+  } catch (e) {
+    console.error('Exception updating lead status:', e);
     return false;
   }
-  // Update cache if present
-  cachedLeads = cachedLeads.map(l => (l.id === leadId ? { ...l, estado: newStatus } as Lead : l));
-  return true;
 };
 
 /**

@@ -75,22 +75,36 @@ export default function LeadsKanbanPage() {
   };
 
   const handleLeadStatusChange = async (leadId: string, newStatus: LeadStatus) => {
-    // Actualizar el estado del lead en el servicio
-    await updateLeadStatus(leadId, newStatus);
-    
-    // Actualizar el estado local
-    setLeads(prevLeads => 
-      prevLeads.map(lead => 
-        lead.id === leadId ? { ...lead, estado: newStatus } : lead
-      )
-    );
-    
-    // Actualizar los leads filtrados
-    setFilteredLeads(prevLeads => 
-      prevLeads.map(lead => 
-        lead.id === leadId ? { ...lead, estado: newStatus } : lead
-      )
-    );
+    try {
+      console.log(`Updating lead ${leadId} from status to ${newStatus}`);
+      
+      // Actualizar el estado del lead en el servicio
+      const success = await updateLeadStatus(leadId, newStatus);
+      
+      if (success) {
+        console.log(`Successfully updated lead ${leadId} to ${newStatus}`);
+        
+        // Actualizar el estado local
+        setLeads(prevLeads => 
+          prevLeads.map(lead => 
+            lead.id === leadId ? { ...lead, estado: newStatus } : lead
+          )
+        );
+        
+        // Actualizar los leads filtrados
+        setFilteredLeads(prevLeads => 
+          prevLeads.map(lead => 
+            lead.id === leadId ? { ...lead, estado: newStatus } : lead
+          )
+        );
+      } else {
+        console.error(`Failed to update lead ${leadId} status in database`);
+        // Aquí podrías mostrar una notificación de error al usuario
+      }
+    } catch (error) {
+      console.error('Error updating lead status:', error);
+      // Aquí podrías mostrar una notificación de error al usuario
+    }
   };
 
   if (isLoading) {
@@ -109,7 +123,7 @@ export default function LeadsKanbanPage() {
 
   return (
     <AppLayout>
-      <div className="mb-8 bg-white">
+      <div className="mb-8 ">
         {/* Nueva topbar con breadcrumbs */}
         <div className="sticky top-0 z-10 backdrop-blur bg-white/70 border-b border-slate-200 mb-6">
           {/* Breadcrumbs */}
@@ -134,7 +148,7 @@ export default function LeadsKanbanPage() {
                 </li>
                 <li aria-current="page">
                   <div className="flex items-center">
-                    <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <svg className="w-6 h-2 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                       <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"></path>
                     </svg>
                     <span className="ml-1 text-sm font-regular text-gray-600 md:ml-2">Tablero Kanban</span>
@@ -145,28 +159,19 @@ export default function LeadsKanbanPage() {
           </div>
 
           {/* Título y acciones */}
-          <div className="px-6 py-4 flex justify-between items-center border-t border-slate-100">
-            <h1 className="text-lg font-semibold text-slate-800 tracking-tight">Tablero Kanban de Leads</h1>
+          <div className="px-6 py-2  flex justify-between items-center border-t border-slate-100">
+            <h1 className="text-md font-semibold text-slate-800 tracking-tight">Tablero de Leads</h1>
             <div className="flex space-x-3">
               <button
                 onClick={toggleFilterVisibility}
-                className="bg-white/60 hover:bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center shadow-sm"
+                className="bg-white/60 hover:bg-white border border-slate-200 text-slate-700 py-1 px-2 rounded-lg text-sm font-medium flex items-center justify-center shadow-sm"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                 </svg>
                 {isFilterVisible ? 'Ocultar filtros' : 'Mostrar filtros'}
               </button>
-              <button
-                onClick={handleExportCSV}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center justify-center"
-                disabled={filteredLeads.length === 0}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                Exportar a CSV
-              </button>
+              
             </div>
           </div>
 
@@ -185,7 +190,7 @@ export default function LeadsKanbanPage() {
         </div>
         
         {/* Panel principal */}
-        <div className="bg-transparent mb-8 overflow-hidden ">
+        <div className="bg-white mb-8 overflow-hidden ">
           <div className="">
             <LeadCards 
               leads={filteredLeads} 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Lead, Property, LeadStatus } from '../types';
 import { findMatchingPropertiesForLead } from '../services/matchingService';
-import LeadDetailModal from './LeadDetailModal';
+import LeadDetailSidebar from './LeadDetailSidebar';
 
 interface LeadCardsProps {
   leads: Lead[];
@@ -10,20 +10,20 @@ interface LeadCardsProps {
 
 const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange }) => {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [showModal, setShowModal] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
   const [matchingProperties, setMatchingProperties] = useState<Map<string, Property[]>>(new Map());
   const [isDraggingOver, setIsDraggingOver] = useState<Record<string, boolean>>({
     caliente: false,
     tibio: false,
     frío: false,
-    cerrado: false,
-    descartado: false
+    llamada: false,
+    visita: false
   });
   
   const statusOrder = ['frío', 'tibio', 'caliente', 'llamada', 'visita'] as const;
   type FiveColumnStatus = typeof statusOrder[number];
   
-  // Memo para agrupar los leads por estado
+  // Memo para agrupar los leads por estado y ordenarlos por fecha
   const groupedLeads = useMemo(() => {
     const result: Record<FiveColumnStatus, Lead[]> = {
       'frío': [] as Lead[],
@@ -42,6 +42,15 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange }) => {
         // lo añadimos a "caliente" por defecto
         result['caliente'].push(lead);
       }
+    });
+    
+    // Ordenar cada columna por fechaContacto (más reciente primero)
+    Object.keys(result).forEach(status => {
+      result[status as FiveColumnStatus].sort((a, b) => {
+        const dateA = new Date(a.ultima_interaccion || a.fechaContacto).getTime();
+        const dateB = new Date(b.ultima_interaccion || b.fechaContacto).getTime();
+        return dateB - dateA; // Orden descendente (más reciente primero)
+      });
     });
     
     return result;
@@ -101,10 +110,6 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange }) => {
         return 'bg-indigo-100 text-indigo-800';
       case 'visita':
         return 'bg-emerald-100 text-emerald-800';
-      case 'cerrado':
-        return 'bg-green-100 text-green-800';
-      case 'descartado':
-        return 'bg-gray-100 text-gray-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -134,11 +139,11 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange }) => {
     }
     
     setSelectedLead(lead);
-    setShowModal(true);
+    setShowSidebar(true);
   };
 
-  const closeModal = () => {
-    setShowModal(false);
+  const closeSidebar = () => {
+    setShowSidebar(false);
     setSelectedLead(null);
   };
   
@@ -174,8 +179,8 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange }) => {
       caliente: false,
       tibio: false,
       frío: false,
-      cerrado: false,
-      descartado: false
+      llamada: false,
+      visita: false
     });
   };
   
@@ -356,14 +361,13 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange }) => {
         </div>
       </div>
 
-      {/* Modal de detalles usando el componente LeadDetailModal */}
-      {showModal && selectedLead && (
-        <LeadDetailModal
-          lead={selectedLead}
-          onClose={closeModal}
-          matchingProperties={matchingProperties.get(selectedLead.id) || []}
-        />
-      )}
+      {/* Sidebar de detalles usando el componente LeadDetailSidebar */}
+      <LeadDetailSidebar
+        lead={selectedLead}
+        onClose={closeSidebar}
+        matchingProperties={selectedLead ? matchingProperties.get(selectedLead.id) || [] : []}
+        isOpen={showSidebar}
+      />
     </>
   );
 };
