@@ -140,10 +140,10 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
       collapsed ? "w-16" : "w-64"
     )}>
       {/* Header */}
-      <div className="flex h-16 items-center justify-between px-4 border-b border-border">
+      <div className="flex h-12 items-center justify-between px-4 border-b border-border">
         {!collapsed && (
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
+            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
               T
             </div>
             <div className="font-semibold text-foreground">Team Ali</div>
