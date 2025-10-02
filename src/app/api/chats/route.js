@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 
-export async function GET() {
+export async function GET(request) {
   try {
+    // Obtener parámetros de búsqueda de la URL
+    const { searchParams } = new URL(request.url);
+    const labelFilter = searchParams.get('label');
+    const assigneeId = searchParams.get('assignee_id');
+    const status = searchParams.get('status');
+    
     // Validar variables de entorno
     const chatwootUrl = process.env.CHATWOOT_URL;
     const accountId = process.env.CHATWOOT_ACCOUNT_ID;
@@ -24,9 +30,27 @@ export async function GET() {
     // Construir URL de la API de Chatwoot (asegurar que no haya doble barra)
     const baseUrl = chatwootUrl.endsWith('/') ? chatwootUrl.slice(0, -1) : chatwootUrl;
     // Agregar el parámetro para incluir información de contacto
-    const apiUrl = `${baseUrl}/api/v1/accounts/${accountId}/conversations?include_contact=true`;
+    let apiUrl = `${baseUrl}/api/v1/accounts/${accountId}/conversations?include_contact=true`;
+    
+    // Agregar filtros opcionales
+    if (labelFilter && labelFilter !== 'all') {
+      apiUrl += `&labels[]=${encodeURIComponent(labelFilter)}`;
+    }
+    
+    if (assigneeId) {
+      if (assigneeId === 'unassigned') {
+        apiUrl += `&assignee_type=unassigned`;
+      } else if (assigneeId !== 'all') {
+        apiUrl += `&assignee_type=assigned&assignee_id=${assigneeId}`;
+      }
+    }
+    
+    if (status && status !== 'all') {
+      apiUrl += `&status=${status}`;
+    }
     
     console.log('Fetching conversations from:', apiUrl);
+    console.log('Filters applied:', { labelFilter, assigneeId, status });
 
     // Hacer petición a Chatwoot
     const response = await fetch(apiUrl, {
@@ -100,6 +124,11 @@ export async function GET() {
       data: whatsappChats,
       total: whatsappChats.length,
       totalConversations: conversations.length,
+      filters: {
+        label: labelFilter,
+        assignee_id: assigneeId,
+        status: status
+      },
       debug: {
         responseStructure: Object.keys(data),
         hasData: !!data.data,

@@ -2,27 +2,28 @@
 
 import React from 'react';
 import { useChats } from '../../hooks/useChats';
+import { useAgents } from '../../hooks/useAgents';
 
 const ChatList = ({ onSelectChat, selectedChat }) => {
-  const { chats, loading, error, refreshChats } = useChats();
+  // Obtener lista de agentes primero
+  const { agents, loading: loadingAgents } = useAgents();
+  
+  // Buscar el ID de Federico Suarez
+  const federicoAgent = agents.find(agent => 
+    agent.name?.toLowerCase().includes('federico') && 
+    agent.name?.toLowerCase().includes('suarez')
+  );
+  
+  // Obtener chats con filtro por defecto para Federico Suarez
+  const { chats, loading, error, refreshChats } = useChats(federicoAgent?.id);
 
   // Función para obtener el nombre o número del contacto
   const getContactInfo = (chat) => {
-    // Debug completo - imprimir todo el objeto chat
-    console.log('DEBUG CHAT COMPLETO:', chat.id, JSON.stringify(chat, null, 2));
-    
     // Intentar obtener el número de teléfono directamente
     const sender = chat.last_non_activity_message?.sender;
     
-    console.log('SENDER INFO:', {
-      name: sender?.name,
-      phone: sender?.phone_number,
-      identifier: sender?.identifier
-    });
-    
     // Priorizar el número de teléfono sobre el nombre para evitar nombres incorrectos
     if (sender?.phone_number) {
-      console.log('Usando phone_number:', sender.phone_number);
       return sender.phone_number;
     }
     
@@ -31,13 +32,11 @@ const ChatList = ({ onSelectChat, selectedChat }) => {
         sender.name.trim() !== '' && 
         !sender.name.toLowerCase().includes('federico') &&
         !sender.name.toLowerCase().includes('suarez')) {
-      console.log('Usando name:', sender.name);
       return sender.name;
     }
     
     // Buscar en contact
     if (chat.contact?.phone_number) {
-      console.log('Usando contact phone:', chat.contact.phone_number);
       return chat.contact.phone_number;
     }
     
@@ -45,12 +44,10 @@ const ChatList = ({ onSelectChat, selectedChat }) => {
         chat.contact.name.trim() !== '' && 
         !chat.contact.name.toLowerCase().includes('federico') &&
         !chat.contact.name.toLowerCase().includes('suarez')) {
-      console.log('Usando contact name:', chat.contact.name);
       return chat.contact.name;
     }
     
     // Último recurso
-    console.log('Usando fallback para chat:', chat.id);
     return `+${chat.id}`;
   };
 
@@ -83,6 +80,33 @@ const ChatList = ({ onSelectChat, selectedChat }) => {
       minute: '2-digit'
     }).format(date);
   };
+
+  if (loadingAgents) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-gray-500">Cargando agentes...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!federicoAgent) {
+    return (
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 m-4">
+        <div className="flex items-start">
+          <svg className="h-5 w-5 text-yellow-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div className="ml-3">
+            <h3 className="text-sm font-medium text-yellow-800">Agente no encontrado</h3>
+            <p className="text-sm text-yellow-700 mt-1">No se encontró el agente "Federico Suarez" en Chatwoot.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -117,17 +141,17 @@ const ChatList = ({ onSelectChat, selectedChat }) => {
     );
   }
 
-  if (chats.length === 0) {
+  if (chats.length === 0 && !loading) {
     return (
       <div className="text-center py-12">
         <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
-        <p className="text-gray-500 text-lg font-medium">No hay chats disponibles</p>
-        <p className="text-gray-400 text-sm mt-1">Los chats de WhatsApp aparecerán aquí</p>
+        <p className="text-gray-500 text-lg font-medium">No hay chats asignados</p>
+        <p className="text-gray-400 text-sm mt-1">No hay chats de WhatsApp asignados a {federicoAgent.name}</p>
         <button 
           onClick={refreshChats}
-          className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+          className="mt-4 px-2 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
         >
           Actualizar
         </button>
@@ -140,9 +164,12 @@ const ChatList = ({ onSelectChat, selectedChat }) => {
       {/* Header con botón de refresh - fijo */}
       <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-white">
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-gray-800">
-            Chats de WhatsApp ({chats.length})
-          </h2>
+          <div>
+            <h2 className="text-sm font-semibold text-gray-800">
+              Chats de WhatsApp ({chats.length})
+            </h2>
+            
+          </div>
           <button 
             onClick={refreshChats}
             disabled={loading}
@@ -196,7 +223,7 @@ const ChatList = ({ onSelectChat, selectedChat }) => {
               
               {chat.created_at && (
                 <div className="text-xs text-gray-400">
-                  {formatDate(chat.created_at)}
+                  {formatDate(chat.created_at.Date)}
                 </div>
               )}
             </div>
