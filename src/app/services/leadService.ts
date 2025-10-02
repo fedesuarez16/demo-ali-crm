@@ -21,18 +21,18 @@ let cachedLeads: Lead[] = [];
 const mapLeadRow = (row: any): Lead => {
   return {
     id: String(row.id),
-    nombreCompleto: row.nombreCompleto ?? row.nombre_completo ?? row.nombre ?? '',
-    email: row.email ?? '',
-    telefono: row.telefono ?? '',
-    estado: (['frío', 'tibio', 'caliente', 'llamada', 'visita'].includes(row.estado) ? row.estado : 'frío') as Lead['estado'], // Solo estados válidos, nuevos van a frío
+    nombreCompleto: row.nombre ?? '',
+    email: '', // No existe en la tabla
+    telefono: row.whatsapp_id ?? '',
+    estado: (['frío', 'tibio', 'caliente', 'llamada', 'visita', 'inicial'].includes(row.estado) ? row.estado : 'frío') as Lead['estado'],
     presupuesto: Number(row.presupuesto ?? 0),
-    zonaInteres: row.zonaInteres ?? row.zona_interes ?? row.zona ?? '',
-    tipoPropiedad: (row.tipoPropiedad ?? row.tipo_propiedad ?? 'departamento') as Lead['tipoPropiedad'],
-    superficieMinima: Number(row.superficieMinima ?? row.superficie_minima ?? 0),
-    cantidadAmbientes: Number(row.cantidadAmbientes ?? row.cantidad_ambientes ?? 0),
-    motivoInteres: (row.motivoInteres ?? row.motivo_interes ?? 'otro') as Lead['motivoInteres'],
-    fechaContacto: row.fechaContacto ?? row.fecha_contacto ?? new Date().toISOString(),
-    observaciones: row.observaciones ?? undefined,
+    zonaInteres: row.zona ?? '',
+    tipoPropiedad: (row.tipo_propiedad ?? 'departamento') as Lead['tipoPropiedad'],
+    superficieMinima: 0, // No existe en la tabla
+    cantidadAmbientes: 0, // No existe en la tabla
+    motivoInteres: (row.intencion ?? 'otro') as Lead['motivoInteres'],
+    fechaContacto: row.created_at ?? new Date().toISOString(),
+    observaciones: row.caracteristicas_buscadas ?? undefined,
     // Campos extras del esquema de Supabase (passthrough)
     whatsapp_id: row.whatsapp_id ?? undefined,
     nombre: row.nombre ?? undefined,
@@ -216,5 +216,135 @@ export const updateAllHotLeadsToFrio = async (): Promise<boolean> => {
   } catch (e) {
     console.error('Error updating hot leads to frio:', e);
     return false;
+  }
+};
+
+/**
+ * Crea un nuevo lead
+ */
+export const createLead = async (leadData: Partial<Lead>): Promise<Lead | null> => {
+  try {
+    console.log('Creating new lead in Supabase:', leadData);
+    
+    // Preparar datos para insertar según la estructura real de la tabla
+    const dataToInsert: any = {
+      whatsapp_id: leadData.telefono || leadData.whatsapp_id || `temp_${Date.now()}`, // Campo requerido
+      nombre: leadData.nombreCompleto || leadData.nombre || null,
+      presupuesto: leadData.presupuesto || null,
+      zona: leadData.zonaInteres || leadData.zona || null,
+      tipo_propiedad: leadData.tipoPropiedad || null,
+      forma_pago: leadData.forma_pago || null,
+      intencion: leadData.motivoInteres || leadData.intencion || null,
+      caracteristicas_buscadas: leadData.observaciones || leadData.caracteristicas_buscadas || null,
+      caracteristicas_venta: leadData.caracteristicas_venta || null,
+      estado: leadData.estado || 'inicial',
+      propiedades_mostradas: leadData.propiedades_mostradas || null,
+      propiedad_interes: leadData.propiedad_interes || null,
+      ultima_interaccion: new Date().toISOString(),
+    };
+    
+    const { data, error } = await (getSupabase() as any)
+      .from('leads')
+      .insert([dataToInsert])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error creating lead in Supabase:', error.message, error);
+      return null;
+    }
+    
+    console.log('Successfully created lead:', data);
+    
+    // Mapear y agregar al cache
+    const newLead = mapLeadRow(data);
+    cachedLeads.unshift(newLead); // Agregar al inicio
+    
+    return newLead;
+  } catch (e) {
+    console.error('Exception creating lead:', e);
+    return null;
+  }
+};
+
+/**
+ * Actualiza un lead existente
+ */
+export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promise<Lead | null> => {
+  try {
+    console.log(`Updating lead ${leadId} in Supabase:`, leadData);
+    
+    // Preparar datos para actualizar según la estructura real de la tabla
+    const dataToUpdate: any = {};
+    
+    // Solo incluir campos que existen en la tabla y se proporcionaron
+    if (leadData.nombreCompleto !== undefined) {
+      dataToUpdate.nombre = leadData.nombreCompleto;
+    }
+    if (leadData.telefono !== undefined) {
+      dataToUpdate.whatsapp_id = leadData.telefono;
+    }
+    if (leadData.estado !== undefined) {
+      dataToUpdate.estado = leadData.estado;
+    }
+    if (leadData.presupuesto !== undefined) {
+      dataToUpdate.presupuesto = leadData.presupuesto;
+    }
+    if (leadData.zonaInteres !== undefined) {
+      dataToUpdate.zona = leadData.zonaInteres;
+    }
+    if (leadData.tipoPropiedad !== undefined) {
+      dataToUpdate.tipo_propiedad = leadData.tipoPropiedad;
+    }
+    if (leadData.motivoInteres !== undefined) {
+      dataToUpdate.intencion = leadData.motivoInteres;
+    }
+    if (leadData.observaciones !== undefined) {
+      dataToUpdate.caracteristicas_buscadas = leadData.observaciones;
+    }
+    if (leadData.forma_pago !== undefined) {
+      dataToUpdate.forma_pago = leadData.forma_pago;
+    }
+    if (leadData.intencion !== undefined) {
+      dataToUpdate.intencion = leadData.intencion;
+    }
+    if (leadData.caracteristicas_buscadas !== undefined) {
+      dataToUpdate.caracteristicas_buscadas = leadData.caracteristicas_buscadas;
+    }
+    if (leadData.caracteristicas_venta !== undefined) {
+      dataToUpdate.caracteristicas_venta = leadData.caracteristicas_venta;
+    }
+    if (leadData.propiedades_mostradas !== undefined) {
+      dataToUpdate.propiedades_mostradas = leadData.propiedades_mostradas;
+    }
+    if (leadData.propiedad_interes !== undefined) {
+      dataToUpdate.propiedad_interes = leadData.propiedad_interes;
+    }
+    
+    // Actualizar ultima_interaccion
+    dataToUpdate.ultima_interaccion = new Date().toISOString();
+    
+    const { data, error } = await (getSupabase() as any)
+      .from('leads')
+      .update(dataToUpdate)
+      .eq('id', leadId)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error updating lead in Supabase:', error.message, error);
+      return null;
+    }
+    
+    console.log('Successfully updated lead:', data);
+    
+    // Mapear y actualizar en el cache
+    const updatedLead = mapLeadRow(data);
+    cachedLeads = cachedLeads.map(l => l.id === leadId ? updatedLead : l);
+    
+    return updatedLead;
+  } catch (e) {
+    console.error('Exception updating lead:', e);
+    return null;
   }
 };

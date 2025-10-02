@@ -1,4 +1,4 @@
-export type LeadStatus = 'frío' | 'tibio' | 'caliente' | 'llamada' | 'visita';
+export type LeadStatus = 'frío' | 'tibio' | 'caliente' | 'llamada' | 'visita' | 'inicial';
 
 export type PropertyType = 'departamento' | 'casa' | 'PH' | 'terreno' | 'local';
 

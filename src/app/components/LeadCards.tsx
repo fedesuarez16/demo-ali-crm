@@ -6,9 +6,10 @@ import LeadDetailSidebar from './LeadDetailSidebar';
 interface LeadCardsProps {
   leads: Lead[];
   onLeadStatusChange?: (leadId: string, newStatus: LeadStatus) => void;
+  onEditLead?: (lead: Lead) => void;
 }
 
-const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange }) => {
+const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEditLead }) => {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [matchingProperties, setMatchingProperties] = useState<Map<string, Property[]>>(new Map());
@@ -23,7 +24,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange }) => {
   const statusOrder = ['frío', 'tibio', 'caliente', 'llamada', 'visita'] as const;
   type FiveColumnStatus = typeof statusOrder[number];
   
-  // Memo para agrupar los leads por estado y ordenarlos por fecha
+  // Memo para agrupar los leads por estado y ordenarlos por ultima_interaccion
   const groupedLeads = useMemo(() => {
     const result: Record<FiveColumnStatus, Lead[]> = {
       'frío': [] as Lead[],
@@ -38,17 +39,18 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange }) => {
       if (statusOrder.includes(lead.estado as any)) {
         result[lead.estado as FiveColumnStatus].push(lead);
       } else {
-        // Si el estado no existe en nuestras 5 columnas (por ej. nuevo o contactado)
-        // lo añadimos a "caliente" por defecto
-        result['caliente'].push(lead);
+        // Si el estado no existe en nuestras 5 columnas (por ej. inicial)
+        // lo añadimos a "frío" por defecto
+        result['frío'].push(lead);
       }
     });
     
-    // Ordenar cada columna por fechaContacto (más reciente primero)
+    // Ordenar cada columna por ultima_interaccion (más reciente primero)
     Object.keys(result).forEach(status => {
       result[status as FiveColumnStatus].sort((a, b) => {
-        const dateA = new Date(a.ultima_interaccion || a.fechaContacto).getTime();
-        const dateB = new Date(b.ultima_interaccion || b.fechaContacto).getTime();
+        // Priorizar ultima_interaccion sobre fechaContacto
+        const dateA = new Date(a.ultima_interaccion || a.created_at || a.fechaContacto).getTime();
+        const dateB = new Date(b.ultima_interaccion || b.created_at || b.fechaContacto).getTime();
         return dateB - dateA; // Orden descendente (más reciente primero)
       });
     });
@@ -367,6 +369,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange }) => {
         onClose={closeSidebar}
         matchingProperties={selectedLead ? matchingProperties.get(selectedLead.id) || [] : []}
         isOpen={showSidebar}
+        onEditLead={onEditLead}
       />
     </>
   );

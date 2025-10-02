@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import AppLayout from '../components/AppLayout';
 import LeadCards from '../components/LeadCards';
 import LeadFilter from '../components/LeadFilter';
+import LeadEditSidebar from '../components/LeadEditSidebar';
 import { Lead, FilterOptions, LeadStatus } from '../types';
 import { 
   getAllLeads, 
@@ -12,7 +13,9 @@ import {
   getUniqueStatuses,
   getUniquePropertyTypes,
   getUniqueInterestReasons,
-  updateLeadStatus
+  updateLeadStatus,
+  createLead,
+  updateLead
 } from '../services/leadService';
 import { exportLeadsToCSV } from '../utils/exportUtils';
 import Link from 'next/link';
@@ -28,6 +31,10 @@ export default function LeadsKanbanPage() {
   const [estados, setEstados] = useState<string[]>([]);
   const [tiposPropiedad, setTiposPropiedad] = useState<string[]>([]);
   const [motivosInteres, setMotivosInteres] = useState<string[]>([]);
+  
+  // Estados para el sidebar de edición
+  const [isEditSidebarOpen, setIsEditSidebarOpen] = useState(false);
+  const [leadToEdit, setLeadToEdit] = useState<Lead | null>(null);
   
   useEffect(() => {
     const loadData = async () => {
@@ -107,6 +114,63 @@ export default function LeadsKanbanPage() {
     }
   };
 
+  const handleOpenNewLead = () => {
+    setLeadToEdit(null);
+    setIsEditSidebarOpen(true);
+  };
+
+  const handleOpenEditLead = (lead: Lead) => {
+    setLeadToEdit(lead);
+    setIsEditSidebarOpen(true);
+  };
+
+  const handleCloseEditSidebar = () => {
+    setIsEditSidebarOpen(false);
+    setLeadToEdit(null);
+  };
+
+  const handleSaveLead = async (leadData: Partial<Lead>) => {
+    try {
+      if (leadToEdit) {
+        // Actualizar lead existente
+        const updatedLead = await updateLead(leadToEdit.id, leadData);
+        if (updatedLead) {
+          // Actualizar en el estado local
+          setLeads(prevLeads => 
+            prevLeads.map(lead => lead.id === updatedLead.id ? updatedLead : lead)
+          );
+          setFilteredLeads(prevLeads => 
+            prevLeads.map(lead => lead.id === updatedLead.id ? updatedLead : lead)
+          );
+          alert('Lead actualizado exitosamente');
+        } else {
+          alert('Error al actualizar el lead');
+        }
+      } else {
+        // Crear nuevo lead
+        const newLead = await createLead(leadData);
+        if (newLead) {
+          // Agregar al estado local
+          setLeads(prevLeads => [newLead, ...prevLeads]);
+          setFilteredLeads(prevLeads => [newLead, ...prevLeads]);
+          
+          // Actualizar opciones de filtros
+          setZonas(getUniqueZones());
+          setEstados(getUniqueStatuses());
+          setTiposPropiedad(getUniquePropertyTypes());
+          setMotivosInteres(getUniqueInterestReasons());
+          
+          alert('Lead creado exitosamente');
+        } else {
+          alert('Error al crear el lead');
+        }
+      }
+    } catch (error) {
+      console.error('Error saving lead:', error);
+      alert('Error al guardar el lead');
+    }
+  };
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -163,6 +227,16 @@ export default function LeadsKanbanPage() {
             <h1 className="text-md font-semibold text-slate-800 tracking-tight">Tablero de Leads</h1>
             <div className="flex space-x-3">
               <button
+                onClick={handleOpenNewLead}
+                className="bg-black hover:bg-black text-white py-1 px-3 rounded-lg text-sm font-medium flex items-center justify-center shadow-sm"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Nuevo Lead
+              </button>
+              
+              <button
                 onClick={toggleFilterVisibility}
                 className="bg-white/60 hover:bg-white border border-gray-200 text-slate-700 py-1 px-2 rounded-lg text-sm font-medium flex items-center justify-center shadow-sm"
               >
@@ -195,10 +269,19 @@ export default function LeadsKanbanPage() {
             <LeadCards 
               leads={filteredLeads} 
               onLeadStatusChange={handleLeadStatusChange}
+              onEditLead={handleOpenEditLead}
             />
           </div>
         </div>
       </div>
+
+      {/* Sidebar de edición/creación */}
+      <LeadEditSidebar
+        lead={leadToEdit}
+        isOpen={isEditSidebarOpen}
+        onClose={handleCloseEditSidebar}
+        onSave={handleSaveLead}
+      />
     </AppLayout>
   );
 } 
