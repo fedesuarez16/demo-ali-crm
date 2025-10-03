@@ -5,6 +5,7 @@ import AppLayout from '../components/AppLayout';
 import LeadCards from '../components/LeadCards';
 import LeadFilter from '../components/LeadFilter';
 import LeadEditSidebar from '../components/LeadEditSidebar';
+import AgentStatusToggle from '../components/AgentStatusToggle';
 import { Lead, FilterOptions, LeadStatus } from '../types';
 import { 
   getAllLeads, 
@@ -226,6 +227,8 @@ export default function LeadsKanbanPage() {
           <div className="px-6 py-2  flex justify-between items-center border-t border-gray-200">
             <h1 className="text-md font-semibold text-slate-800 tracking-tight">Tablero de Leads</h1>
             <div className="flex space-x-3">
+              <AgentStatusToggle className="py-1 px-3 text-sm" />
+              
               <button
                 onClick={handleOpenNewLead}
                 className="bg-black hover:bg-black text-white py-1 px-3 rounded-lg text-sm font-medium flex items-center justify-center shadow-sm"
