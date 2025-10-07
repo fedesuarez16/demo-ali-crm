@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import AppLayout from '../components/AppLayout';
 import WhatsAppView from '../components/WhatsAppView';
+import AgentStatusToggle from '../components/AgentStatusToggle';
 
 interface Message {
   id: string;
@@ -84,6 +85,7 @@ export default function ChatPage() {
         <div className="border-b border-gray-200 py-2 px-6">
           <div className="flex items-center justify-between mb-">
             <h1 className="text-lg font-medium text-gray-800">Centro de Comunicación</h1>
+            <AgentStatusToggle variant="dark" className="py-1 px-3 text-sm" />
           </div>
                   
         </div>

@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 
 interface AgentStatusToggleProps {
   className?: string;
+  variant?: 'default' | 'dark';
 }
 
-const AgentStatusToggle: React.FC<AgentStatusToggleProps> = ({ className = '' }) => {
+const AgentStatusToggle: React.FC<AgentStatusToggleProps> = ({ className = '', variant = 'default' }) => {
   const [isActive, setIsActive] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isFetching, setIsFetching] = useState<boolean>(true);
@@ -65,6 +66,19 @@ const AgentStatusToggle: React.FC<AgentStatusToggleProps> = ({ className = '' })
     }
   };
 
+  // Estilos según la variante
+  const getButtonStyles = () => {
+    if (variant === 'dark') {
+      return isActive 
+        ? 'bg-black hover:bg-gray-900 text-white' 
+        : 'bg-gray-600 hover:bg-gray-700 text-white';
+    }
+    // Variante default (colorida)
+    return isActive 
+      ? 'bg-black hover:bg-black text-white' 
+      : 'bg-gray-500 hover:bg-gray-600 text-white';
+  };
+
   if (isFetching) {
     return (
       <button
@@ -85,10 +99,7 @@ const AgentStatusToggle: React.FC<AgentStatusToggleProps> = ({ className = '' })
       onClick={toggleAgentStatus}
       disabled={isLoading}
       className={`
-        ${isActive 
-          ? 'bg-gray-900 hover:bg-gray-800 text-white' 
-          : 'bg-gray-500 hover:bg-grays-600 text-white'
-        }
+        ${getButtonStyles()}
         ${isLoading ? 'opacity-60 cursor-not-allowed' : ''}
         py-2 px-4 rounded-lg text-sm font-medium flex items-center justify-center shadow-sm transition-all duration-200
         ${className}
