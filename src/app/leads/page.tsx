@@ -37,6 +37,37 @@ export default function LeadsKanbanPage() {
   const [isEditSidebarOpen, setIsEditSidebarOpen] = useState(false);
   const [leadToEdit, setLeadToEdit] = useState<Lead | null>(null);
   
+  // Estados para columnas personalizadas
+  const [customColumns, setCustomColumns] = useState<string[]>([]);
+  const [isAddColumnModalVisible, setIsAddColumnModalVisible] = useState(false);
+  const [newColumnName, setNewColumnName] = useState('');
+  const [isColumnSelectorVisible, setIsColumnSelectorVisible] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(['frío', 'tibio', 'caliente', 'llamada', 'visita']);
+
+  // Cargar columnas personalizadas desde localStorage al inicializar
+  useEffect(() => {
+    const savedCustomColumns = localStorage.getItem('customColumns');
+    const savedVisibleColumns = localStorage.getItem('visibleColumns');
+    
+    if (savedCustomColumns) {
+      try {
+        const parsed = JSON.parse(savedCustomColumns);
+        setCustomColumns(parsed);
+      } catch (error) {
+        console.error('Error parsing saved custom columns:', error);
+      }
+    }
+    
+    if (savedVisibleColumns) {
+      try {
+        const parsed = JSON.parse(savedVisibleColumns);
+        setVisibleColumns(parsed);
+      } catch (error) {
+        console.error('Error parsing saved visible columns:', error);
+      }
+    }
+  }, []);
+  
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
@@ -129,6 +160,54 @@ export default function LeadsKanbanPage() {
     setIsEditSidebarOpen(false);
     setLeadToEdit(null);
   };
+
+  // Funciones para manejar columnas personalizadas
+  const handleAddColumn = () => {
+    if (newColumnName.trim() && !visibleColumns.includes(newColumnName.trim().toLowerCase())) {
+      const newColumn = newColumnName.trim().toLowerCase();
+      const updatedCustomColumns = [...customColumns, newColumn];
+      const updatedVisibleColumns = [...visibleColumns, newColumn];
+      
+      setCustomColumns(updatedCustomColumns);
+      setVisibleColumns(updatedVisibleColumns);
+      
+      // Guardar en localStorage
+      localStorage.setItem('customColumns', JSON.stringify(updatedCustomColumns));
+      localStorage.setItem('visibleColumns', JSON.stringify(updatedVisibleColumns));
+      
+      setNewColumnName('');
+      setIsAddColumnModalVisible(false);
+    }
+  };
+
+  const handleDeleteCustomColumn = (columnName: string) => {
+    const updatedCustomColumns = customColumns.filter(col => col !== columnName);
+    const updatedVisibleColumns = visibleColumns.filter(col => col !== columnName);
+    
+    setCustomColumns(updatedCustomColumns);
+    setVisibleColumns(updatedVisibleColumns);
+    
+    // Guardar en localStorage
+    localStorage.setItem('customColumns', JSON.stringify(updatedCustomColumns));
+    localStorage.setItem('visibleColumns', JSON.stringify(updatedVisibleColumns));
+  };
+
+  const handleColumnToggle = (column: string) => {
+    const updatedVisibleColumns = visibleColumns.includes(column) 
+      ? visibleColumns.filter(col => col !== column)
+      : [...visibleColumns, column];
+    
+    setVisibleColumns(updatedVisibleColumns);
+    
+    // Guardar en localStorage
+    localStorage.setItem('visibleColumns', JSON.stringify(updatedVisibleColumns));
+  };
+
+  const toggleColumnSelector = () => {
+    setIsColumnSelectorVisible(!isColumnSelectorVisible);
+  };
+
+  const allColumns = ['frío', 'tibio', 'caliente', 'llamada', 'visita', ...customColumns];
 
   const handleSaveLead = async (leadData: Partial<Lead>) => {
     try {
@@ -226,27 +305,55 @@ export default function LeadsKanbanPage() {
           {/* Título y acciones */}
           <div className="px-6 py-2  flex justify-between items-center border-t border-gray-200">
             <h1 className="text-md font-semibold text-slate-800 tracking-tight">Tablero de Leads</h1>
-            <div className="flex space-x-3">
-              <AgentStatusToggle className="py-1 px-3 text-sm" />
+            <div className="flex space-x-2">
+              <AgentStatusToggle className="py-1 px-2 text-sm" />
+              
+              <button
+                onClick={() => setIsAddColumnModalVisible(true)}
+                className="bg-indigo-600 hover:bg-indigo-700 px-3 py-0.5 text-white p-2 rounded-xl flex items-center justify-center"
+                title="Agregar Columna"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
               
               <button
                 onClick={handleOpenNewLead}
-                className="bg-black hover:bg-black text-white py-1 px-3 rounded-lg text-sm font-medium flex items-center justify-center shadow-sm"
+                className=" hover:bg-gray-800 text-white p-2 rounded-xl text-black border border-gray-200 flex items-center justify-center"
+                title="Nuevo Lead"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                Nuevo Lead
+              </button>
+              
+              <button
+                onClick={toggleColumnSelector}
+                className={`p-2 rounded-xl flex items-center justify-center border ${
+                  isColumnSelectorVisible 
+                    ? ' border-indigo-300 text-indigo-700' 
+                    : 'bg-white/60 hover:bg-white border-gray-200 text-slate-700'
+                }`}
+                title={isColumnSelectorVisible ? 'Ocultar columnas' : 'Mostrar columnas'}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
               </button>
               
               <button
                 onClick={toggleFilterVisibility}
-                className="bg-white/60 hover:bg-white border border-gray-200 text-slate-700 py-1 px-2 rounded-lg text-sm font-medium flex items-center justify-center shadow-sm"
+                className={`p-2 rounded-lg flex items-center justify-center border ${
+                  isFilterVisible 
+                    ? 'bg-indigo-100 border-indigo-300 text-indigo-700' 
+                    : 'bg-white/60 hover:bg-white border-gray-200 text-slate-700'
+                }`}
+                title={isFilterVisible ? 'Ocultar filtros' : 'Mostrar filtros'}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                 </svg>
-                {isFilterVisible ? 'Ocultar filtros' : 'Mostrar filtros'}
               </button>
               
             </div>
@@ -264,6 +371,59 @@ export default function LeadsKanbanPage() {
               onResetFilters={handleResetFilters}
             />
           </div>
+
+          {/* Selector de columnas plegable */}
+          <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isColumnSelectorVisible ? 'max-h-96' : 'max-h-0'}`}>
+            <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-gray-700">Seleccionar columnas visibles</h3>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => {
+                      setVisibleColumns(allColumns);
+                      localStorage.setItem('visibleColumns', JSON.stringify(allColumns));
+                    }}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                  >
+                    Seleccionar todas
+                  </button>
+                  <span className="text-gray-300">|</span>
+                  <button
+                    onClick={() => {
+                      setVisibleColumns([]);
+                      localStorage.setItem('visibleColumns', JSON.stringify([]));
+                    }}
+                    className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+                  >
+                    Deseleccionar todas
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                {allColumns.map((column) => (
+                  <div key={column} className="flex items-center justify-between">
+                    <label className="flex items-center space-x-2 cursor-pointer flex-1">
+                      <input
+                        type="checkbox"
+                        checked={visibleColumns.includes(column)}
+                        onChange={() => handleColumnToggle(column)}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm text-gray-700 capitalize">{column}</span>
+                    </label>
+                    {customColumns.includes(column) && (
+                      <button
+                        onClick={() => handleDeleteCustomColumn(column)}
+                        className="text-xs text-red-600 hover:text-red-800"
+                      >
+                        🗑️
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
         
         {/* Panel principal */}
@@ -273,9 +433,50 @@ export default function LeadsKanbanPage() {
               leads={filteredLeads} 
               onLeadStatusChange={handleLeadStatusChange}
               onEditLead={handleOpenEditLead}
+              visibleColumns={visibleColumns}
             />
           </div>
         </div>
+
+        {/* Modal para agregar columnas */}
+        {isAddColumnModalVisible && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-96 max-w-md mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Agregar Nueva Columna</h3>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nombre de la columna
+                </label>
+                <input
+                  type="text"
+                  value={newColumnName}
+                  onChange={(e) => setNewColumnName(e.target.value)}
+                  placeholder="Ej: seguimiento, negociación, etc."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onKeyPress={(e) => e.key === 'Enter' && handleAddColumn()}
+                />
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setIsAddColumnModalVisible(false);
+                    setNewColumnName('');
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleAddColumn}
+                  disabled={!newColumnName.trim()}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Agregar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sidebar de edición/creación */}

@@ -28,6 +28,15 @@ export default function LeadsTablePage() {
   const [tiposPropiedad, setTiposPropiedad] = useState<string[]>([]);
   const [motivosInteres, setMotivosInteres] = useState<string[]>([]);
   
+  // Estado para columnas visibles
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(['frío', 'tibio', 'caliente', 'llamada', 'visita']);
+  const [isColumnSelectorVisible, setIsColumnSelectorVisible] = useState(false);
+  const [customColumns, setCustomColumns] = useState<string[]>([]);
+  const [isAddColumnModalVisible, setIsAddColumnModalVisible] = useState(false);
+  const [newColumnName, setNewColumnName] = useState('');
+  
+  const allColumns = ['frío', 'tibio', 'caliente', 'llamada', 'visita', ...customColumns];
+  
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
@@ -73,6 +82,48 @@ export default function LeadsTablePage() {
     setIsFilterVisible(!isFilterVisible);
   };
 
+  const toggleColumnSelector = () => {
+    setIsColumnSelectorVisible(!isColumnSelectorVisible);
+  };
+
+  const handleColumnToggle = (column: string) => {
+    setVisibleColumns(prev => 
+      prev.includes(column) 
+        ? prev.filter(col => col !== column)
+        : [...prev, column]
+    );
+  };
+
+  const handleSelectAllColumns = () => {
+    setVisibleColumns(allColumns);
+  };
+
+  const handleDeselectAllColumns = () => {
+    setVisibleColumns([]);
+  };
+
+  const handleAddColumn = () => {
+    if (newColumnName.trim() && !allColumns.includes(newColumnName.trim().toLowerCase())) {
+      const newColumn = newColumnName.trim().toLowerCase();
+      setCustomColumns(prev => [...prev, newColumn]);
+      setVisibleColumns(prev => [...prev, newColumn]);
+      setNewColumnName('');
+      setIsAddColumnModalVisible(false);
+    }
+  };
+
+  const handleDeleteCustomColumn = (columnName: string) => {
+    setCustomColumns(prev => prev.filter(col => col !== columnName));
+    setVisibleColumns(prev => prev.filter(col => col !== columnName));
+  };
+
+  const handleRenameCustomColumn = (oldName: string, newName: string) => {
+    if (newName.trim() && !allColumns.includes(newName.trim().toLowerCase())) {
+      setCustomColumns(prev => prev.map(col => col === oldName ? newName.trim().toLowerCase() : col));
+      setVisibleColumns(prev => prev.map(col => col === oldName ? newName.trim().toLowerCase() : col));
+    }
+  };
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -91,9 +142,9 @@ export default function LeadsTablePage() {
     <AppLayout>
       <div className="mb-8">
         {/* Nueva topbar con breadcrumbs */}
-        <div className="bg-white shadow-sm border-b border-gray-200 mb-6">
+        <div className="bg-white shadow-sm border-b border-gray-200 mb-4">
           {/* Breadcrumbs */}
-          <div className="px-6 py-3">
+          <div className="px-4 py-2">
             <nav className="flex" aria-label="Breadcrumb">
               <ol className="inline-flex items-center space-x-1 md:space-x-3">
                 <li className="inline-flex items-center">
@@ -125,12 +176,30 @@ export default function LeadsTablePage() {
           </div>
 
           {/* Título y acciones */}
-          <div className="px-6 py-4 flex justify-between items-center border-t border-gray-100">
-            <h1 className="text-2xl font-bold text-slate-800">Tabla de Leads</h1>
+          <div className="px-4 py-3 flex justify-between items-center border-t border-gray-100">
+            <h1 className="text-xl font-bold text-slate-800">Tabla de Leads</h1>
             <div className="flex space-x-3">
               <button
+                onClick={() => setIsAddColumnModalVisible(true)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-sm font-medium flex items-center justify-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Agregar Columna
+              </button>
+              <button
+                onClick={toggleColumnSelector}
+                className="bg-white hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-md text-sm font-medium flex items-center justify-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+                {isColumnSelectorVisible ? 'Ocultar columnas' : 'Mostrar columnas'}
+              </button>
+              <button
                 onClick={toggleFilterVisibility}
-                className="bg-white hover:bg-indigo-100 text-indigo-700 px-4 py-2 rounded-md text-sm font-medium flex items-center justify-center"
+                className="bg-white hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-md text-sm font-medium flex items-center justify-center"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
@@ -139,7 +208,7 @@ export default function LeadsTablePage() {
               </button>
               <button
                 onClick={handleExportCSV}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center"
+                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center justify-center"
                 disabled={filteredLeads.length === 0}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -162,12 +231,110 @@ export default function LeadsTablePage() {
               onResetFilters={handleResetFilters}
             />
           </div>
+
+          {/* Selector de columnas plegable */}
+          <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isColumnSelectorVisible ? 'max-h-96' : 'max-h-0'}`}>
+            <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-gray-700">Seleccionar columnas visibles</h3>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={handleSelectAllColumns}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                  >
+                    Seleccionar todas
+                  </button>
+                  <span className="text-gray-300">|</span>
+                  <button
+                    onClick={handleDeselectAllColumns}
+                    className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+                  >
+                    Deseleccionar todas
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                {allColumns.map((column) => (
+                  <div key={column} className="flex items-center justify-between">
+                    <label className="flex items-center space-x-2 cursor-pointer flex-1">
+                      <input
+                        type="checkbox"
+                        checked={visibleColumns.includes(column)}
+                        onChange={() => handleColumnToggle(column)}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className="text-sm text-gray-700 capitalize">{column}</span>
+                    </label>
+                    {customColumns.includes(column) && (
+                      <div className="flex space-x-1">
+                        <button
+                          onClick={() => {
+                            const newName = prompt('Nuevo nombre:', column);
+                            if (newName) handleRenameCustomColumn(column, newName);
+                          }}
+                          className="text-xs text-indigo-600 hover:text-indigo-800"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCustomColumn(column)}
+                          className="text-xs text-red-600 hover:text-red-800"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
         
         {/* Panel principal */}
-        <div className="bg-white rounded-lg shadow-md mb-8 overflow-hidden border border-gray-100">
-          <LeadTable leads={filteredLeads} />
+        <div className="bg-white rounded-lg shadow-md mb-6 overflow-hidden border border-gray-100">
+          <LeadTable leads={filteredLeads} visibleColumns={visibleColumns} />
         </div>
+
+        {/* Modal para agregar columnas */}
+        {isAddColumnModalVisible && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-96 max-w-md mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Agregar Nueva Columna</h3>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nombre de la columna
+                </label>
+                <input
+                  type="text"
+                  value={newColumnName}
+                  onChange={(e) => setNewColumnName(e.target.value)}
+                  placeholder="Ej: seguimiento, negociación, etc."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onKeyPress={(e) => e.key === 'Enter' && handleAddColumn()}
+                />
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setIsAddColumnModalVisible(false);
+                    setNewColumnName('');
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleAddColumn}
+                  disabled={!newColumnName.trim()}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Agregar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AppLayout>
   );

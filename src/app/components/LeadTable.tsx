@@ -3,9 +3,10 @@ import { Lead } from '../types';
 
 interface LeadTableProps {
   leads: Lead[];
+  visibleColumns?: string[];
 }
 
-const LeadTable: React.FC<LeadTableProps> = ({ leads }) => {
+const LeadTable: React.FC<LeadTableProps> = ({ leads, visibleColumns }) => {
   if (leads.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 px-44 bg-white">
@@ -18,28 +19,31 @@ const LeadTable: React.FC<LeadTableProps> = ({ leads }) => {
     );
   }
 
-  const statusOrder = ['frío', 'tibio', 'caliente', 'llamada', 'visita'] as const;
+  const defaultStatuses = ['frío', 'tibio', 'caliente', 'llamada', 'visita'] as const;
+  const statusOrder = visibleColumns && visibleColumns.length > 0 
+    ? visibleColumns
+    : defaultStatuses;
 
   // Agrupar por estado según el orden solicitado
   const grouped = statusOrder.map(status => leads.filter(l => (l.estado as unknown as string) === status));
 
   const renderLead = (lead: Lead) => (
-    <div className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="text-sm font-medium text-gray-900">{lead.nombreCompleto || (lead as any).nombre || lead.email}</div>
-      <div className="text-gray-600 text-sm">{lead.telefono}</div>
-      <div className="text-gray-500 text-xs">{(lead as any).zona || lead.zonaInteres}</div>
+    <div className="rounded border border-slate-200 bg-white p-1 shadow-sm">
+      <div className="text-xs font-medium text-gray-900 truncate leading-tight">{lead.nombreCompleto || (lead as any).nombre || lead.email}</div>
+      <div className="text-gray-600 text-xs truncate leading-tight">{lead.telefono}</div>
+      <div className="text-gray-500 text-xs truncate leading-tight">{(lead as any).zona || lead.zonaInteres}</div>
     </div>
   );
 
   return (
-    <div className="overflow-x-auto ">
-      <div className="min-w-max grid grid-cols-5 gap-4">
+    <div className="overflow-x-auto">
+      <div className={`min-w-max grid gap-1 ${statusOrder.length <= 3 ? 'grid-cols-3' : statusOrder.length === 4 ? 'grid-cols-4' : statusOrder.length === 5 ? 'grid-cols-5' : 'grid-cols-1'}`}>
         {statusOrder.map((col, idx) => (
-          <div key={col} className="min-w-[260px] bg-white">
-            <div className="mb-2 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">{col}</div>
-            <div className="space-y-2">
+          <div key={col} className="min-w-[160px] bg-white">
+            <div className="mb-1 px-1 py-0.5 text-xs font-semibold uppercase tracking-wide text-slate-600">{col}</div>
+            <div className="space-y-0.5">
               {grouped[idx].length === 0 ? (
-                <div className="text-xs  text-slate-400  rounded-md py-6 text-center">Vacío</div>
+                <div className="text-xs text-slate-400 rounded py-2 text-center">Vacío</div>
               ) : (
                 grouped[idx].map(lead => (
                   <div key={lead.id}>{renderLead(lead)}</div>

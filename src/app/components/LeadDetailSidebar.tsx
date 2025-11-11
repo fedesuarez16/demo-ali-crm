@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { Lead, Property } from '../types';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -98,6 +99,13 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
       personalizado: ''
     };
     return templates[plantilla] || '';
+  };
+
+  // Función helper para normalizar números de teléfono
+  const normalizePhoneNumber = (phone: string) => {
+    if (!phone) return '';
+    // Remover todo lo que no sean números y el símbolo +
+    return phone.replace(/[^\d+]/g, '');
   };
 
   const handleProgramarMensaje = async () => {
@@ -335,10 +343,18 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
               Llamar
             </Button>
             
-            <Button variant="outline" size="sm">
-              <Mail className="h-4 w-4 mr-2" />
-              Email
-            </Button>
+            {/* Chat Button */}
+            <Link 
+              href={`/chat?phoneNumber=${encodeURIComponent(normalizePhoneNumber(lead.telefono || (lead as any).whatsapp_id || ''))}`}
+              className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              Chat
+            </Link>
+            
+         
           </div>
         </div>
         
@@ -354,10 +370,7 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">{lead.email}</span>
-                </div>
+               
                 <div className="flex items-center gap-3">
                   <Phone className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm">{(lead as any).whatsapp_id || lead.telefono}</span>
@@ -370,6 +383,35 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                 </div>
               </CardContent>
             </Card>
+            
+            {/* Propiedad de Interés - Destacada */}
+            {lead.propiedad_interes && (
+              <Card className="border-primary/20 bg-primary/5">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2 text-primary">
+                    <Building className="h-5 w-5" />
+                    Propiedad de Interés
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-primary/10 rounded-lg p-4 border border-primary/20">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-primary/20 rounded-full">
+                        <Building className="h-4 w-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-primary text-lg">
+                          {lead.propiedad_interes}
+                        </p>
+                        <p className="text-sm text-primary/70">
+                          Propiedad consultada por el cliente
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
             
             {/* Interests */}
             <Card>
@@ -405,12 +447,6 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                   <span className="text-sm text-muted-foreground">Intención:</span>
                   <span className="text-sm font-medium">{(lead as any).intencion || (lead as any).motivoInteres || lead.motivoInteres}</span>
                 </div>
-                {lead.propiedad_interes && (
-                  <div className="flex justify-between items-start">
-                    <span className="text-sm text-muted-foreground">Propiedad de interés:</span>
-                    <span className="text-sm font-medium text-right max-w-[250px]">{lead.propiedad_interes}</span>
-                  </div>
-                )}
                 {(lead as any).forma_pago && (
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Forma de pago:</span>

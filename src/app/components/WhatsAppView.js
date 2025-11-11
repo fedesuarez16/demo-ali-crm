@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import ChatList from './ChatList';
 import ChatConversation from './ChatConversation';
 
-const WhatsAppView = () => {
+const WhatsAppView = ({ targetPhoneNumber }) => {
   const [selectedChat, setSelectedChat] = useState(null);
   const [showConversation, setShowConversation] = useState(false);
 
@@ -28,6 +28,7 @@ const WhatsAppView = () => {
           <ChatList 
             onSelectChat={handleSelectChat} 
             selectedChat={selectedChat}
+            targetPhoneNumber={targetPhoneNumber}
           />
         </div>
       </div>

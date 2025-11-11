@@ -43,7 +43,7 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
   
   // Renderiza un estado como badge
   const renderStatusBadge = (status: string, isSelected: boolean) => {
-    const baseClasses = "px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer border";
+    const baseClasses = "px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer border";
     let colorClasses = "";
     
     switch (status) {
@@ -114,8 +114,8 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
   const activeFilters = getActiveFiltersCount();
 
   return (
-    <div className="px-6 py-4 bg-white/70 backdrop-blur border-t border-slate-200">
-      <div className="flex justify-between items-center mb-4">
+    <div className="px-4 py-3 bg-white/70 backdrop-blur border-t border-slate-200">
+      <div className="flex justify-between items-center mb-3">
         <div className="flex items-center">
           <h3 className="text-sm font-medium text-gray-800">Filtros</h3>
           {activeFilters > 0 && (
@@ -136,11 +136,11 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
         </button>
       </div>
       
-      <div className="flex flex-col space-y-4">
+      <div className="flex flex-col space-y-3">
         {/* Estado del lead como badges */}
         <div>
-          <p className="text-xs font-medium text-gray-500 mb-2">Estado del lead</p>
-          <div className="flex flex-wrap gap-1.5">
+          <p className="text-xs font-medium text-gray-500 mb-1.5">Estado del lead</p>
+          <div className="flex flex-wrap gap-1">
             {estados.map((estado) => (
               <button
                 key={estado}
@@ -154,7 +154,7 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
         </div>
         
         {/* Resto de filtros en grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {/* Zona */}
           <div>
             <label htmlFor="zona" className="block text-xs font-medium text-gray-500 mb-1">
@@ -165,7 +165,7 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
               name="zona"
               value={filterOptions.zona || ''}
               onChange={handleInputChange}
-              className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-2 px-2 text-sm text-gray-700"
+              className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1.5 px-2 text-xs text-gray-700"
             >
               <option value="">Todas las zonas</option>
               {zonas.map((zona) => (
@@ -187,7 +187,7 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
               name="presupuestoMaximo"
               value={filterOptions.presupuestoMaximo || ''}
               onChange={handleInputChange}
-              className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-2 px-2 text-sm text-gray-700"
+              className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1.5 px-2 text-xs text-gray-700"
               placeholder="Sin límite"
             />
           </div>
@@ -202,7 +202,7 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
               name="tipoPropiedad"
               value={filterOptions.tipoPropiedad || ''}
               onChange={handleInputChange}
-              className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-2 px-2 text-sm text-gray-700"
+              className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1.5 px-2 text-xs text-gray-700"
             >
               <option value="">Todos los tipos</option>
               {tiposPropiedad.map((tipo) => (
@@ -225,7 +225,7 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
               value={filterOptions.cantidadAmbientesMinima || ''}
               onChange={handleInputChange}
               min="1"
-              className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-2 px-2 text-sm text-gray-700"
+              className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1.5 px-2 text-xs text-gray-700"
               placeholder="Mínimo"
             />
           </div>
@@ -240,7 +240,7 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
               name="motivoInteres"
               value={filterOptions.motivoInteres || ''}
               onChange={handleInputChange}
-              className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-2 px-2 text-sm text-gray-700"
+              className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1.5 px-2 text-xs text-gray-700"
             >
               <option value="">Todos los motivos</option>
               {motivosInteres.map((motivo) => (

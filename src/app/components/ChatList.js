@@ -1,10 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useChats } from '../../hooks/useChats';
 import { useAgents } from '../../hooks/useAgents';
 
-const ChatList = ({ onSelectChat, selectedChat }) => {
+const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
   // Obtener lista de agentes primero
   const { agents, loading: loadingAgents } = useAgents();
   
@@ -50,6 +50,55 @@ const ChatList = ({ onSelectChat, selectedChat }) => {
     // Último recurso
     return `+${chat.id}`;
   };
+
+  // Función para extraer el número de teléfono del chat para comparación
+  const getChatPhoneNumber = (chat) => {
+    const sender = chat.last_non_activity_message?.sender;
+    
+    if (sender?.phone_number) {
+      return sender.phone_number.replace(/[^\d+]/g, '');
+    }
+    
+    if (chat.contact?.phone_number) {
+      return chat.contact.phone_number.replace(/[^\d+]/g, '');
+    }
+    
+    return null;
+  };
+
+  // Función para normalizar números de teléfono
+  const normalizePhoneNumber = (phone) => {
+    if (!phone) return '';
+    return phone.replace(/[^\d+]/g, '');
+  };
+
+  // Efecto para buscar automáticamente el chat cuando se proporciona un número objetivo
+  useEffect(() => {
+    if (targetPhoneNumber && chats.length > 0 && !loading) {
+      const normalizedTarget = normalizePhoneNumber(targetPhoneNumber);
+      
+      if (normalizedTarget) {
+        const foundChat = chats.find(chat => {
+          const chatPhone = getChatPhoneNumber(chat);
+          if (!chatPhone) return false;
+          
+          // Comparar números normalizados
+          const normalizedChatPhone = normalizePhoneNumber(chatPhone);
+          
+          // Intentar diferentes formatos de comparación
+          return normalizedChatPhone === normalizedTarget ||
+                 normalizedChatPhone === normalizedTarget.replace('+', '') ||
+                 normalizedTarget === normalizedChatPhone.replace('+', '') ||
+                 normalizedChatPhone.endsWith(normalizedTarget.replace('+', '')) ||
+                 normalizedTarget.replace('+', '').endsWith(normalizedChatPhone.replace('+', ''));
+        });
+        
+        if (foundChat && onSelectChat) {
+          onSelectChat(foundChat);
+        }
+      }
+    }
+  }, [targetPhoneNumber, chats, loading, onSelectChat]);
 
   // Función para obtener el color del estado
   const getStatusColor = (status) => {

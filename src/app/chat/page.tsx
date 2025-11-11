@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import AppLayout from '../components/AppLayout';
 import WhatsAppView from '../components/WhatsAppView';
 import AgentStatusToggle from '../components/AgentStatusToggle';
@@ -12,11 +13,19 @@ interface Message {
   timestamp: Date;
 }
 
-export default function ChatPage() {
+function ChatPageContent() {
+  const searchParams = useSearchParams();
+  const leadId = searchParams?.get('leadId');
+  const phoneNumber = searchParams?.get('phoneNumber');
+  
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      content: 'Hola, soy tu asistente inmobiliario. ¿En qué puedo ayudarte hoy?',
+      content: leadId 
+        ? `Hola, estás conversando con el lead ID: ${leadId}. ¿En qué puedo ayudarte?`
+        : phoneNumber
+        ? `Buscando conversación para el número: ${phoneNumber}...`
+        : 'Hola, soy tu asistente inmobiliario. ¿En qué puedo ayudarte hoy?',
       sender: 'assistant',
       timestamp: new Date()
     }
@@ -83,17 +92,26 @@ export default function ChatPage() {
       <div className="flex flex-col h-[calc(100vh-10px)]">
         {/* Encabezado con tabs */}
         <div className="border-b border-gray-200 py-2 px-6">
-          <div className="flex items-center justify-between mb-">
-            <h1 className="text-lg font-medium text-gray-800">Centro de Comunicación</h1>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h1 className="text-lg font-medium text-gray-800">Centro de Comunicación</h1>
+              {(leadId || phoneNumber) && (
+                <div className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  {leadId ? `Lead ID: ${leadId}` : `Teléfono: ${phoneNumber}`}
+                </div>
+              )}
+            </div>
             <AgentStatusToggle variant="dark" className="py-1 px-3 text-sm" />
           </div>
-                  
         </div>
         
         {/* Contenido condicional basado en el tab activo */}
         {activeView === 'whatsapp' ? (
           <div className="flex-1 overflow-hidden h-full">
-            <WhatsAppView />
+            <WhatsAppView targetPhoneNumber={phoneNumber} />
           </div>
         ) : (
           <>
@@ -194,5 +212,22 @@ export default function ChatPage() {
         )}
       </div>
     </AppLayout>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={
+      <AppLayout>
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+            <h2 className="text-xl font-semibold text-slate-800">Cargando chat...</h2>
+          </div>
+        </div>
+      </AppLayout>
+    }>
+      <ChatPageContent />
+    </Suspense>
   );
 } 

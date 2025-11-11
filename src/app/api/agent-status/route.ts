@@ -1,18 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+// Variable global para almacenar el estado cuando Supabase no está disponible
+let fallbackAgentStatus = true;
+
 // GET: Obtener el estado actual del agente
 export async function GET() {
   try {
     // Verificar si Supabase está configurado
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      console.error('Supabase no está configurado. Variables de entorno faltantes.');
+      console.warn('Supabase no está configurado. Usando almacenamiento local como fallback.');
       return NextResponse.json(
         { 
-          error: 'Supabase no está configurado. Por favor, configura las variables de entorno NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY',
-          is_active: true // Valor por defecto
+          is_active: fallbackAgentStatus,
+          fallback_mode: true,
+          message: 'Funcionando en modo local (Supabase no configurado)'
         },
-        { status: 500 }
+        { status: 200 }
       );
     }
 
@@ -90,13 +94,19 @@ export async function POST(request: NextRequest) {
 
     // Verificar si Supabase está configurado
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      console.error('Supabase no está configurado. Variables de entorno faltantes.');
+      console.warn('Supabase no está configurado. Actualizando estado en modo local.');
+      
+      // Actualizar el estado en la variable global
+      fallbackAgentStatus = is_active;
+      
       return NextResponse.json(
         { 
-          error: 'Supabase no está configurado. Por favor, configura las variables de entorno NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY',
-          success: false
+          success: true,
+          is_active: fallbackAgentStatus,
+          fallback_mode: true,
+          message: `Agente ${is_active ? 'activado' : 'desactivado'} exitosamente (modo local)`
         },
-        { status: 500 }
+        { status: 200 }
       );
     }
 
