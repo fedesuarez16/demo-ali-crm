@@ -240,20 +240,8 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
   const getStatusBackgroundColor = (status: string, isDragging: boolean) => {
     if (!isDragging) return 'bg-transparent';
     
-    switch (status) {
-      case 'caliente':
-        return 'bg-gray-50';
-      case 'tibio':
-        return 'bg-gray-50';
-      case 'frío':
-        return 'bg-gray-50';
-      case 'llamada':
-        return 'bg-gray-50';
-      case 'visita':
-        return 'bg-gray-50';
-      default:
-        return 'bg-gray-50';
-    }
+    // Color más visible cuando se arrastra sobre la columna
+    return 'bg-indigo-50 border-2 border-dashed border-indigo-300';
   };
 
   const getStatusBorderColor = (status: string) => {
@@ -278,86 +266,99 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
       <div className="w-full  overflow-x-auto pb-1">
         <div className="flex gap-2 min-w-max pr-2">
           {statusOrder.map((status) => (
-            <div key={status} className="min-w-[240px] bg-slate-100 border-gray-400 rounded-xl">
-            
-            
-            <div
+            <div 
+              key={status} 
+              className="min-w-[240px] bg-slate-100 border-gray-400 rounded-xl flex flex-col"
               onDragOver={(e) => handleDragOver(e, status)}
               onDragLeave={(e) => handleDragLeave(e, status)}
               onDrop={(e) => handleDrop(e, status)}
-              className={`space-y-1.5 min-h-[200px] p-1  rounded-xl   duration-200   ${
-                getStatusBackgroundColor(status, isDraggingOver[status])
-              }`}
             >
-
-            <div className={`mb-2 bg-white  p-1.5 rounded-xl flex items-center justify-between`}>
-              <h3 className="text-xs font-semibold text-slate-700">
-                {getStatusTitle(status)}
-              </h3>
-              <span className={` items-center px-1.5 py-0.5 rounded-full text-[10px] border ${getStatusBorderColor(status).split(' ')[0]} text-slate-500`}>
-                {groupedLeads[status].length}
-              </span>
-            </div>
-              {groupedLeads[status].length === 0 ? (
-                <div className="text-center py-10 border  border-dashed border-slate-200 rounded-lg bg-slate-50">
-                  <p className="text-slate-500  text-sm">No hay leads en esta categoría</p>
-                </div>
-              ) : (
-                groupedLeads[status].map((lead: Lead) => {
-                  const matchCount = matchingProperties.get(lead.id)?.length || 0;
-                  
-                  return (
-                    <div
-                      key={lead.id}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, lead)}
-                      onDragEnd={handleDragEnd}
-                      className={`relative rounded-xl  border-l-4 border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer bg-white/90 backdrop-blur ${getStatusColor(lead.estado)}`}
-                      onClick={(e) => handleLeadClick(lead, e)}
-                    >
-                      <div className="p-2 space-y-1.5">
-                        <div className="pr-6">
-                          <h4 className="text-xs font-semibold text-slate-900 leading-tight truncate">
-                            {lead.nombreCompleto || (lead as any).nombre || (lead as any).whatsapp_id}
-                          </h4>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className={`inline-flex items-center px-1 py-0.5 rounded-full text-[10px] font-medium ${getStatusBadgeColor(lead.estado)}`}>
-                            {lead.estado}
-                          </span>
-                        </div>
-                        <div className="h-px bg-slate-100"></div>
-                        <div className="text-[10px] text-gray-600 space-y-1">
-                          <div className="flex items-center">
-                            <svg className="h-2.5 w-2.5 text-gray-400 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 12l4.243-4.243m-9.9 9.9L3.414 12l4.243-4.243" />
-                            </svg>
-                            <span className="truncate">{(lead as any).zona || lead.zonaInteres}</span>
-                          </div>
-                          <div className="flex items-center">
-                            <svg className="h-2.5 w-2.5 text-gray-400 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h18M3 10h18M7 15h10M9 20h6" />
-                            </svg>
-                            <span className="truncate">{(lead as any).tipo_propiedad || (lead as any).tipoPropiedad} · {formatCurrency(Number(lead.presupuesto ?? 0))}</span>
-                          </div>
-                          <div className="flex items-center">
-                            <svg className="h-2.5 w-2.5 text-gray-400 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                            </svg>
-                            <span className="truncate">{(lead as any).whatsapp_id || lead.telefono}</span>
-                          </div>
-                        </div>
-                        {matchCount > 0 && (
-                          <div className="absolute top-3 right-3 bg-emerald-500 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center shadow-sm">
-                            {matchCount}
-                          </div>
-                        )}
+              {/* Header de la columna */}
+              <div className={`m-2 bg-white p-1.5 rounded-xl flex items-center justify-between`}>
+                <h3 className="text-xs font-semibold text-slate-700">
+                  {getStatusTitle(status)}
+                </h3>
+                <span className={` items-center px-1.5 py-0.5 rounded-full text-[10px] border ${getStatusBorderColor(status).split(' ')[0]} text-slate-500`}>
+                  {groupedLeads[status].length}
+                </span>
+              </div>
+              
+              {/* Área de drop que cubre toda la altura */}
+              <div
+                className={`flex-1 min-h-[400px] p-1 rounded-xl transition-colors duration-200 ${
+                  getStatusBackgroundColor(status, isDraggingOver[status])
+                }`}
+              >
+                <div className="space-y-1.5 h-full">
+                  {groupedLeads[status].length === 0 ? (
+                    <div className="h-full flex items-center justify-center">
+                      <div className="text-center py-10 border border-dashed border-slate-200 rounded-lg bg-slate-50 w-full">
+                        <p className="text-slate-500 text-sm">No hay leads en esta categoría</p>
+                        <p className="text-slate-400 text-xs mt-1">Arrastra aquí para cambiar estado</p>
                       </div>
                     </div>
-                  );
-                })
-              )}
-            </div>
+                  ) : (
+                    <>
+                      {groupedLeads[status].map((lead: Lead) => {
+                        const matchCount = matchingProperties.get(lead.id)?.length || 0;
+                        
+                        return (
+                          <div
+                            key={lead.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, lead)}
+                            onDragEnd={handleDragEnd}
+                            className={`relative rounded-xl border-l-4 border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer bg-white/90 backdrop-blur ${getStatusColor(lead.estado)}`}
+                            onClick={(e) => handleLeadClick(lead, e)}
+                          >
+                            <div className="p-2 space-y-1.5">
+                              <div className="pr-6">
+                                <h4 className="text-xs font-semibold text-slate-900 leading-tight truncate">
+                                  {lead.nombreCompleto || (lead as any).nombre || (lead as any).whatsapp_id}
+                                </h4>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className={`inline-flex items-center px-1 py-0.5 rounded-full text-[10px] font-medium ${getStatusBadgeColor(lead.estado)}`}>
+                                  {lead.estado}
+                                </span>
+                              </div>
+                              <div className="h-px bg-slate-100"></div>
+                              <div className="text-[10px] text-gray-600 space-y-1">
+                                <div className="flex items-center">
+                                  <svg className="h-2.5 w-2.5 text-gray-400 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 12l4.243-4.243m-9.9 9.9L3.414 12l4.243-4.243" />
+                                  </svg>
+                                  <span className="truncate">{(lead as any).zona || lead.zonaInteres}</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <svg className="h-2.5 w-2.5 text-gray-400 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h18M3 10h18M7 15h10M9 20h6" />
+                                  </svg>
+                                  <span className="truncate">{(lead as any).tipo_propiedad || (lead as any).tipoPropiedad} · {formatCurrency(Number(lead.presupuesto ?? 0))}</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <svg className="h-2.5 w-2.5 text-gray-400 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                  </svg>
+                                  <span className="truncate">{(lead as any).whatsapp_id || lead.telefono}</span>
+                                </div>
+                              </div>
+                              {matchCount > 0 && (
+                                <div className="absolute top-3 right-3 bg-emerald-500 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center shadow-sm">
+                                  {matchCount}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      
+                      {/* Área de drop adicional para llenar el espacio restante */}
+                      <div className="flex-1 min-h-[100px]"></div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           ))}
         </div>
