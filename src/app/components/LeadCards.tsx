@@ -16,9 +16,8 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
   const [matchingProperties, setMatchingProperties] = useState<Map<string, Property[]>>(new Map());
   const [isDraggingOver, setIsDraggingOver] = useState<Record<string, boolean>>({});
   
-  const defaultStatusOrder = ['frío', 'tibio', 'caliente', 'llamada', 'visita'] as const;
+  const defaultStatusOrder = ['frío', 'tibio', 'caliente', 'llamada', 'visita'];
   const statusOrder = visibleColumns && visibleColumns.length > 0 ? visibleColumns : defaultStatusOrder;
-  type ColumnStatus = string;
   
   // Memo para agrupar los leads por estado y ordenarlos por ultima_interaccion
   const groupedLeads = useMemo(() => {
@@ -30,7 +29,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
     });
     
     leads.forEach(lead => {
-      const leadStatus = lead.estado as string;
+      const leadStatus = lead.estado;
       // Si el estado coincide con alguna de nuestras columnas visibles, lo añadimos ahí
       if (statusOrder.includes(leadStatus)) {
         if (!result[leadStatus]) {
