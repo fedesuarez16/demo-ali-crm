@@ -9,9 +9,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, MessageSquare, Phone, Mail, Calendar, ChevronDown, MapPin, DollarSign, Home, User, Clock, FileText, Building, Send, Plus, Minus } from 'lucide-react';
+import { X, MessageSquare, Phone, Mail, Calendar, ChevronDown, MapPin, DollarSign, Home, User, Clock, FileText, Building, Send, Plus, Minus, Wifi, WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { programarMensaje } from '../services/mensajeService';
+import { useChatStatus } from '../../hooks/useChatStatus';
 
 interface LeadDetailSidebarProps {
   lead: Lead | null;
@@ -38,6 +39,10 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAddingToRedis, setIsAddingToRedis] = useState(false);
   const [isRemovingFromRedis, setIsRemovingFromRedis] = useState(false);
+  
+  // Hook para verificar el estado del chat via n8n webhook
+  const phoneNumber = (lead as any)?.whatsapp_id || lead?.telefono;
+  const { isActive: isChatActive, lastActivity, loading: chatLoading, refreshChatStatus, source, chatData } = useChatStatus(phoneNumber);
   
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-AR', {
@@ -266,9 +271,41 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                   {lead.nombreCompleto || (lead as any).nombre || (lead as any).whatsapp_id}
                 </h3>
               </div>
-              <Badge variant={getStatusVariant(lead.estado)}>
-                {lead.estado}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant={getStatusVariant(lead.estado)}>
+                  {lead.estado}
+                </Badge>
+                {/* Chat Status Indicator */}
+                {chatLoading ? (
+                  <Badge variant="outline" className="text-xs">
+                    <div className="animate-spin rounded-full h-2 w-2 border-b border-gray-400 mr-1"></div>
+                    Consultando n8n...
+                  </Badge>
+                ) : (
+                  <Badge 
+                    variant={isChatActive ? "default" : "secondary"}
+                    className={cn(
+                      "text-xs",
+                      isChatActive 
+                        ? "bg-green-100 text-green-800 border-green-200" 
+                        : "bg-gray-100 text-gray-600 border-gray-200"
+                    )}
+                    title={source === 'n8n-webhook' ? 'Estado obtenido desde n8n webhook' : 'Estado local'}
+                  >
+                    {isChatActive ? (
+                      <>
+                        <Wifi className="h-3 w-3 mr-1" />
+                        Chat Activo
+                      </>
+                    ) : (
+                      <>
+                        <WifiOff className="h-3 w-3 mr-1" />
+                        Chat Inactivo
+                      </>
+                    )}
+                  </Badge>
+                )}
+              </div>
             </div>
             <Button
               variant="ghost"
@@ -279,6 +316,24 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
               <X className="h-4 w-4" />
             </Button>
           </div>
+          
+          {/* Chat Status Details */}
+          {!chatLoading && (
+            <div className="mt-2 space-y-1">
+              {lastActivity && (
+                <div className="text-xs text-muted-foreground">
+                  Última actividad: {new Intl.DateTimeFormat('es-AR', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  }).format(lastActivity)}
+                </div>
+              )}
+             
+            </div>
+          )}
         </div>
         
         {/* Action buttons */}
@@ -467,22 +522,41 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
             </div>
             
             {/* Quick action buttons */}
-            <div className="grid grid-cols-2 gap-2">
-              <Button variant="outline" size="sm">
-                <Phone className="h-4 w-4 mr-2" />
-                Llamar
-              </Button>
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" size="sm">
+                  <Phone className="h-4 w-4 mr-2" />
+                  Llamar
+                </Button>
+                
+                {/* Chat Button */}
+                <Link 
+                  href={`/chat?phoneNumber=${encodeURIComponent(normalizePhoneNumber(lead.telefono || (lead as any).whatsapp_id || ''))}`}
+                  className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  {isChatActive ? 'Ir al Chat' : 'Abrir Chat'}
+                </Link>
+              </div>
               
-              {/* Chat Button */}
-              <Link 
-                href={`/chat?phoneNumber=${encodeURIComponent(normalizePhoneNumber(lead.telefono || (lead as any).whatsapp_id || ''))}`}
-                className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+              {/* Refresh Chat Status Button */}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={refreshChatStatus}
+                disabled={chatLoading}
+                className="w-full text-xs"
+                title="Consulta el estado del chat desde n8n webhook"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                Chat
-              </Link>
+                {chatLoading ? (
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-400 mr-2"></div>
+                ) : (
+                  <Wifi className="h-3 w-3 mr-2" />
+                )}
+                Refrescar Estado 
+              </Button>
             </div>
             
          
