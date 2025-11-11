@@ -9,7 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, MessageSquare, Phone, Mail, Calendar, ChevronDown, MapPin, DollarSign, Home, User, Clock, FileText, Building, Send } from 'lucide-react';
+import { X, MessageSquare, Phone, Mail, Calendar, ChevronDown, MapPin, DollarSign, Home, User, Clock, FileText, Building, Send, Plus, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { programarMensaje } from '../services/mensajeService';
 
@@ -36,6 +36,8 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
     mensajePersonalizado: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAddingToRedis, setIsAddingToRedis] = useState(false);
+  const [isRemovingFromRedis, setIsRemovingFromRedis] = useState(false);
   
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-AR', {
@@ -155,6 +157,86 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
     setIsSubmitting(false);
   };
 
+  // Función para obtener el JID del lead
+  const getLeadJid = () => {
+    const jid = (lead as any)?.whatsapp_id || lead?.telefono;
+    if (!jid) return null;
+    
+    // Asegurar que tenga el formato correcto
+    return jid.includes('@s.whatsapp.net') ? jid : `${jid}@s.whatsapp.net`;
+  };
+
+  // Función para agregar JID a Redis via n8n
+  const handleAddToRedis = async () => {
+    const jid = getLeadJid();
+    if (!jid) {
+      alert('No se encontró un número de WhatsApp válido para este lead');
+      return;
+    }
+
+    setIsAddingToRedis(true);
+    
+    try {
+      const response = await fetch('/api/redis-jids', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jid: jid,
+          ttl: 86400 // 24 horas por defecto
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert(`✅ JID agregado exitosamente a la campaña Redis\n\nJID: ${jid}\nTTL: 24 horas`);
+      } else {
+        alert(`❌ Error al agregar JID: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Error adding JID to Redis:', error);
+      alert('❌ Error de conexión al agregar JID');
+    } finally {
+      setIsAddingToRedis(false);
+    }
+  };
+
+  // Función para eliminar JID de Redis via n8n
+  const handleRemoveFromRedis = async () => {
+    const jid = getLeadJid();
+    if (!jid) {
+      alert('No se encontró un número de WhatsApp válido para este lead');
+      return;
+    }
+
+    if (!confirm(`¿Estás seguro de que quieres eliminar este JID de la campaña Redis?\n\nJID: ${jid}`)) {
+      return;
+    }
+
+    setIsRemovingFromRedis(true);
+    
+    try {
+      const response = await fetch(`/api/redis-jids?jid=${encodeURIComponent(jid)}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert(`✅ JID eliminado exitosamente de la campaña Redis\n\nJID: ${jid}`);
+      } else {
+        alert(`❌ Error al eliminar JID: ${data.message || data.error}`);
+      }
+    } catch (error) {
+      console.error('Error removing JID from Redis:', error);
+      alert('❌ Error de conexión al eliminar JID');
+    } finally {
+      setIsRemovingFromRedis(false);
+    }
+  };
+
   if (!lead) return null;
 
   return (
@@ -201,12 +283,12 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
         
         {/* Action buttons */}
         <div className="p-6 bg-muted/50 border-b">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-3">
             {/* Editar Lead */}
             {onEditLead && lead && (
               <Button 
                 variant="default" 
-                className="col-span-2"
+                className="w-full"
                 onClick={() => {
                   onEditLead(lead);
                   onClose();
@@ -220,7 +302,7 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
             )}
             
             {/* Message menu */}
-            <div className="relative col-span-2">
+            <div className="relative">
               <Button 
                 variant="outline" 
                 className="w-full justify-between"
@@ -337,22 +419,71 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
               )}
             </div>
             
-            {/* Quick action buttons */}
-            <Button variant="outline" size="sm">
-              <Phone className="h-4 w-4 mr-2" />
-              Llamar
-            </Button>
+            {/* Redis Campaign Buttons */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-px bg-border flex-1"></div>
+                <span className="text-xs text-muted-foreground font-medium">Campaña Redis</span>
+                <div className="h-px bg-border flex-1"></div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleAddToRedis}
+                  disabled={isAddingToRedis || !getLeadJid()}
+                  className="text-green-700 border-green-200 hover:bg-green-50"
+                >
+                  {isAddingToRedis ? (
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-green-600 mr-2"></div>
+                  ) : (
+                    <Plus className="h-4 w-4 mr-2" />
+                  )}
+                  Agregar
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleRemoveFromRedis}
+                  disabled={isRemovingFromRedis || !getLeadJid()}
+                  className="text-red-700 border-red-200 hover:bg-red-50"
+                >
+                  {isRemovingFromRedis ? (
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-600 mr-2"></div>
+                  ) : (
+                    <Minus className="h-4 w-4 mr-2" />
+                  )}
+                  Eliminar
+                </Button>
+              </div>
+              
+              {getLeadJid() && (
+                <div className="text-xs text-muted-foreground text-center bg-muted/50 p-2 rounded">
+                  JID: {getLeadJid()}
+                </div>
+              )}
+            </div>
             
-            {/* Chat Button */}
-            <Link 
-              href={`/chat?phoneNumber=${encodeURIComponent(normalizePhoneNumber(lead.telefono || (lead as any).whatsapp_id || ''))}`}
-              className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-              Chat
-            </Link>
+            {/* Quick action buttons */}
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" size="sm">
+                <Phone className="h-4 w-4 mr-2" />
+                Llamar
+              </Button>
+              
+              {/* Chat Button */}
+              <Link 
+                href={`/chat?phoneNumber=${encodeURIComponent(normalizePhoneNumber(lead.telefono || (lead as any).whatsapp_id || ''))}`}
+                className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                Chat
+              </Link>
+            </div>
             
          
           </div>

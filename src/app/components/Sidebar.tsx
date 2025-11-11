@@ -114,6 +114,16 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
       name: 'Herramientas',
       items: [
         {
+          name: 'Gestión Redis',
+          path: '/redis-manager',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 1.79 4 4 4h8c0-2.21-1.79-4-4-4H4V7z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 15h16M4 11h16" />
+            </svg>
+          ),
+        },
+        {
           name: 'Documentación',
           path: '/documentacion',
           icon: (
