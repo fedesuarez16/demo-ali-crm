@@ -423,7 +423,7 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
             <div className="space-y-2">
               <div className="flex items-center gap-2 mb-2">
                 <div className="h-px bg-border flex-1"></div>
-                <span className="text-xs text-muted-foreground font-medium">Campaña Redis</span>
+                <span className="text-xs text-muted-foreground font-medium">Agente management</span>
                 <div className="h-px bg-border flex-1"></div>
               </div>
               
@@ -440,7 +440,7 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                   ) : (
                     <Plus className="h-4 w-4 mr-2" />
                   )}
-                  Agregar
+                  Activar agente
                 </Button>
                 
                 <Button 
@@ -455,7 +455,7 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                   ) : (
                     <Minus className="h-4 w-4 mr-2" />
                   )}
-                  Eliminar
+                  Frenar agente
                 </Button>
               </div>
               
