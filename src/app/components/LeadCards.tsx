@@ -37,10 +37,12 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
         }
         result[leadStatus].push(lead);
       } else {
-        // Si el estado no existe en nuestras columnas visibles, lo añadimos a la primera columna por defecto
-        if (statusOrder.length > 0) {
-          result[statusOrder[0]].push(lead);
+        // Si el estado no existe en nuestras columnas visibles, crear una nueva columna para él
+        // Esto permite que los estados personalizados se muestren correctamente
+        if (!result[leadStatus]) {
+          result[leadStatus] = [];
         }
+        result[leadStatus].push(lead);
       }
     });
     
@@ -261,11 +263,21 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
     }
   };
 
+  // Combinar columnas visibles con columnas que tienen leads (para mostrar estados personalizados)
+  const allColumnsToShow = useMemo(() => {
+    const visibleSet = new Set(statusOrder);
+    const columnsWithLeads = Object.keys(groupedLeads).filter(status => groupedLeads[status].length > 0);
+    const customColumns = columnsWithLeads.filter(status => !visibleSet.has(status));
+    
+    // Primero las columnas visibles en orden, luego las personalizadas
+    return [...statusOrder, ...customColumns];
+  }, [statusOrder, groupedLeads]);
+
   return (
     <>
       <div className="w-full  overflow-x-auto pb-1">
         <div className="flex gap-2 min-w-max pr-2">
-          {statusOrder.map((status) => (
+          {allColumnsToShow.map((status) => (
             <div 
               key={status} 
               className="min-w-[240px] bg-slate-100 border-gray-400 rounded-xl flex flex-col"

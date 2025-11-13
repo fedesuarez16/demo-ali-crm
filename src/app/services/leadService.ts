@@ -24,7 +24,7 @@ const mapLeadRow = (row: any): Lead => {
     nombreCompleto: row.nombre ?? '',
     email: '', // No existe en la tabla
     telefono: row.whatsapp_id ?? '',
-    estado: (['frío', 'tibio', 'caliente', 'llamada', 'visita', 'inicial'].includes(row.estado) ? row.estado : 'frío') as Lead['estado'],
+    estado: (row.estado || 'inicial') as Lead['estado'], // Acepta cualquier estado, incluyendo personalizados
     presupuesto: Number(row.presupuesto ?? 0),
     zonaInteres: row.zona ?? '',
     tipoPropiedad: (row.tipo_propiedad ?? 'departamento') as Lead['tipoPropiedad'],
@@ -165,14 +165,20 @@ export const getUniqueInterestReasons = (): string[] => {
 /**
  * Actualiza el estado de un lead
  */
-export const updateLeadStatus = async (leadId: string, newStatus: LeadStatus): Promise<boolean> => {
+export const updateLeadStatus = async (leadId: string, newStatus: string): Promise<boolean> => {
   try {
     console.log(`Updating lead ${leadId} to status ${newStatus} in Supabase`);
+    
+    // Validar que el estado no esté vacío
+    if (!newStatus || typeof newStatus !== 'string' || newStatus.trim() === '') {
+      console.error('Invalid status provided:', newStatus);
+      return false;
+    }
     
     // Cast table typing loosely to avoid TS inference issues without generated types
     const { data, error } = await (getSupabase() as any)
       .from('leads')
-      .update({ estado: newStatus })
+      .update({ estado: newStatus.trim() })
       .eq('id', leadId)
       .select();
     
@@ -184,7 +190,7 @@ export const updateLeadStatus = async (leadId: string, newStatus: LeadStatus): P
     console.log('Supabase update result:', data);
     
     // Update cache if present
-    cachedLeads = cachedLeads.map(l => (l.id === leadId ? { ...l, estado: newStatus } as Lead : l));
+    cachedLeads = cachedLeads.map(l => (l.id === leadId ? { ...l, estado: newStatus.trim() as LeadStatus } as Lead : l));
     
     console.log(`Successfully updated lead ${leadId} to ${newStatus}`);
     return true;

@@ -53,29 +53,133 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
 
   // Función para extraer el número de teléfono del chat para comparación
   const getChatPhoneNumber = (chat) => {
+    // 1. PRIMERO: Usar campos enriquecidos de la API si existen
+    if (chat.enriched_phone_number) {
+      return chat.enriched_phone_number;
+    }
+
+    if (chat.enriched_identifier) {
+      return chat.enriched_identifier;
+    }
+
+    if (chat.enriched_phone_raw) {
+      return chat.enriched_phone_raw;
+    }
+
+    if (Array.isArray(chat.enriched_phone_candidates)) {
+      const candidate = chat.enriched_phone_candidates.find(Boolean);
+      if (candidate) return candidate;
+    }
+
+    // 2. Intentar múltiples fuentes de datos (fallback)
     const sender = chat.last_non_activity_message?.sender;
-    
+    const contact = chat.contact;
+
+    // 3. Buscar en sender phone_number
     if (sender?.phone_number) {
-      return sender.phone_number.replace(/[^\d+]/g, '');
+      return sender.phone_number;
     }
-    
-    if (chat.contact?.phone_number) {
-      return chat.contact.phone_number.replace(/[^\d+]/g, '');
+
+    // 4. Buscar en sender identifier (puede ser JID)
+    if (sender?.identifier) {
+      return sender.identifier;
     }
-    
+
+    // 5. Buscar en contact phone_number
+    if (contact?.phone_number) {
+      return contact.phone_number;
+    }
+
+    // 6. Buscar en contact identifier
+    if (contact?.identifier) {
+      return contact.identifier;
+    }
+
+    // 7. Buscar en meta.sender (Chatwoot puede guardar info aquí)
+    if (chat.meta?.sender?.phone_number || chat.meta?.sender?.phone) {
+      return chat.meta.sender.phone_number || chat.meta.sender.phone;
+    }
+
+    if (chat.meta?.sender?.identifier) {
+      return chat.meta.sender.identifier;
+    }
+
+    // 8. Buscar en additional_attributes
+    if (chat.additional_attributes?.phone_number || chat.additional_attributes?.phone) {
+      return chat.additional_attributes.phone_number || chat.additional_attributes.phone;
+    }
+
+    if (chat.additional_attributes?.wa_id) {
+      return chat.additional_attributes.wa_id;
+    }
+
+    // 9. Buscar en source_id (formato WAID:numero)
+    if (chat.last_non_activity_message?.source_id) {
+      return chat.last_non_activity_message.source_id;
+    }
+
+    // 10. Buscar en contact_inbox
+    if (chat.contact_inbox?.source_id) {
+      return chat.contact_inbox.source_id;
+    }
+
     return null;
   };
 
-  // Función para normalizar números de teléfono
+  // Función para normalizar números de teléfono (más robusta)
   const normalizePhoneNumber = (phone) => {
     if (!phone) return '';
-    return phone.replace(/[^\d+]/g, '');
+    
+    // Remover @s.whatsapp.net si existe
+    let normalized = phone.replace('@s.whatsapp.net', '');
+    
+    // Remover prefijos comunes
+    normalized = normalized.replace(/^WAID:/, '');
+    normalized = normalized.replace(/^whatsapp:/, '');
+    
+    // Remover todo lo que no sean números y el símbolo +
+    normalized = normalized.replace(/[^\d+]/g, '');
+    
+    // Remover + al inicio para comparación consistente
+    normalized = normalized.replace(/^\+/, '');
+    
+    return normalized;
+  };
+  
+  // Función para comparar números de teléfono (más flexible)
+  const comparePhoneNumbers = (phone1, phone2) => {
+    if (!phone1 || !phone2) return false;
+    
+    const normalized1 = normalizePhoneNumber(phone1);
+    const normalized2 = normalizePhoneNumber(phone2);
+    
+    // Comparación exacta
+    if (normalized1 === normalized2) return true;
+    
+    // Comparación por últimos dígitos (útil para números con/sin código de país)
+    const minLength = Math.min(normalized1.length, normalized2.length);
+    if (minLength >= 8) {
+      // Comparar últimos 8-10 dígitos
+      const lastDigits1 = normalized1.slice(-Math.min(10, normalized1.length));
+      const lastDigits2 = normalized2.slice(-Math.min(10, normalized2.length));
+      if (lastDigits1 === lastDigits2) return true;
+    }
+    
+    // Comparación por inclusión (uno contiene al otro)
+    if (normalized1.includes(normalized2) || normalized2.includes(normalized1)) {
+      return true;
+    }
+    
+    return false;
   };
 
   // Efecto para buscar automáticamente el chat cuando se proporciona un número objetivo
   useEffect(() => {
     if (targetPhoneNumber && chats.length > 0 && !loading) {
       const normalizedTarget = normalizePhoneNumber(targetPhoneNumber);
+      
+      console.log('🔍 Buscando chat para número:', targetPhoneNumber);
+      console.log('📱 Número normalizado:', normalizedTarget);
       
       if (normalizedTarget) {
         const foundChat = chats.find(chat => {
@@ -85,16 +189,47 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
           // Comparar números normalizados
           const normalizedChatPhone = normalizePhoneNumber(chatPhone);
           
-          // Intentar diferentes formatos de comparación
-          return normalizedChatPhone === normalizedTarget ||
-                 normalizedChatPhone === normalizedTarget.replace('+', '') ||
-                 normalizedTarget === normalizedChatPhone.replace('+', '') ||
-                 normalizedChatPhone.endsWith(normalizedTarget.replace('+', '')) ||
-                 normalizedTarget.replace('+', '').endsWith(normalizedChatPhone.replace('+', ''));
+          // Comparación exacta
+          if (normalizedChatPhone === normalizedTarget) {
+            console.log('✅ Chat encontrado (comparación exacta):', chat.id, 'Número:', chatPhone);
+            return true;
+          }
+          
+          // Comparación por últimos dígitos (útil para números con/sin código de país)
+          const minLength = Math.min(normalizedChatPhone.length, normalizedTarget.length);
+          if (minLength >= 8) {
+            const lastDigits1 = normalizedChatPhone.slice(-Math.min(10, normalizedChatPhone.length));
+            const lastDigits2 = normalizedTarget.slice(-Math.min(10, normalizedTarget.length));
+            if (lastDigits1 === lastDigits2) {
+              console.log('✅ Chat encontrado (últimos dígitos):', chat.id, 'Número:', chatPhone);
+              return true;
+            }
+          }
+          
+          // Comparación por inclusión (uno contiene al otro)
+          if (normalizedChatPhone.includes(normalizedTarget) || normalizedTarget.includes(normalizedChatPhone)) {
+            console.log('✅ Chat encontrado (inclusión):', chat.id, 'Número:', chatPhone);
+            return true;
+          }
+          
+          return false;
         });
         
         if (foundChat && onSelectChat) {
+          console.log('🎯 Chat seleccionado:', foundChat.id);
           onSelectChat(foundChat);
+        } else {
+          console.warn('⚠️ No se encontró chat para el número:', normalizedTarget);
+          console.log('📋 Chats disponibles:', chats.map(chat => {
+            const rawPhone = getChatPhoneNumber(chat);
+            return {
+              id: chat.id,
+              phone: rawPhone,
+              normalized: normalizePhoneNumber(rawPhone),
+              enriched_phone: chat.enriched_phone_number,
+              enriched_identifier: chat.enriched_identifier
+            };
+          })));
         }
       }
     }

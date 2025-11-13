@@ -19,6 +19,7 @@ import {
   updateLead
 } from '../services/leadService';
 import { exportLeadsToCSV } from '../utils/exportUtils';
+import { getKanbanColumns, saveKanbanColumns, migrateColumnsFromLocalStorage } from '../services/columnService';
 import Link from 'next/link';
 
 export default function LeadsKanbanPage() {
@@ -45,28 +46,26 @@ export default function LeadsKanbanPage() {
   const [isColumnSelectorVisible, setIsColumnSelectorVisible] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['frío', 'tibio', 'caliente', 'llamada', 'visita']);
 
-  // Cargar columnas personalizadas desde localStorage al inicializar
+  // Cargar columnas personalizadas desde Supabase al inicializar
   useEffect(() => {
-    const savedCustomColumns = localStorage.getItem('customColumns');
-    const savedVisibleColumns = localStorage.getItem('visibleColumns');
-    
-    if (savedCustomColumns) {
+    const loadColumns = async () => {
       try {
-        const parsed = JSON.parse(savedCustomColumns);
-        setCustomColumns(parsed);
+        // Primero intentar migrar desde localStorage si existe
+        await migrateColumnsFromLocalStorage();
+        
+        // Cargar columnas desde Supabase
+        const { customColumns: loadedCustom, visibleColumns: loadedVisible } = await getKanbanColumns();
+        setCustomColumns(loadedCustom);
+        setVisibleColumns(loadedVisible);
       } catch (error) {
-        console.error('Error parsing saved custom columns:', error);
+        console.error('Error loading columns from Supabase:', error);
+        // Fallback a valores por defecto
+        setCustomColumns([]);
+        setVisibleColumns(['frío', 'tibio', 'caliente', 'llamada', 'visita']);
       }
-    }
+    };
     
-    if (savedVisibleColumns) {
-      try {
-        const parsed = JSON.parse(savedVisibleColumns);
-        setVisibleColumns(parsed);
-      } catch (error) {
-        console.error('Error parsing saved visible columns:', error);
-      }
-    }
+    loadColumns();
   }, []);
   
   useEffect(() => {
@@ -143,16 +142,19 @@ export default function LeadsKanbanPage() {
         // Actualizar el estado local
         setLeads(prevLeads => 
           prevLeads.map(lead => 
-            lead.id === leadId ? { ...lead, estado: newStatus } : lead
+            lead.id === leadId ? { ...lead, estado: newStatus as LeadStatus } : lead
           )
         );
         
         // Actualizar los leads filtrados
         setFilteredLeads(prevLeads => 
           prevLeads.map(lead => 
-            lead.id === leadId ? { ...lead, estado: newStatus } : lead
+            lead.id === leadId ? { ...lead, estado: newStatus as LeadStatus } : lead
           )
         );
+        
+        // Actualizar estados únicos para incluir el nuevo estado personalizado
+        setEstados(getUniqueStatuses());
       } else {
         console.error(`Failed to update lead ${leadId} status in database`);
         // Aquí podrías mostrar una notificación de error al usuario
@@ -179,7 +181,7 @@ export default function LeadsKanbanPage() {
   };
 
   // Funciones para manejar columnas personalizadas
-  const handleAddColumn = () => {
+  const handleAddColumn = async () => {
     if (newColumnName.trim() && !visibleColumns.includes(newColumnName.trim().toLowerCase())) {
       const newColumn = newColumnName.trim().toLowerCase();
       const updatedCustomColumns = [...customColumns, newColumn];
@@ -188,36 +190,49 @@ export default function LeadsKanbanPage() {
       setCustomColumns(updatedCustomColumns);
       setVisibleColumns(updatedVisibleColumns);
       
-      // Guardar en localStorage
-      localStorage.setItem('customColumns', JSON.stringify(updatedCustomColumns));
-      localStorage.setItem('visibleColumns', JSON.stringify(updatedVisibleColumns));
+      // Guardar en Supabase
+      const success = await saveKanbanColumns(updatedCustomColumns, updatedVisibleColumns);
+      if (!success) {
+        console.error('Error saving columns to Supabase');
+        alert('Error al guardar la columna. Por favor intenta nuevamente.');
+        // Revertir cambios locales
+        setCustomColumns(customColumns);
+        setVisibleColumns(visibleColumns);
+        return;
+      }
       
       setNewColumnName('');
       setIsAddColumnModalVisible(false);
     }
   };
 
-  const handleDeleteCustomColumn = (columnName: string) => {
+  const handleDeleteCustomColumn = async (columnName: string) => {
     const updatedCustomColumns = customColumns.filter(col => col !== columnName);
     const updatedVisibleColumns = visibleColumns.filter(col => col !== columnName);
     
     setCustomColumns(updatedCustomColumns);
     setVisibleColumns(updatedVisibleColumns);
     
-    // Guardar en localStorage
-    localStorage.setItem('customColumns', JSON.stringify(updatedCustomColumns));
-    localStorage.setItem('visibleColumns', JSON.stringify(updatedVisibleColumns));
+    // Guardar en Supabase
+    const success = await saveKanbanColumns(updatedCustomColumns, updatedVisibleColumns);
+    if (!success) {
+      console.error('Error saving columns to Supabase');
+      alert('Error al eliminar la columna. Por favor intenta nuevamente.');
+      // Revertir cambios locales
+      setCustomColumns(customColumns);
+      setVisibleColumns(visibleColumns);
+    }
   };
 
-  const handleColumnToggle = (column: string) => {
+  const handleColumnToggle = async (column: string) => {
     const updatedVisibleColumns = visibleColumns.includes(column) 
       ? visibleColumns.filter(col => col !== column)
       : [...visibleColumns, column];
     
     setVisibleColumns(updatedVisibleColumns);
     
-    // Guardar en localStorage
-    localStorage.setItem('visibleColumns', JSON.stringify(updatedVisibleColumns));
+    // Guardar en Supabase
+    await saveKanbanColumns(customColumns, updatedVisibleColumns);
   };
 
   const toggleColumnSelector = () => {
@@ -432,9 +447,9 @@ export default function LeadsKanbanPage() {
                 <h3 className="text-sm font-medium text-gray-700">Seleccionar columnas visibles</h3>
                 <div className="flex space-x-2">
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       setVisibleColumns(allColumns);
-                      localStorage.setItem('visibleColumns', JSON.stringify(allColumns));
+                      await saveKanbanColumns(customColumns, allColumns);
                     }}
                     className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
                   >
@@ -442,9 +457,9 @@ export default function LeadsKanbanPage() {
                   </button>
                   <span className="text-gray-300">|</span>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       setVisibleColumns([]);
-                      localStorage.setItem('visibleColumns', JSON.stringify([]));
+                      await saveKanbanColumns(customColumns, []);
                     }}
                     className="text-xs text-gray-500 hover:text-gray-700 font-medium"
                   >
