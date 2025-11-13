@@ -109,6 +109,14 @@ export const filterLeads = (options: FilterOptions): Lead[] => {
       return false;
     }
     
+    // Filtrar por propiedad de interés (campaña) si se especifica
+    if (options.propiedadInteres) {
+      const leadPropiedadInteres = (lead as any).propiedad_interes || '';
+      if (!leadPropiedadInteres || leadPropiedadInteres.toLowerCase() !== options.propiedadInteres.toLowerCase()) {
+        return false;
+      }
+    }
+    
     // Si pasa todos los filtros, incluir el lead
     return true;
   });
@@ -160,6 +168,20 @@ export const getUniqueInterestReasons = (): string[] => {
   const reasons = new Set<string>();
   cachedLeads.forEach(lead => reasons.add(lead.motivoInteres));
   return Array.from(reasons).sort();
+};
+
+/**
+ * Obtiene propiedades de interés únicas para los filtros (campañas activas)
+ */
+export const getUniquePropertyInterests = (): string[] => {
+  const properties = new Set<string>();
+  cachedLeads.forEach(lead => {
+    const propiedadInteres = (lead as any).propiedad_interes;
+    if (propiedadInteres && propiedadInteres.trim() !== '') {
+      properties.add(propiedadInteres.trim());
+    }
+  });
+  return Array.from(properties).sort();
 };
 
 /**

@@ -41,6 +41,7 @@ export interface FilterOptions {
   estado?: LeadStatus;
   cantidadAmbientesMinima?: number;
   motivoInteres?: InterestReason;
+  propiedadInteres?: string; // Filtrar por campaña de propiedad
 }
 
 // Nuevos tipos para propiedades inmobiliarias

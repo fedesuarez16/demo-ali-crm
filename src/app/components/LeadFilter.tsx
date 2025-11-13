@@ -8,6 +8,7 @@ interface LeadFilterProps {
   estados: string[];
   tiposPropiedad: string[];
   motivosInteres: string[];
+  propiedadesInteres?: string[]; // Propiedades de interés únicas (campañas)
   onResetFilters: () => void;
 }
 
@@ -18,6 +19,7 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
   estados,
   tiposPropiedad,
   motivosInteres,
+  propiedadesInteres = [],
   onResetFilters
 }) => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -108,6 +110,7 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
     if (filterOptions.estado) count++;
     if (filterOptions.cantidadAmbientesMinima) count++;
     if (filterOptions.motivoInteres) count++;
+    if (filterOptions.propiedadInteres) count++;
     return count;
   };
 
@@ -154,7 +157,7 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
         </div>
         
         {/* Resto de filtros en grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
           {/* Zona */}
           <div>
             <label htmlFor="zona" className="block text-xs font-medium text-gray-500 mb-1">
@@ -250,6 +253,29 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
               ))}
             </select>
           </div>
+          
+          {/* Propiedad de Interés (Campaña) */}
+          {propiedadesInteres.length > 0 && (
+            <div>
+              <label htmlFor="propiedadInteres" className="block text-xs font-medium text-gray-500 mb-1">
+                Propiedad de Interés (Campaña)
+              </label>
+              <select
+                id="propiedadInteres"
+                name="propiedadInteres"
+                value={filterOptions.propiedadInteres || ''}
+                onChange={handleInputChange}
+                className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1.5 px-2 text-xs text-gray-700"
+              >
+                <option value="">Todas las campañas</option>
+                {propiedadesInteres.map((propiedad) => (
+                  <option key={propiedad} value={propiedad}>
+                    {propiedad}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
     </div>

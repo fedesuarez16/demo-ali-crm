@@ -89,4 +89,13 @@
   .dashboard-card {
     @apply bg-card p-6 rounded-lg shadow-md flex flex-col border border-border;
   }
+  
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }

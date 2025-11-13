@@ -11,7 +11,8 @@ import {
   getUniqueZones,
   getUniqueStatuses,
   getUniquePropertyTypes,
-  getUniqueInterestReasons
+  getUniqueInterestReasons,
+  getUniquePropertyInterests
 } from '../../services/leadService';
 import { exportLeadsToCSV } from '../../utils/exportUtils';
 import Link from 'next/link';
@@ -27,6 +28,8 @@ export default function LeadsTablePage() {
   const [estados, setEstados] = useState<string[]>([]);
   const [tiposPropiedad, setTiposPropiedad] = useState<string[]>([]);
   const [motivosInteres, setMotivosInteres] = useState<string[]>([]);
+  const [propiedadesInteres, setPropiedadesInteres] = useState<string[]>([]);
+  const [showAllCampaigns, setShowAllCampaigns] = useState(false);
   
   // Estado para columnas visibles
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['frío', 'tibio', 'caliente', 'llamada', 'visita']);
@@ -53,6 +56,7 @@ export default function LeadsTablePage() {
       setEstados(getUniqueStatuses());
       setTiposPropiedad(getUniquePropertyTypes());
       setMotivosInteres(getUniqueInterestReasons());
+      setPropiedadesInteres(getUniquePropertyInterests());
       
       setIsLoading(false);
     };
@@ -219,6 +223,46 @@ export default function LeadsTablePage() {
             </div>
           </div>
 
+          {/* Barra de campañas */}
+          {propiedadesInteres.length > 0 && (
+            <div className="px-4 py-3 border-t border-gray-100 bg-white/50">
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                <span className="text-xs font-medium text-gray-600 mr-1 whitespace-nowrap">Campañas:</span>
+                <button
+                  onClick={() => handleFilterChange({ ...filterOptions, propiedadInteres: undefined })}
+                  className={`px-3 py-1 text-xs rounded-full border transition-colors whitespace-nowrap ${
+                    !filterOptions.propiedadInteres
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  Todas
+                </button>
+                {(showAllCampaigns ? propiedadesInteres : propiedadesInteres.slice(0, 5)).map((propiedad) => (
+                  <button
+                    key={propiedad}
+                    onClick={() => handleFilterChange({ ...filterOptions, propiedadInteres: propiedad })}
+                    className={`px-3 py-1 text-xs rounded-full border transition-colors whitespace-nowrap ${
+                      filterOptions.propiedadInteres === propiedad
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {propiedad}
+                  </button>
+                ))}
+                {propiedadesInteres.length > 5 && (
+                  <button
+                    onClick={() => setShowAllCampaigns(!showAllCampaigns)}
+                    className="px-3 py-1 text-xs rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap"
+                  >
+                    {showAllCampaigns ? 'Mostrar menos' : `Mostrar todas (${propiedadesInteres.length - 5})`}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Barra de filtros plegable */}
           <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isFilterVisible ? 'max-h-96' : 'max-h-0'}`}>
             <LeadFilter
@@ -228,6 +272,7 @@ export default function LeadsTablePage() {
               estados={estados}
               tiposPropiedad={tiposPropiedad}
               motivosInteres={motivosInteres}
+              propiedadesInteres={propiedadesInteres}
               onResetFilters={handleResetFilters}
             />
           </div>
