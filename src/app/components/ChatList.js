@@ -220,7 +220,7 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
           onSelectChat(foundChat);
         } else {
           console.warn('⚠️ No se encontró chat para el número:', normalizedTarget);
-          console.log('📋 Chats disponibles:', chats.map(chat => {
+          const availableChats = chats.map(chat => {
             const rawPhone = getChatPhoneNumber(chat);
             return {
               id: chat.id,
@@ -229,7 +229,8 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
               enriched_phone: chat.enriched_phone_number,
               enriched_identifier: chat.enriched_identifier
             };
-          })));
+          });
+          console.log('📋 Chats disponibles:', availableChats);
         }
       }
     }

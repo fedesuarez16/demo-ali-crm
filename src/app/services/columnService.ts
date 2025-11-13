@@ -28,7 +28,7 @@ export interface KanbanColumns {
  */
 export const getKanbanColumns = async (): Promise<{ customColumns: string[]; visibleColumns: string[] }> => {
   try {
-    const { data, error } = await getSupabase()
+    const { data, error } = await (getSupabase() as any)
       .from('kanban_columns')
       .select('*')
       .order('id', { ascending: false })
@@ -52,11 +52,11 @@ export const getKanbanColumns = async (): Promise<{ customColumns: string[]; vis
       };
     }
 
-    // Usar el primer registro (más reciente)
-    const latestRecord = data[0];
+    // Usar el primer registro (más reciente) con tipo explícito
+    const latestRecord = data[0] as KanbanColumns;
     return {
-      customColumns: latestRecord.custom_columns || [],
-      visibleColumns: latestRecord.visible_columns || ['frío', 'tibio', 'caliente', 'llamada', 'visita']
+      customColumns: (latestRecord.custom_columns as string[]) || [],
+      visibleColumns: (latestRecord.visible_columns as string[]) || ['frío', 'tibio', 'caliente', 'llamada', 'visita']
     };
   } catch (e) {
     console.error('Supabase not configured or failed to initialize:', e);
@@ -78,7 +78,7 @@ export const saveKanbanColumns = async (
 ): Promise<boolean> => {
   try {
     // Primero intentar obtener el registro existente
-    const { data: existingData } = await getSupabase()
+    const { data: existingData } = await (getSupabase() as any)
       .from('kanban_columns')
       .select('id')
       .order('id', { ascending: false })
@@ -90,34 +90,37 @@ export const saveKanbanColumns = async (
       updated_at: new Date().toISOString()
     };
 
-    if (existingData && existingData.length > 0 && existingData[0]?.id) {
-      // Actualizar registro existente
-      const { error } = await getSupabase()
-        .from('kanban_columns')
-        .update(columnsData)
-        .eq('id', existingData[0].id);
+    if (existingData && existingData.length > 0) {
+      const existingRecord = existingData[0] as { id: number };
+      if (existingRecord?.id) {
+        // Actualizar registro existente
+        const { error } = await (getSupabase() as any)
+          .from('kanban_columns')
+          .update(columnsData)
+          .eq('id', existingRecord.id);
 
-      if (error) {
-        console.error('Error updating kanban columns in Supabase:', error.message);
-        return false;
+        if (error) {
+          console.error('Error updating kanban columns in Supabase:', error.message);
+          return false;
+        }
+
+        console.log('Kanban columns updated successfully');
+        return true;
       }
-
-      console.log('Kanban columns updated successfully');
-      return true;
-    } else {
-      // Crear nuevo registro
-      const { error } = await getSupabase()
-        .from('kanban_columns')
-        .insert([columnsData]);
-
-      if (error) {
-        console.error('Error creating kanban columns in Supabase:', error.message);
-        return false;
-      }
-
-      console.log('Kanban columns created successfully');
-      return true;
     }
+    
+    // Crear nuevo registro
+    const { error } = await (getSupabase() as any)
+      .from('kanban_columns')
+      .insert([columnsData]);
+
+    if (error) {
+      console.error('Error creating kanban columns in Supabase:', error.message);
+      return false;
+    }
+
+    console.log('Kanban columns created successfully');
+    return true;
   } catch (e) {
     console.error('Exception saving kanban columns:', e);
     return false;
@@ -132,7 +135,7 @@ export const migrateColumnsFromLocalStorage = async (): Promise<boolean> => {
 
   try {
     // Verificar si ya hay datos en Supabase
-    const { data: existingData } = await getSupabase()
+    const { data: existingData } = await (getSupabase() as any)
       .from('kanban_columns')
       .select('id')
       .limit(1);
