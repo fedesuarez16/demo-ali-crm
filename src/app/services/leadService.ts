@@ -17,6 +17,189 @@ const getSupabase = () => {
 // Local in-memory cache to support filtering on already-fetched data
 let cachedLeads: Lead[] = [];
 
+// Mapa de nombres originales a nombres normalizados/agrupados
+let campaignGroupMap: Map<string, string> = new Map();
+let campaignGroups: Map<string, string[]> = new Map(); // Grupo representativo -> [variantes]
+
+/**
+ * Normaliza un nombre de campaña para comparación
+ */
+const normalizeCampaignName = (name: string): string => {
+  if (!name) return '';
+  
+  // Convertir a minúsculas y trim
+  let normalized = name.toLowerCase().trim();
+  
+  // Remover acentos
+  normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  
+  // Remover caracteres especiales y múltiples espacios
+  normalized = normalized.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  
+  // Remover palabras comunes que no aportan valor para identificar direcciones
+  const commonWords = [
+    'entre', 'y', 'con', 'sin', 'de', 'del', 'la', 'el', 'las', 'los',
+    'av', 'avenida', 'calle', 'c', 'av.', 'calle.', 'entre', 'esq',
+    'esquina', 'altura', 'al', 'numero', 'nro', 'n°', '#', 'casa', 'departamento', 'depto'
+  ];
+  
+  // Dividir en palabras y filtrar palabras comunes
+  const words = normalized.split(' ').filter(word => {
+    const cleanWord = word.trim();
+    // Mantener palabras significativas (más de 1 carácter y no en la lista de comunes)
+    return cleanWord.length > 1 && !commonWords.includes(cleanWord);
+  });
+  
+  // Reunir palabras significativas
+  normalized = words.join(' ').trim();
+  
+  return normalized;
+};
+
+/**
+ * Calcula la similitud entre dos strings (0-1)
+ * Optimizado para detectar direcciones similares
+ */
+const stringSimilarity = (str1: string, str2: string): number => {
+  const s1 = normalizeCampaignName(str1);
+  const s2 = normalizeCampaignName(str2);
+  
+  if (s1 === s2) return 1.0;
+  if (s1.length === 0 || s2.length === 0) return 0.0;
+  
+  // Si uno contiene al otro completamente, alta similitud
+  if (s1.includes(s2) || s2.includes(s1)) {
+    const longer = Math.max(s1.length, s2.length);
+    const shorter = Math.min(s1.length, s2.length);
+    return Math.max(0.85, shorter / longer); // Mínimo 85% si uno contiene al otro
+  }
+  
+  // Obtener palabras significativas (después de normalización)
+  const words1 = s1.split(' ').filter(w => w.length > 1);
+  const words2 = s2.split(' ').filter(w => w.length > 1);
+  
+  if (words1.length === 0 || words2.length === 0) {
+    // Si después de normalizar no quedan palabras, comparar directamente
+    const longer = s1.length > s2.length ? s1 : s2;
+    const shorter = s1.length > s2.length ? s2 : s1;
+    if (longer.length === 0) return 1.0;
+    const lengthSimilarity = shorter.length / longer.length;
+    return lengthSimilarity > 0.7 ? lengthSimilarity : 0.0;
+  }
+  
+  // Calcular similitud por palabras comunes
+  const set1 = new Set(words1);
+  const set2 = new Set(words2);
+  const commonWords = words1.filter(w => set2.has(w)).length;
+  const totalWords = Math.max(words1.length, words2.length);
+  
+  if (totalWords === 0) return 0.5;
+  
+  const wordSimilarity = commonWords / totalWords;
+  
+  // Si tienen todas las palabras en común (o casi todas), alta similitud
+  if (wordSimilarity >= 0.8) {
+    return Math.min(1.0, wordSimilarity * 1.1); // Permitir hasta 110% para asegurar agrupación
+  }
+  
+  // Si comparten más del 60% de palabras, considerar similitud media-alta
+  if (wordSimilarity >= 0.6) {
+    // Verificar si las palabras que no coinciden son muy similares
+    const unique1 = words1.filter(w => !set2.has(w));
+    const unique2 = words2.filter(w => !set1.has(w));
+    
+    // Si hay pocas palabras únicas, alta similitud
+    if (unique1.length <= 1 && unique2.length <= 1) {
+      return Math.max(0.75, wordSimilarity * 1.2);
+    }
+    
+    return wordSimilarity;
+  }
+  
+  // Si tienen menos del 60% de palabras en común, verificar si las palabras principales coinciden
+  // (primeras 2-3 palabras suelen ser la dirección principal)
+  const mainWords1 = words1.slice(0, Math.min(3, words1.length));
+  const mainWords2 = words2.slice(0, Math.min(3, words2.length));
+  const mainCommon = mainWords1.filter(w => set2.has(w)).length;
+  const mainTotal = Math.max(mainWords1.length, mainWords2.length);
+  
+  if (mainTotal > 0 && mainCommon / mainTotal >= 0.8) {
+    // Si las palabras principales coinciden en 80%+, considerar similitud alta
+    return 0.75;
+  }
+  
+  return wordSimilarity;
+};
+
+/**
+ * Agrupa campañas similares
+ */
+const groupSimilarCampaigns = (campaigns: string[]): { groups: Map<string, string[]>, map: Map<string, string> } => {
+  const groups = new Map<string, string[]>();
+  const map = new Map<string, string>();
+  const threshold = 0.65; // 65% de similitud para considerar iguales (más permisivo para direcciones)
+  
+  // Eliminar duplicados exactos antes de procesar
+  const uniqueCampaigns = [...new Set(campaigns)];
+  
+  // Contar frecuencia de cada campaña (normalizada) para usar la más frecuente como representante
+  const campaignCounts = new Map<string, number>();
+  const normalizedToOriginal = new Map<string, string[]>();
+  
+  uniqueCampaigns.forEach(c => {
+    const normalized = normalizeCampaignName(c);
+    campaignCounts.set(normalized, (campaignCounts.get(normalized) || 0) + 1);
+    
+    if (!normalizedToOriginal.has(normalized)) {
+      normalizedToOriginal.set(normalized, []);
+    }
+    normalizedToOriginal.get(normalized)!.push(c);
+  });
+  
+  // Ordenar campañas por frecuencia (las más comunes primero para usarlas como representativas)
+  const sortedCampaigns = uniqueCampaigns.sort((a, b) => {
+    const countA = campaignCounts.get(normalizeCampaignName(a)) || 0;
+    const countB = campaignCounts.get(normalizeCampaignName(b)) || 0;
+    if (countB !== countA) return countB - countA; // Más frecuentes primero
+    return a.localeCompare(b); // Luego alfabéticamente
+  });
+  
+  // Rastrear qué campañas ya fueron agrupadas
+  const processedCampaigns = new Set<string>();
+  
+  for (const campaign of sortedCampaigns) {
+    // Si ya fue procesada, saltarla
+    if (processedCampaigns.has(campaign)) continue;
+    
+    const normalized = normalizeCampaignName(campaign);
+    let foundGroup = false;
+    
+    // Buscar si pertenece a algún grupo existente
+    for (const [groupRep, variants] of groups.entries()) {
+      // Comparar con el representante del grupo
+      const similarity = stringSimilarity(campaign, groupRep);
+      
+      if (similarity >= threshold) {
+        // Agregar a este grupo
+        variants.push(campaign);
+        map.set(campaign, groupRep);
+        processedCampaigns.add(campaign);
+        foundGroup = true;
+        break;
+      }
+    }
+    
+    // Si no pertenece a ningún grupo, crear uno nuevo
+    if (!foundGroup) {
+      groups.set(campaign, [campaign]);
+      map.set(campaign, campaign);
+      processedCampaigns.add(campaign);
+    }
+  }
+  
+  return { groups, map };
+};
+
 // Map a DB row (snake_case or camelCase) into our Lead type
 const mapLeadRow = (row: any): Lead => {
   return {
@@ -110,9 +293,23 @@ export const filterLeads = (options: FilterOptions): Lead[] => {
     }
     
     // Filtrar por propiedad de interés (campaña) si se especifica
+    // Incluye todas las variantes del grupo para manejar diferencias ortográficas
     if (options.propiedadInteres) {
       const leadPropiedadInteres = (lead as any).propiedad_interes || '';
-      if (!leadPropiedadInteres || leadPropiedadInteres.toLowerCase() !== options.propiedadInteres.toLowerCase()) {
+      if (!leadPropiedadInteres) {
+        return false;
+      }
+      
+      // Obtener todas las variantes de la campaña seleccionada
+      const campaignVariants = getCampaignVariants(options.propiedadInteres);
+      
+      // Verificar si el lead pertenece a alguna de las variantes
+      const normalizedLeadCampaign = normalizeCampaignName(leadPropiedadInteres);
+      const matches = campaignVariants.some(variant => 
+        normalizeCampaignName(variant) === normalizedLeadCampaign
+      );
+      
+      if (!matches) {
         return false;
       }
     }
@@ -172,16 +369,45 @@ export const getUniqueInterestReasons = (): string[] => {
 
 /**
  * Obtiene propiedades de interés únicas para los filtros (campañas activas)
+ * Agrupa campañas similares para evitar duplicados por errores ortográficos
  */
 export const getUniquePropertyInterests = (): string[] => {
-  const properties = new Set<string>();
+  const allProperties: string[] = [];
   cachedLeads.forEach(lead => {
     const propiedadInteres = (lead as any).propiedad_interes;
     if (propiedadInteres && propiedadInteres.trim() !== '') {
-      properties.add(propiedadInteres.trim());
+      allProperties.push(propiedadInteres.trim());
     }
   });
-  return Array.from(properties).sort();
+  
+  // Si no hay propiedades, retornar vacío
+  if (allProperties.length === 0) return [];
+  
+  // Primero, eliminar duplicados exactos antes de agrupar
+  const uniqueProperties = [...new Set(allProperties)];
+  
+  // Agrupar campañas similares
+  const { groups, map } = groupSimilarCampaigns(uniqueProperties);
+  
+  // Guardar el mapa para usar en el filtrado
+  campaignGroupMap = map;
+  campaignGroups = groups;
+  
+  // Retornar solo los nombres representativos de cada grupo (sin duplicados, ordenados)
+  const representatives = Array.from(groups.keys());
+  
+  // Asegurarse de que no haya duplicados en los representantes (por si acaso)
+  const uniqueRepresentatives = [...new Set(representatives)];
+  
+  return uniqueRepresentatives.sort();
+};
+
+/**
+ * Obtiene todas las variantes de una campaña (incluyendo las que pertenecen al mismo grupo)
+ */
+export const getCampaignVariants = (campaignName: string): string[] => {
+  const representative = campaignGroupMap.get(campaignName) || campaignName;
+  return campaignGroups.get(representative) || [campaignName];
 };
 
 /**
