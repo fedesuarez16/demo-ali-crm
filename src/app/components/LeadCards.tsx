@@ -323,6 +323,40 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                             className={`relative rounded-xl border-l-4 border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer bg-white/90 backdrop-blur ${getStatusColor(lead.estado)}`}
                             onClick={(e) => handleLeadClick(lead, e)}
                           >
+                            {/* Contadores absolutos - esquina superior derecha */}
+                            {matchCount > 0 && (
+                              <div className="absolute top-1 right-9 bg-emerald-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center shadow-md z-20 pointer-events-none">
+                                {matchCount}
+                              </div>
+                            )}
+                            {((lead.seguimientos_count !== undefined && lead.seguimientos_count !== null && lead.seguimientos_count > 0) || true) && (
+                              <div 
+                                className="absolute top-1 right-1 z-50"
+                                style={{
+                                  position: 'absolute',
+                                  top: '4px',
+                                  right: '4px',
+                                  color: '#6b7280',
+                                  fontSize: '10px',
+                                  fontWeight: '700',
+                                  borderRadius: '4px',
+                                  minWidth: '18px',
+                                  height: '18px',
+                                  paddingLeft: '4px',
+                                  paddingRight: '4px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  backgroundColor: '#f3f4f6',
+                                  border: '1px solid #e5e7eb',
+                                  zIndex: 50,
+                                  pointerEvents: 'none'
+                                }}
+                              >
+                                {lead.seguimientos_count || 1}
+                              </div>
+                            )}
+                            
                             <div className="p-2 space-y-1.5">
                               <div className="pr-6">
                                 <h4 className="text-xs font-semibold text-slate-900 leading-tight truncate">
@@ -355,11 +389,6 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                                   <span className="truncate">{(lead as any).whatsapp_id || lead.telefono}</span>
                                 </div>
                               </div>
-                              {matchCount > 0 && (
-                                <div className="absolute top-3 right-3 bg-emerald-500 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center shadow-sm">
-                                  {matchCount}
-                                </div>
-                              )}
                             </div>
                           </div>
                         );

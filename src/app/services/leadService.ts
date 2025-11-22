@@ -230,6 +230,8 @@ const mapLeadRow = (row: any): Lead => {
     ultima_interaccion: row.ultima_interaccion ?? undefined,
     created_at: row.created_at ?? undefined,
     updated_at: row.updated_at ?? undefined,
+    seguimientos_count: row.seguimientos_count ?? 0,
+    notas: row.notas ?? undefined,
   };
 };
 
@@ -495,6 +497,8 @@ export const createLead = async (leadData: Partial<Lead>): Promise<Lead | null> 
       propiedades_mostradas: leadData.propiedades_mostradas || null,
       propiedad_interes: leadData.propiedad_interes || null,
       ultima_interaccion: new Date().toISOString(),
+      seguimientos_count: leadData.seguimientos_count ?? 0,
+      notas: leadData.notas ?? null,
     };
     
     const { data, error } = await (getSupabase() as any)
@@ -573,6 +577,12 @@ export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promi
     }
     if (leadData.propiedad_interes !== undefined) {
       dataToUpdate.propiedad_interes = leadData.propiedad_interes;
+    }
+    if (leadData.seguimientos_count !== undefined) {
+      dataToUpdate.seguimientos_count = leadData.seguimientos_count;
+    }
+    if (leadData.notas !== undefined) {
+      dataToUpdate.notas = leadData.notas;
     }
     
     // Actualizar ultima_interaccion

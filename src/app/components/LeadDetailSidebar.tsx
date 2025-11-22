@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Lead, Property } from '../types';
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { X, MessageSquare, Phone, Mail, Calendar, ChevronDown, MapPin, DollarSig
 import { cn } from '@/lib/utils';
 import { programarMensaje } from '../services/mensajeService';
 import { useChatStatus } from '../../hooks/useChatStatus';
+import { updateLead } from '../services/leadService';
 
 interface LeadDetailSidebarProps {
   lead: Lead | null;
@@ -39,10 +40,24 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAddingToRedis, setIsAddingToRedis] = useState(false);
   const [isRemovingFromRedis, setIsRemovingFromRedis] = useState(false);
+  const [notas, setNotas] = useState(lead?.notas || '');
+  const [isSavingNotas, setIsSavingNotas] = useState(false);
+  const [seguimientosCount, setSeguimientosCount] = useState(lead?.seguimientos_count || 0);
+  const [isSavingSeguimientos, setIsSavingSeguimientos] = useState(false);
   
   // Hook para verificar el estado del chat via n8n webhook
   const phoneNumber = (lead as any)?.whatsapp_id || lead?.telefono;
   const { isActive: isChatActive, lastActivity, loading: chatLoading, refreshChatStatus, source, chatData } = useChatStatus(phoneNumber);
+  
+  // Actualizar notas cuando cambia el lead
+  useEffect(() => {
+    if (lead?.notas !== undefined) {
+      setNotas(lead.notas || '');
+    }
+    if (lead?.seguimientos_count !== undefined && lead?.seguimientos_count !== null) {
+      setSeguimientosCount(lead.seguimientos_count);
+    }
+  }, [lead?.id, lead?.notas, lead?.seguimientos_count]);
   
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-AR', {
@@ -108,6 +123,49 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
     return templates[plantilla] || '';
   };
 
+  // Función para guardar notas
+  const handleSaveNotas = async () => {
+    if (!lead) return;
+    
+    setIsSavingNotas(true);
+    try {
+      const updatedLead = await updateLead(lead.id, { notas });
+      if (updatedLead) {
+        // Las notas se actualizaron exitosamente
+        // El componente padre debería actualizar el lead si es necesario
+      }
+    } catch (error) {
+      console.error('Error saving notas:', error);
+      alert('Error al guardar las notas');
+    } finally {
+      setIsSavingNotas(false);
+    }
+  };
+  
+  // Función para guardar seguimientos_count
+  const handleSaveSeguimientos = async () => {
+    if (!lead) return;
+    
+    const count = Number(seguimientosCount);
+    if (isNaN(count) || count < 0) {
+      alert('Por favor ingresa un número válido (0 o mayor)');
+      return;
+    }
+    
+    setIsSavingSeguimientos(true);
+    try {
+      const updatedLead = await updateLead(lead.id, { seguimientos_count: count });
+      if (updatedLead) {
+        // El seguimientos_count se actualizó exitosamente
+      }
+    } catch (error) {
+      console.error('Error saving seguimientos_count:', error);
+      alert('Error al guardar el contador de seguimientos');
+    } finally {
+      setIsSavingSeguimientos(false);
+    }
+  };
+  
   // Función helper para normalizar números de teléfono (consistente con ChatList.js)
   const normalizePhoneNumber = (phone: string) => {
     if (!phone) return '';
@@ -270,12 +328,12 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
       {/* Sidebar */}
       <div 
         className={cn(
-          "fixed top-0 right-0 h-full w-[500px] bg-background shadow-xl z-50 transform transition-transform duration-300 ease-in-out border-l",
+          "fixed top-0 right-0 h-full w-[500px] bg-background shadow-xl z-50 transform transition-transform duration-300 ease-in-out border-l flex flex-col",
           isOpen ? 'translate-x-0' : 'translate-x-full'
         )}
       >
         {/* Header */}
-        <div className="p-6 border-b bg-card sticky top-0 z-10">
+        <div className="p-6 border-b bg-card flex-shrink-0 z-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
@@ -350,7 +408,7 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
         </div>
         
         {/* Action buttons */}
-        <div className="p-6 bg-muted/50 border-b">
+        <div className="p-6 bg-muted/50 border-b flex-shrink-0">
           <div className="space-y-3">
             {/* Editar Lead */}
             {onEditLead && lead && (
@@ -606,8 +664,8 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
         </div>
         
         {/* Scrollable content */}
-        <ScrollArea className="flex-1 h-[calc(100vh-200px)]">
-          <div className="p-6 space-y-6">
+        <ScrollArea className="flex-1 overflow-hidden">
+          <div className="p-6 space-y-6 pb-8">
             {/* Contact Information */}
             <Card>
               <CardHeader>
@@ -617,7 +675,6 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-               
                 <div className="flex items-center gap-3">
                   <Phone className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm">{(lead as any).whatsapp_id || lead.telefono}</span>
@@ -627,6 +684,33 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                   <span className="text-sm">
                     Última interacción: {lead.ultima_interaccion ? formatDate(lead.ultima_interaccion) : formatDate(lead.fechaContacto)}
                   </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 pt-2 border-t">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Seguimientos:</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      value={seguimientosCount}
+                      onChange={(e) => setSeguimientosCount(Number(e.target.value))}
+                      className="w-16 h-8 text-center text-sm"
+                      disabled={isSavingSeguimientos}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={handleSaveSeguimientos}
+                      disabled={isSavingSeguimientos || !lead}
+                      className="h-8"
+                    >
+                      {isSavingSeguimientos ? (
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                      ) : (
+                        'Guardar'
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -739,21 +823,58 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
               </CardContent>
             </Card>
             
-            {/* Notes */}
+            {/* Notes - Editable */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Notas
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <textarea
+                  className="w-full h-32 px-3 py-2 text-sm border border-input rounded-md bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
+                  placeholder="Agrega notas sobre este lead..."
+                  value={notas}
+                  onChange={(e) => setNotas(e.target.value)}
+                  disabled={isSavingNotas}
+                />
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={handleSaveNotas}
+                    disabled={isSavingNotas || !lead}
+                  >
+                    {isSavingNotas ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                        Guardando...
+                      </>
+                    ) : (
+                      'Guardar Notas'
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+            
+            {/* Observaciones antiguas (si existen y son diferentes de notas) */}
             {(lead.observaciones || (lead as any).propiedades_mostradas) && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Notas
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="bg-muted p-3 rounded-md text-sm text-muted-foreground">
-                    {lead.observaciones || (lead as any).propiedades_mostradas}
-                  </div>
-                </CardContent>
-              </Card>
+              (lead.observaciones || (lead as any).propiedades_mostradas) !== notas && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Observaciones
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="bg-muted p-3 rounded-md text-sm text-muted-foreground">
+                      {lead.observaciones || (lead as any).propiedades_mostradas}
+                    </div>
+                  </CardContent>
+                </Card>
+              )
             )}
             
             {/* Matching Properties */}

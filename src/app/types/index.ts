@@ -32,6 +32,8 @@ export interface Lead {
   ultima_interaccion?: string;
   created_at?: string;
   updated_at?: string;
+  seguimientos_count?: number;
+  notas?: string;
 }
 
 export interface FilterOptions {
