@@ -30,7 +30,7 @@ export default function Page() {
 
   // Agrupar leads por fecha
   const leadsByDate = useMemo(() => {
-    const grouped: Record<string, number> = {};
+    const grouped: Record<string, { total: number; tibios: number; frios: number; calientes: number }> = {};
     
     // Obtener los últimos 30 días
     const today = new Date();
@@ -41,7 +41,7 @@ export default function Page() {
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
       dates.push(dateStr);
-      grouped[dateStr] = 0;
+      grouped[dateStr] = { total: 0, tibios: 0, frios: 0, calientes: 0 };
     }
 
     // Contar leads por fecha
@@ -50,22 +50,44 @@ export default function Page() {
       const dateStr = leadDate.toISOString().split('T')[0];
       
       if (grouped[dateStr] !== undefined) {
-        grouped[dateStr]++;
+        grouped[dateStr].total++;
+        if (lead.estado === 'tibio') {
+          grouped[dateStr].tibios++;
+        } else if (lead.estado === 'frío') {
+          grouped[dateStr].frios++;
+        } else if (lead.estado === 'caliente') {
+          grouped[dateStr].calientes++;
+        }
       }
     });
 
     // Convertir a array para el gráfico
     return dates.map(date => ({
       date,
-      leads: grouped[date],
+      leads: grouped[date].total,
+      tibios: grouped[date].tibios,
+      frios: grouped[date].frios,
+      calientes: grouped[date].calientes,
     }));
   }, [leads]);
 
   // Configuración del gráfico
   const chartConfig: ChartConfig = {
     leads: {
-      label: "Leads",
-      color: "#1E90FF", // Celeste (sky-500)
+      label: "Leads Totales",
+      color: "#1E90FF", // Celeste
+    },
+    tibios: {
+      label: "Leads Tibios",
+      color: "#FFA500", // Naranja
+    },
+    frios: {
+      label: "Leads Fríos",
+      color: "#4169E1", // Azul
+    },
+    calientes: {
+      label: "Leads Calientes",
+      color: "#FF4500", // Rojo/Naranja oscuro
     },
   };
 
@@ -227,7 +249,7 @@ export default function Page() {
           <CardHeader>
             <CardTitle>Leads por Período</CardTitle>
             <CardDescription>
-              Cantidad de leads ingresados en los últimos 30 días
+              Cantidad de leads ingresados en los últimos 30 días (total, tibios, fríos y calientes)
             </CardDescription>
           </CardHeader>
           <CardContent>

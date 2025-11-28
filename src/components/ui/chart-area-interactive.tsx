@@ -62,6 +62,27 @@ export function ChartAreaInteractive({
           bottom: 0,
         }}
       >
+        <defs>
+          {Object.keys(config).map((key) => {
+            if (key === dateKey) return null
+            const itemConfig = config[key]
+            const color = itemConfig?.color || "#0ea5e9"
+            return (
+              <linearGradient key={`fill${key}`} id={`fill${key}`} x1="0" y1="0" x2="0" y2="1">
+                <stop
+                  offset="5%"
+                  stopColor={color}
+                  stopOpacity={0.8}
+                />
+                <stop
+                  offset="95%"
+                  stopColor={color}
+                  stopOpacity={0.1}
+                />
+              </linearGradient>
+            )
+          })}
+        </defs>
         <CartesianGrid strokeDasharray="3 3" vertical={false} />
         <XAxis
           dataKey={dateKey}
@@ -81,15 +102,30 @@ export function ChartAreaInteractive({
           if (key === dateKey) return null
           const itemConfig = config[key]
           const color = itemConfig?.color || "#0ea5e9"
+          // Todas las series usan áreas con gradientes
+          if (key === "leads") {
+            return (
+              <Area
+                key={key}
+                dataKey={key}
+                type="natural"
+                fill={`url(#fill${key})`}
+                stroke={color}
+                stackId="a"
+              />
+            )
+          }
+          // Para tibios, frios y calientes también usamos áreas con gradientes pero sin stackId para que se superpongan
           return (
             <Area
               key={key}
               dataKey={key}
               type="natural"
-              fill={color}
-              fillOpacity={0.6}
+              fill={`url(#fill${key})`}
               stroke={color}
-              stackId="a"
+              strokeWidth={2.5}
+              dot={false}
+              activeDot={{ r: 4 }}
             />
           )
         })}
