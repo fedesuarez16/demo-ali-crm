@@ -171,3 +171,32 @@ export interface DocumentFilterOptions {
   dormitoriosMin?: number;
   banosMin?: number;
 }
+
+// Tipo para la tabla propiedades de Supabase
+export interface SupabasePropiedad {
+  id: string;
+  tipo_de_propiedad: string;
+  direccion: string;
+  zona: string;
+  valor: string;
+  dormitorios: string;
+  banos: string;
+  patio_parque: string;
+  garage: string;
+  mts_const: string;
+  lote: string;
+  piso: string;
+  link: string;
+  columna_1: string;
+  apto_banco: string;
+  alternativa_menor_1: string;
+  alternativa_menor_2: string;
+  alternativa_menor_3: string;
+  alterniva_menor_4: string;
+  alternativa_menor_5: string;
+  alternativa_mayor: string;
+  alternativa_mayor_2: string;
+  alternativa_mayor_3: string;
+  alternativa_mayor_4: string;
+  alternativa_mayor_5: string;
+}

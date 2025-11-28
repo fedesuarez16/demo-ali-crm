@@ -74,27 +74,27 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
     // 2. Intentar múltiples fuentes de datos (fallback)
     const sender = chat.last_non_activity_message?.sender;
     const contact = chat.contact;
-
+    
     // 3. Buscar en sender phone_number
     if (sender?.phone_number) {
       return sender.phone_number;
     }
-
+    
     // 4. Buscar en sender identifier (puede ser JID)
     if (sender?.identifier) {
       return sender.identifier;
     }
-
+    
     // 5. Buscar en contact phone_number
     if (contact?.phone_number) {
       return contact.phone_number;
     }
-
+    
     // 6. Buscar en contact identifier
     if (contact?.identifier) {
       return contact.identifier;
     }
-
+    
     // 7. Buscar en meta.sender (Chatwoot puede guardar info aquí)
     if (chat.meta?.sender?.phone_number || chat.meta?.sender?.phone) {
       return chat.meta.sender.phone_number || chat.meta.sender.phone;
@@ -122,7 +122,7 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
     if (chat.contact_inbox?.source_id) {
       return chat.contact_inbox.source_id;
     }
-
+    
     return null;
   };
 

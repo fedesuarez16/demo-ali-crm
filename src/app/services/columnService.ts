@@ -18,15 +18,29 @@ export interface KanbanColumns {
   id: number;
   custom_columns: string[];
   visible_columns: string[];
+  column_colors?: Record<string, string>; // Mapeo de nombre de columna -> color hex
   created_at?: string;
   updated_at?: string;
 }
+
+// Colores por defecto para las columnas estándar
+const DEFAULT_COLORS: Record<string, string> = {
+  'frío': '#3b82f6',      // Azul
+  'tibio': '#eab308',     // Amarillo
+  'caliente': '#ef4444',  // Rojo
+  'llamada': '#8b5cf6',   // Púrpura
+  'visita': '#10b981'     // Verde
+};
 
 /**
  * Obtiene las columnas personalizadas desde Supabase
  * Si no existen, devuelve valores por defecto
  */
-export const getKanbanColumns = async (): Promise<{ customColumns: string[]; visibleColumns: string[] }> => {
+export const getKanbanColumns = async (): Promise<{ 
+  customColumns: string[]; 
+  visibleColumns: string[]; 
+  columnColors: Record<string, string> 
+}> => {
   try {
     const { data, error } = await (getSupabase() as any)
       .from('kanban_columns')
@@ -39,7 +53,8 @@ export const getKanbanColumns = async (): Promise<{ customColumns: string[]; vis
       // En caso de error, devolver valores por defecto
       return {
         customColumns: [],
-        visibleColumns: ['frío', 'tibio', 'caliente', 'llamada', 'visita']
+        visibleColumns: ['frío', 'tibio', 'caliente', 'llamada', 'visita'],
+        columnColors: DEFAULT_COLORS
       };
     }
 
@@ -48,22 +63,30 @@ export const getKanbanColumns = async (): Promise<{ customColumns: string[]; vis
       console.log('No existe configuración de columnas, usando valores por defecto');
       return {
         customColumns: [],
-        visibleColumns: ['frío', 'tibio', 'caliente', 'llamada', 'visita']
+        visibleColumns: ['frío', 'tibio', 'caliente', 'llamada', 'visita'],
+        columnColors: DEFAULT_COLORS
       };
     }
 
     // Usar el primer registro (más reciente) con tipo explícito
     const latestRecord = data[0] as KanbanColumns;
+    const columnColors = (latestRecord.column_colors as Record<string, string>) || {};
+    
+    // Combinar con colores por defecto para asegurar que todas las columnas tengan color
+    const mergedColors = { ...DEFAULT_COLORS, ...columnColors };
+    
     return {
       customColumns: (latestRecord.custom_columns as string[]) || [],
-      visibleColumns: (latestRecord.visible_columns as string[]) || ['frío', 'tibio', 'caliente', 'llamada', 'visita']
+      visibleColumns: (latestRecord.visible_columns as string[]) || ['frío', 'tibio', 'caliente', 'llamada', 'visita'],
+      columnColors: mergedColors
     };
   } catch (e) {
     console.error('Supabase not configured or failed to initialize:', e);
     // En caso de error, devolver valores por defecto
     return {
       customColumns: [],
-      visibleColumns: ['frío', 'tibio', 'caliente', 'llamada', 'visita']
+      visibleColumns: ['frío', 'tibio', 'caliente', 'llamada', 'visita'],
+      columnColors: DEFAULT_COLORS
     };
   }
 };
@@ -74,19 +97,37 @@ export const getKanbanColumns = async (): Promise<{ customColumns: string[]; vis
  */
 export const saveKanbanColumns = async (
   customColumns: string[],
-  visibleColumns: string[]
+  visibleColumns: string[],
+  columnColors?: Record<string, string>
 ): Promise<boolean> => {
   try {
-    // Primero intentar obtener el registro existente
+    // Primero intentar obtener el registro existente para preservar los colores existentes
     const { data: existingData } = await (getSupabase() as any)
       .from('kanban_columns')
-      .select('id')
+      .select('*')
       .order('id', { ascending: false })
       .limit(1);
+
+    let finalColumnColors: Record<string, string> = {};
+    
+    if (existingData && existingData.length > 0) {
+      const existingRecord = existingData[0] as KanbanColumns;
+      // Preservar colores existentes
+      finalColumnColors = (existingRecord.column_colors as Record<string, string>) || {};
+    }
+    
+    // Combinar con colores por defecto
+    finalColumnColors = { ...DEFAULT_COLORS, ...finalColumnColors };
+    
+    // Si se proporcionan nuevos colores, actualizarlos
+    if (columnColors) {
+      finalColumnColors = { ...finalColumnColors, ...columnColors };
+    }
 
     const columnsData = {
       custom_columns: customColumns,
       visible_columns: visibleColumns,
+      column_colors: finalColumnColors,
       updated_at: new Date().toISOString()
     };
 

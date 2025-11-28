@@ -8,9 +8,10 @@ interface LeadCardsProps {
   onLeadStatusChange?: (leadId: string, newStatus: LeadStatus) => void;
   onEditLead?: (lead: Lead) => void;
   visibleColumns?: string[];
+  columnColors?: Record<string, string>;
 }
 
-const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEditLead, visibleColumns }) => {
+const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEditLead, visibleColumns, columnColors = {} }) => {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [matchingProperties, setMatchingProperties] = useState<Map<string, Property[]>>(new Map());
@@ -102,19 +103,65 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
   };
 
   const getStatusBadgeColor = (status: string) => {
+    // Si hay un color personalizado para esta columna, usarlo
+    if (columnColors[status]) {
+      const color = columnColors[status];
+      // Convertir hex a RGB para calcular el color de fondo más claro
+      const hex = color.replace('#', '');
+      const r = parseInt(hex.substr(0, 2), 16);
+      const g = parseInt(hex.substr(2, 2), 16);
+      const b = parseInt(hex.substr(4, 2), 16);
+      // Crear un color de fondo más claro (20% de opacidad)
+      const bgColor = `rgba(${r}, ${g}, ${b}, 0.15)`;
+      // Determinar si el texto debe ser oscuro o claro basado en la luminosidad
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      const textColor = luminance > 0.5 ? color : color;
+      
+      return {
+        backgroundColor: bgColor,
+        color: textColor,
+        borderColor: color
+      };
+    }
+    
+    // Fallback a colores por defecto
     switch (status) {
       case 'frío':
-        return 'bg-blue-100 text-gray-800';
+        return {
+          backgroundColor: 'rgb(219, 234, 254)',
+          color: '#1e40af',
+          borderColor: '#3b82f6'
+        };
       case 'tibio':
-        return 'bg-yellow-100 text-gray-800';
+        return {
+          backgroundColor: 'rgb(254, 249, 195)',
+          color: '#854d0e',
+          borderColor: '#eab308'
+        };
       case 'caliente':
-        return 'bg-red-100 text-red-800';
+        return {
+          backgroundColor: 'rgb(254, 226, 226)',
+          color: '#991b1b',
+          borderColor: '#ef4444'
+        };
       case 'llamada':
-        return 'bg-indigo-100 text-indigo-800';
+        return {
+          backgroundColor: 'rgb(237, 233, 254)',
+          color: '#5b21b6',
+          borderColor: '#8b5cf6'
+        };
       case 'visita':
-        return 'bg-emerald-100 text-emerald-800';
+        return {
+          backgroundColor: 'rgb(209, 250, 229)',
+          color: '#065f46',
+          borderColor: '#10b981'
+        };
       default:
-        return 'bg-gray-100 text-gray-800';
+        return {
+          backgroundColor: 'rgb(243, 244, 246)',
+          color: '#1f2937',
+          borderColor: '#9ca3af'
+        };
     }
   };
 
@@ -364,7 +411,10 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                                 </h4>
                               </div>
                               <div className="flex items-center gap-1">
-                                <span className={`inline-flex items-center px-1 py-0.5 rounded-full text-[10px] font-medium ${getStatusBadgeColor(lead.estado)}`}>
+                                <span 
+                                  className="inline-flex items-center px-1 py-0.5 rounded-full text-[10px] font-medium border"
+                                  style={getStatusBadgeColor(lead.estado)}
+                                >
                                   {lead.estado}
                                 </span>
                               </div>
@@ -412,6 +462,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
         matchingProperties={selectedLead ? matchingProperties.get(selectedLead.id) || [] : []}
         isOpen={showSidebar}
         onEditLead={onEditLead}
+        columnColors={columnColors}
       />
     </>
   );

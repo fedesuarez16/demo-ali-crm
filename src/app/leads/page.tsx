@@ -46,8 +46,10 @@ export default function LeadsKanbanPage() {
   const [customColumns, setCustomColumns] = useState<string[]>([]);
   const [isAddColumnModalVisible, setIsAddColumnModalVisible] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
+  const [newColumnColor, setNewColumnColor] = useState('#3b82f6'); // Color por defecto (azul)
   const [isColumnSelectorVisible, setIsColumnSelectorVisible] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['frío', 'tibio', 'caliente', 'llamada', 'visita']);
+  const [columnColors, setColumnColors] = useState<Record<string, string>>({});
 
   // Cargar columnas personalizadas desde Supabase al inicializar
   useEffect(() => {
@@ -57,9 +59,10 @@ export default function LeadsKanbanPage() {
         await migrateColumnsFromLocalStorage();
         
         // Cargar columnas desde Supabase
-        const { customColumns: loadedCustom, visibleColumns: loadedVisible } = await getKanbanColumns();
+        const { customColumns: loadedCustom, visibleColumns: loadedVisible, columnColors: loadedColors } = await getKanbanColumns();
         setCustomColumns(loadedCustom);
         setVisibleColumns(loadedVisible);
+        setColumnColors(loadedColors);
       } catch (error) {
         console.error('Error loading columns from Supabase:', error);
         // Fallback a valores por defecto
@@ -190,22 +193,26 @@ export default function LeadsKanbanPage() {
       const newColumn = newColumnName.trim().toLowerCase();
       const updatedCustomColumns = [...customColumns, newColumn];
       const updatedVisibleColumns = [...visibleColumns, newColumn];
+      const updatedColumnColors = { ...columnColors, [newColumn]: newColumnColor };
       
       setCustomColumns(updatedCustomColumns);
       setVisibleColumns(updatedVisibleColumns);
+      setColumnColors(updatedColumnColors);
       
       // Guardar en Supabase
-      const success = await saveKanbanColumns(updatedCustomColumns, updatedVisibleColumns);
+      const success = await saveKanbanColumns(updatedCustomColumns, updatedVisibleColumns, updatedColumnColors);
       if (!success) {
         console.error('Error saving columns to Supabase');
         alert('Error al guardar la columna. Por favor intenta nuevamente.');
         // Revertir cambios locales
         setCustomColumns(customColumns);
         setVisibleColumns(visibleColumns);
+        setColumnColors(columnColors);
         return;
       }
       
       setNewColumnName('');
+      setNewColumnColor('#3b82f6'); // Resetear a color por defecto
       setIsAddColumnModalVisible(false);
     }
   };
@@ -213,18 +220,22 @@ export default function LeadsKanbanPage() {
   const handleDeleteCustomColumn = async (columnName: string) => {
     const updatedCustomColumns = customColumns.filter(col => col !== columnName);
     const updatedVisibleColumns = visibleColumns.filter(col => col !== columnName);
+    const updatedColumnColors = { ...columnColors };
+    delete updatedColumnColors[columnName];
     
     setCustomColumns(updatedCustomColumns);
     setVisibleColumns(updatedVisibleColumns);
+    setColumnColors(updatedColumnColors);
     
     // Guardar en Supabase
-    const success = await saveKanbanColumns(updatedCustomColumns, updatedVisibleColumns);
+    const success = await saveKanbanColumns(updatedCustomColumns, updatedVisibleColumns, updatedColumnColors);
     if (!success) {
       console.error('Error saving columns to Supabase');
       alert('Error al eliminar la columna. Por favor intenta nuevamente.');
       // Revertir cambios locales
       setCustomColumns(customColumns);
       setVisibleColumns(visibleColumns);
+      setColumnColors(columnColors);
     }
   };
 
@@ -236,7 +247,7 @@ export default function LeadsKanbanPage() {
     setVisibleColumns(updatedVisibleColumns);
     
     // Guardar en Supabase
-    await saveKanbanColumns(customColumns, updatedVisibleColumns);
+    await saveKanbanColumns(customColumns, updatedVisibleColumns, columnColors);
   };
 
   const toggleColumnSelector = () => {
@@ -547,6 +558,7 @@ export default function LeadsKanbanPage() {
               onLeadStatusChange={handleLeadStatusChange}
               onEditLead={handleOpenEditLead}
               visibleColumns={visibleColumns}
+              columnColors={columnColors}
             />
           </div>
         </div>
@@ -569,11 +581,33 @@ export default function LeadsKanbanPage() {
                   onKeyPress={(e) => e.key === 'Enter' && handleAddColumn()}
                 />
               </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Color de la columna
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={newColumnColor}
+                    onChange={(e) => setNewColumnColor(e.target.value)}
+                    className="h-10 w-20 border border-gray-300 rounded-md cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={newColumnColor}
+                    onChange={(e) => setNewColumnColor(e.target.value)}
+                    placeholder="#3b82f6"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Selecciona un color para los badges de esta columna</p>
+              </div>
               <div className="flex justify-end space-x-3">
                 <button
                   onClick={() => {
                     setIsAddColumnModalVisible(false);
                     setNewColumnName('');
+                    setNewColumnColor('#3b82f6');
                   }}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
                 >

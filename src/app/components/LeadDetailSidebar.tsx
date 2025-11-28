@@ -21,6 +21,7 @@ interface LeadDetailSidebarProps {
   matchingProperties: Property[];
   isOpen: boolean;
   onEditLead?: (lead: Lead) => void;
+  columnColors?: Record<string, string>;
 }
 
 const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({ 
@@ -28,7 +29,8 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
   onClose, 
   matchingProperties, 
   isOpen,
-  onEditLead
+  onEditLead,
+  columnColors = {}
 }) => {
   const [showMessageMenu, setShowMessageMenu] = useState(false);
   const [messageForm, setMessageForm] = useState({
@@ -77,6 +79,11 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
   };
 
   const getStatusVariant = (status: string) => {
+    // Si hay un color personalizado, usar estilo personalizado
+    if (columnColors[status]) {
+      return 'custom';
+    }
+    // Fallback a variantes por defecto
     switch (status) {
       case 'frío':
         return 'secondary';
@@ -91,6 +98,26 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
       default:
         return 'secondary';
     }
+  };
+  
+  const getStatusBadgeStyle = (status: string) => {
+    if (columnColors[status]) {
+      const color = columnColors[status];
+      const hex = color.replace('#', '');
+      const r = parseInt(hex.substr(0, 2), 16);
+      const g = parseInt(hex.substr(2, 2), 16);
+      const b = parseInt(hex.substr(4, 2), 16);
+      const bgColor = `rgba(${r}, ${g}, ${b}, 0.15)`;
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      const textColor = luminance > 0.5 ? color : color;
+      
+      return {
+        backgroundColor: bgColor,
+        color: textColor,
+        borderColor: color
+      };
+    }
+    return {};
   };
 
   const toggleMessageMenu = () => {
@@ -343,7 +370,11 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                 </h3>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant={getStatusVariant(lead.estado)}>
+                <Badge 
+                  variant={getStatusVariant(lead.estado) === 'custom' ? 'outline' : (getStatusVariant(lead.estado) as 'default' | 'destructive' | 'outline' | 'secondary')}
+                  style={getStatusVariant(lead.estado) === 'custom' ? getStatusBadgeStyle(lead.estado) : {}}
+                  className={getStatusVariant(lead.estado) === 'custom' ? 'border' : ''}
+                >
                   {lead.estado}
                 </Badge>
                 {/* Chat Status Indicator */}
@@ -620,9 +651,9 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                     );
                   }
                   return (
-                    <Link 
+                <Link 
                       href={`/chat?phoneNumber=${encodeURIComponent(phoneNumber)}`}
-                      className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+                  className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
                       onClick={() => {
                         console.log('🔗 Redirigiendo al chat con número:', phoneNumber);
                         console.log('📋 Datos del lead:', {
@@ -631,12 +662,12 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                           normalized: phoneNumber
                         });
                       }}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                      </svg>
-                      {isChatActive ? 'Ir al Chat' : 'Abrir Chat'}
-                    </Link>
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  {isChatActive ? 'Ir al Chat' : 'Abrir Chat'}
+                </Link>
                   );
                 })()}
               </div>
@@ -824,11 +855,11 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
             </Card>
             
             {/* Notes - Editable */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Notas
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Notas
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -866,14 +897,14 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                     <CardTitle className="text-sm flex items-center gap-2">
                       <FileText className="h-4 w-4" />
                       Observaciones
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="bg-muted p-3 rounded-md text-sm text-muted-foreground">
-                      {lead.observaciones || (lead as any).propiedades_mostradas}
-                    </div>
-                  </CardContent>
-                </Card>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-muted p-3 rounded-md text-sm text-muted-foreground">
+                    {lead.observaciones || (lead as any).propiedades_mostradas}
+                  </div>
+                </CardContent>
+              </Card>
               )
             )}
             

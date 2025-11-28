@@ -3,44 +3,74 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import AppLayout from '../components/AppLayout';
-import DocumentCards from '../components/DocumentCards';
+import PropiedadCards from '../components/PropiedadCards';
 import PropertyDocFilter from '../components/PropertyDocFilter';
-import { PropertyDocument, DocumentFilterOptions } from '../types';
-import { 
-  getAllDocuments, 
-  filterDocuments, 
-  getUniqueDocumentZones,
-  getUniqueDocumentTypes
-} from '../services/documentService';
-import { exportDocumentsToCSV } from '../utils/exportUtils';
+import { SupabasePropiedad } from '../types';
+import { DocumentFilterOptions } from '../types';
+import { getAllPropiedades, deletePropiedad } from '../services/propiedadesService';
 
 export default function PropertiesKanbanPage() {
-  const [documents, setDocuments] = useState<PropertyDocument[]>([]);
-  const [filteredDocuments, setFilteredDocuments] = useState<PropertyDocument[]>([]);
+  const [propiedades, setPropiedades] = useState<SupabasePropiedad[]>([]);
+  const [filteredPropiedades, setFilteredPropiedades] = useState<SupabasePropiedad[]>([]);
   const [filterOptions, setFilterOptions] = useState<DocumentFilterOptions>({});
   const [isFilterVisible, setIsFilterVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [zonas, setZonas] = useState<string[]>([]);
-  const [tipos, setTipos] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 500));
-      const allDocs = await getAllDocuments();
-      setDocuments(allDocs);
-      setFilteredDocuments(allDocs);
-      setZonas(getUniqueDocumentZones());
-      setTipos(getUniqueDocumentTypes());
-      setIsLoading(false);
-    };
-    loadData();
+    loadPropiedades();
   }, []);
 
+  const loadPropiedades = async () => {
+    setIsLoading(true);
+    try {
+      const data = await getAllPropiedades();
+      setPropiedades(data);
+      setFilteredPropiedades(data);
+    } catch (error) {
+      console.error('Error loading propiedades:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const filtered = filterDocuments(filterOptions);
-    setFilteredDocuments(filtered);
-  }, [filterOptions]);
+    let filtered = [...propiedades];
+
+    if (filterOptions.zona) {
+      filtered = filtered.filter(p => p.zona?.toLowerCase().includes(filterOptions.zona!.toLowerCase()));
+    }
+
+    if (filterOptions.tipoDePropiedad) {
+      filtered = filtered.filter(p => p.tipo_de_propiedad?.toLowerCase().includes(filterOptions.tipoDePropiedad!.toLowerCase()));
+    }
+
+    if (filterOptions.valorMaximo) {
+      // Intentar extraer números del string de valor
+      filtered = filtered.filter(p => {
+        const valorStr = p.valor?.replace(/[^0-9]/g, '');
+        if (!valorStr) return false;
+        const valor = parseInt(valorStr);
+        return !isNaN(valor) && valor <= filterOptions.valorMaximo!;
+      });
+    }
+
+    if (filterOptions.dormitoriosMin) {
+      filtered = filtered.filter(p => {
+        const dorm = parseInt(p.dormitorios || '0');
+        return !isNaN(dorm) && dorm >= filterOptions.dormitoriosMin!;
+      });
+    }
+
+    if (filterOptions.banosMin) {
+      filtered = filtered.filter(p => {
+        const banos = parseInt(p.banos || '0');
+        return !isNaN(banos) && banos >= filterOptions.banosMin!;
+      });
+    }
+
+    setFilteredPropiedades(filtered);
+  }, [filterOptions, propiedades]);
 
   const handleFilterChange = (newFilterOptions: DocumentFilterOptions) => {
     setFilterOptions(newFilterOptions);
@@ -50,8 +80,26 @@ export default function PropertiesKanbanPage() {
     setFilterOptions({});
   };
 
-  const handleExportCSV = () => {
-    exportDocumentsToCSV(filteredDocuments, 'propiedades_documents');
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar esta propiedad?')) {
+      return;
+    }
+
+    setIsDeleting(id);
+    try {
+      const success = await deletePropiedad(id);
+      if (success) {
+        setPropiedades(propiedades.filter(p => p.id !== id));
+        setFilteredPropiedades(filteredPropiedades.filter(p => p.id !== id));
+      } else {
+        alert('Error al eliminar la propiedad');
+      }
+    } catch (error) {
+      console.error('Error deleting propiedad:', error);
+      alert('Error al eliminar la propiedad');
+    } finally {
+      setIsDeleting(null);
+    }
   };
 
   const toggleFilterVisibility = () => {
@@ -119,16 +167,15 @@ export default function PropertiesKanbanPage() {
                 </svg>
                 {isFilterVisible ? 'Ocultar filtros' : 'Mostrar filtros'}
               </button>
-              <button
-                onClick={handleExportCSV}
+              <Link
+                href="/propiedades/nueva"
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center justify-center"
-                disabled={filteredDocuments.length === 0}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                Exportar a CSV
-              </button>
+                Nueva Propiedad
+              </Link>
             </div>
           </div>
 
@@ -136,16 +183,20 @@ export default function PropertiesKanbanPage() {
             <PropertyDocFilter
               filterOptions={filterOptions}
               onFilterChange={handleFilterChange}
-              zonas={zonas}
-              tipos={tipos}
+              zonas={Array.from(new Set(propiedades.map(p => p.zona).filter(Boolean)))}
+              tipos={Array.from(new Set(propiedades.map(p => p.tipo_de_propiedad).filter(Boolean)))}
               onResetFilters={handleResetFilters}
             />
           </div>
         </div>
 
-        <div className="bg-transparent mb-8 overflow-hidden ">
+        <div className="bg-transparent  overflow-hidden ">
           <div className="">
-            <DocumentCards documents={filteredDocuments} />
+            <PropiedadCards 
+              propiedades={filteredPropiedades} 
+              onDelete={handleDelete}
+              isDeleting={isDeleting}
+            />
           </div>
         </div>
       </div>

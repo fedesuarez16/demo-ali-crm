@@ -101,11 +101,11 @@ export async function GET(request) {
     const data = await response.json();
     
     try {
-      console.log('Chatwoot API Response structure keys:', Object.keys(data));
-      if (data.data) {
+    console.log('Chatwoot API Response structure keys:', Object.keys(data));
+    if (data.data) {
         console.log('data.data type:', typeof data.data, 'isArray:', Array.isArray(data.data));
         if (data.data.payload && Array.isArray(data.data.payload)) {
-          console.log(`Found ${data.data.payload.length} conversations in payload`);
+        console.log(`Found ${data.data.payload.length} conversations in payload`);
           // Log de la primera conversación para ver estructura (solo si existe)
           if (data.data.payload.length > 0) {
             const firstChat = data.data.payload[0];
@@ -133,23 +133,23 @@ export async function GET(request) {
     let conversations = [];
     
     try {
-      if (Array.isArray(data)) {
-        // Si la respuesta directa es un array
-        conversations = data;
+    if (Array.isArray(data)) {
+      // Si la respuesta directa es un array
+      conversations = data;
         console.log('Conversations found in root array');
-      } else if (data.data && data.data.payload && Array.isArray(data.data.payload)) {
-        // Si los datos están en data.data.payload (estructura real de Chatwoot)
-        conversations = data.data.payload;
+    } else if (data.data && data.data.payload && Array.isArray(data.data.payload)) {
+      // Si los datos están en data.data.payload (estructura real de Chatwoot)
+      conversations = data.data.payload;
         console.log('Conversations found in data.data.payload');
-      } else if (data.data && Array.isArray(data.data)) {
-        // Si los datos están en data.data
-        conversations = data.data;
+    } else if (data.data && Array.isArray(data.data)) {
+      // Si los datos están en data.data
+      conversations = data.data;
         console.log('Conversations found in data.data');
-      } else if (data.payload && Array.isArray(data.payload)) {
-        // Si los datos están en data.payload
-        conversations = data.payload;
+    } else if (data.payload && Array.isArray(data.payload)) {
+      // Si los datos están en data.payload
+      conversations = data.payload;
         console.log('Conversations found in data.payload');
-      } else {
+    } else {
         console.warn('Unexpected API response structure:', Object.keys(data));
         conversations = [];
       }
@@ -252,9 +252,9 @@ export async function GET(request) {
     // Filtrar solo conversaciones de WhatsApp
     const whatsappChats = enrichedConversations.filter(chat => {
       try {
-        // Verificar si es WhatsApp por diferentes criterios
-        const hasWhatsAppSender = chat.last_non_activity_message?.sender?.identifier?.includes('@s.whatsapp.net');
-        const hasWhatsAppPhone = chat.last_non_activity_message?.sender?.phone_number;
+      // Verificar si es WhatsApp por diferentes criterios
+      const hasWhatsAppSender = chat.last_non_activity_message?.sender?.identifier?.includes('@s.whatsapp.net');
+      const hasWhatsAppPhone = chat.last_non_activity_message?.sender?.phone_number;
         const hasWhatsAppSourceId = typeof chat.last_non_activity_message?.source_id === 'string' && 
                                     chat.last_non_activity_message.source_id.includes('WAID:');
         const hasEnrichedPhone = !!chat.enriched_phone_number;
