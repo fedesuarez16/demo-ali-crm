@@ -165,8 +165,8 @@ export default function MensajesProgramadosPage() {
 
   return (
     <AppLayout>
-      <div className="mb-8">
-        <div className="sticky top-0 z-10 backdrop-blur bg-white/70 border-b border-slate-200 mb-6">
+      <div className="mb-8 ">
+        <div className="sticky top-0 z-10 backdrop-blur bg-white/70 border-b border-slate-200 mb-2">
           <div className="px-2 py-2">
             <nav className="flex" aria-label="Breadcrumb">
               <ol className="inline-flex items-center space-x-1 md:space-x-3">
@@ -206,7 +206,7 @@ export default function MensajesProgramadosPage() {
           </div>
         </div>
 
-        <div className="space-y-6 px-6">
+        <div className="space-y-1 p">
           {/* Mensajes Pendientes */}
           <Card>
             <CardHeader>
