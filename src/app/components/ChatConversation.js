@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useChatMessages } from '../../hooks/useChatMessages';
 
 const ChatConversation = ({ conversation, onBack }) => {
-  const { messages, loading, error, refreshMessages } = useChatMessages(conversation?.id);
+  const { messages, loading, error, refreshMessages, sendMessage } = useChatMessages(conversation?.id);
   const messagesEndRef = useRef(null);
+  const [inputValue, setInputValue] = useState('');
+  const [sending, setSending] = useState(false);
 
   // Scroll al final cuando se cargan nuevos mensajes
   useEffect(() => {
@@ -225,25 +227,54 @@ const ChatConversation = ({ conversation, onBack }) => {
 
       {/* Área de entrada de mensaje */}
       <div className="bg-white border-t border-gray-200 p-4">
-        <div className="flex items-center space-x-3">
+        <form 
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!inputValue.trim() || sending || !conversation) return;
+            
+            const messageContent = inputValue.trim();
+            setInputValue('');
+            setSending(true);
+            
+            try {
+              await sendMessage(messageContent);
+            } catch (err) {
+              console.error('Error al enviar mensaje:', err);
+              // Restaurar el mensaje si falla
+              setInputValue(messageContent);
+              alert('Error al enviar el mensaje. Por favor, intenta de nuevo.');
+            } finally {
+              setSending(false);
+            }
+          }}
+          className="flex items-center space-x-3"
+        >
           <input
             type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
             placeholder="Escribe un mensaje..."
-            className="flex-1 border border-gray-300 rounded-full py-2 px-4 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
-            disabled
+            className="flex-1 border border-gray-300 rounded-full py-2 px-4 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            disabled={sending || !conversation}
           />
           <button
-            disabled
-            className="bg-gray-300 text-gray-500 p-2 rounded-full cursor-not-allowed"
+            type="submit"
+            disabled={!inputValue.trim() || sending || !conversation}
+            className={`p-2 rounded-full transition-colors ${
+              !inputValue.trim() || sending || !conversation
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-green-500 text-white hover:bg-green-600'
+            }`}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
+            {sending ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            )}
           </button>
-        </div>
-        <p className="text-xs text-gray-500 mt-2 text-center">
-          Envío de mensajes en desarrollo
-        </p>
+        </form>
       </div>
     </div>
   );

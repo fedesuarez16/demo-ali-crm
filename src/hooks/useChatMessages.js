@@ -56,10 +56,48 @@ export const useChatMessages = (conversationId) => {
     fetchMessages();
   }, [fetchMessages]);
 
+  // Función para enviar un mensaje
+  const sendMessage = useCallback(async (content) => {
+    if (!conversationId || !content || !content.trim()) {
+      throw new Error('ID de conversación y contenido del mensaje son requeridos');
+    }
+
+    try {
+      console.log('Sending message to conversation:', conversationId);
+      
+      const response = await fetch(`/api/chats/${conversationId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content: content.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+      }
+
+      if (data.success) {
+        // Refrescar mensajes después de enviar
+        await fetchMessages();
+        return data;
+      } else {
+        throw new Error(data.error || 'Failed to send message');
+      }
+
+    } catch (err) {
+      console.error('Error sending message:', err);
+      throw err;
+    }
+  }, [conversationId, fetchMessages]);
+
   return {
     messages,
     loading,
     error,
-    refreshMessages
+    refreshMessages,
+    sendMessage
   };
 };

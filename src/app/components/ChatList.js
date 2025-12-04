@@ -7,38 +7,93 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
   // Obtener chats sin filtrar por agente (mostrar todas las conversaciones)
   const { chats, loading, error, refreshChats } = useChats(null);
 
-  // Función para obtener el nombre o número del contacto
-  const getContactInfo = (chat) => {
-    // Intentar obtener el número de teléfono directamente
+  // Función para obtener el nombre del contacto
+  const getContactName = (chat) => {
     const sender = chat.last_non_activity_message?.sender;
+    const contact = chat.contact;
     
-    // Priorizar el número de teléfono sobre el nombre para evitar nombres incorrectos
+    // Buscar nombre en sender (filtrar nombres genéricos o incorrectos)
+    if (sender?.name && 
+        sender.name.trim() !== '' && 
+        !sender.name.toLowerCase().includes('federico') &&
+        !sender.name.toLowerCase().includes('suarez') &&
+        sender.name.trim().length > 2) {
+      return sender.name.trim();
+    }
+    
+    // Buscar nombre en contact
+    if (contact?.name && 
+        contact.name.trim() !== '' && 
+        !contact.name.toLowerCase().includes('federico') &&
+        !contact.name.toLowerCase().includes('suarez') &&
+        contact.name.trim().length > 2) {
+      return contact.name.trim();
+    }
+    
+    // Buscar en meta.sender
+    if (chat.meta?.sender?.name && 
+        chat.meta.sender.name.trim() !== '' &&
+        chat.meta.sender.name.trim().length > 2) {
+      return chat.meta.sender.name.trim();
+    }
+    
+    return null;
+  };
+
+  // Función para obtener el número de teléfono del contacto
+  const getContactPhone = (chat) => {
+    const sender = chat.last_non_activity_message?.sender;
+    const contact = chat.contact;
+    
+    // Priorizar campos enriquecidos
+    if (chat.enriched_phone_number) {
+      return chat.enriched_phone_number;
+    }
+    
+    if (chat.enriched_phone_raw) {
+      return chat.enriched_phone_raw;
+    }
+    
+    // Buscar en sender
     if (sender?.phone_number) {
       return sender.phone_number;
     }
     
-    // Solo usar el nombre si parece ser real (no contiene "federico" o nombres genéricos)
-    if (sender?.name && 
-        sender.name.trim() !== '' && 
-        !sender.name.toLowerCase().includes('federico') &&
-        !sender.name.toLowerCase().includes('suarez')) {
-      return sender.name;
-    }
-    
     // Buscar en contact
-    if (chat.contact?.phone_number) {
-      return chat.contact.phone_number;
+    if (contact?.phone_number) {
+      return contact.phone_number;
     }
     
-    if (chat.contact?.name && 
-        chat.contact.name.trim() !== '' && 
-        !chat.contact.name.toLowerCase().includes('federico') &&
-        !chat.contact.name.toLowerCase().includes('suarez')) {
-      return chat.contact.name;
+    // Buscar en meta.sender
+    if (chat.meta?.sender?.phone_number || chat.meta?.sender?.phone) {
+      return chat.meta.sender.phone_number || chat.meta.sender.phone;
+    }
+    
+    // Buscar en additional_attributes
+    if (chat.additional_attributes?.phone_number || chat.additional_attributes?.phone) {
+      return chat.additional_attributes.phone_number || chat.additional_attributes.phone;
+    }
+    
+    return null;
+  };
+
+  // Función para obtener el nombre o número del contacto (para compatibilidad)
+  const getContactInfo = (chat) => {
+    const name = getContactName(chat);
+    const phone = getContactPhone(chat);
+    
+    // Si hay nombre, mostrar nombre
+    if (name) {
+      return name;
+    }
+    
+    // Si hay teléfono, mostrar teléfono
+    if (phone) {
+      return phone;
     }
     
     // Último recurso
-    return `+${chat.id}`;
+    return `Chat ${chat.id}`;
   };
 
   // Función para extraer el número de teléfono del chat para comparación
@@ -299,7 +354,7 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
         <p className="text-gray-400 text-sm mt-1">No hay conversaciones de WhatsApp disponibles</p>
         <button 
           onClick={refreshChats}
-          className="mt-4 px-2 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+          className="mt-4 text-sm px-2 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
         >
           Actualizar
         </button>
@@ -310,7 +365,7 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
   return (
     <div className="flex flex-col h-full min-h-full">
       {/* Header con botón de refresh - fijo */}
-      <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-white">
+      <div className="flex-shrink-0 p-3 border-b border-gray-200 bg-white">
         <div className="flex justify-between items-center">
           <div>
             <h2 className="text-sm font-semibold text-gray-800">
@@ -321,12 +376,12 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
           <button 
             onClick={refreshChats}
             disabled={loading}
-            className="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="px-3 py-2 text-sm bg-white rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             <svg className="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Actualizar
+            
           </button>
         </div>
       </div>
@@ -337,28 +392,64 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
           <div 
             key={chat.id} 
             onClick={() => onSelectChat && onSelectChat(chat)}
-            className={`bg-white border rounded-lg py-2 px-3 hover:shadow-sm transition-all cursor-pointer ${
+            className={`bg-white border-b border-gray-200 rounded-lg py-3 px-3 hover:shadow-sm transition-all cursor-pointer ${
               selectedChat?.id === chat.id 
-                ? 'border-green-500 bg-green-50' 
+                ? 'border-gray-100 bg-green-50' 
                 : 'border-gray-200 hover:border-gray-300'
             }`}
           >
             {/* Header del chat simplificado */}
             <div className="flex justify-between items-center">
-              <div className="flex items-center">
-                <div className="w-7 h-7 bg-green-500 rounded-full flex items-center justify-center mr-2">
+              <div className="flex items-center flex-1 min-w-0">
+                <div className="w-7 h-7 bg-green-500 rounded-full flex items-center justify-center mr-2 flex-shrink-0">
                   <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
                   </svg>
                 </div>
-                <div>
-                  <h3 className="font-medium text-gray-900 text-sm truncate max-w-[180px]">
-                    {getContactInfo(chat)}
-                  </h3>
+                <div className="flex-1 min-w-0">
+                  {(() => {
+                    const name = getContactName(chat);
+                    const phone = getContactPhone(chat);
+                    
+                    if (name && phone) {
+                      // Mostrar nombre y número
+                      return (
+                        <>
+                          <h3 className="font-medium text-gray-900 text-sm truncate">
+                            {name}
+                          </h3>
+                          <p className="text-xs text-gray-500 truncate">
+                            {phone}
+                          </p>
+                        </>
+                      );
+                    } else if (name) {
+                      // Solo nombre
+                      return (
+                        <h3 className="font-medium text-gray-900 text-sm truncate">
+                          {name}
+                        </h3>
+                      );
+                    } else if (phone) {
+                      // Solo número
+                      return (
+                        <h3 className="font-medium text-gray-900 text-sm truncate">
+                          {phone}
+                        </h3>
+                      );
+                    } else {
+                      // Fallback
+                      return (
+                        <h3 className="font-medium text-gray-900 text-sm truncate">
+                          {getContactInfo(chat)}
+                        </h3>
+                      );
+                    }
+                  })()}
                 </div>
               </div>
               
-              <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(chat.status)}`}>
+              <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ml-2 ${getStatusColor(chat.status)}`}>
                 {chat.status}
               </span>
             </div>
