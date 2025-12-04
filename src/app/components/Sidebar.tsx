@@ -156,7 +156,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
   return (
     <div className={cn(
       "flex h-screen flex-col bg-card border-r border-border transition-all duration-300 z-10 fixed left-0 top-0",
-      collapsed ? "w-16" : "w-64"
+      collapsed ? "w-16" : "w-[13.6rem]"
     )}>
       {/* Header */}
       <div className="flex h-12 items-center justify-between px-4 border-b border-border">
