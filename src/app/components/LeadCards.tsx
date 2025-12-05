@@ -404,7 +404,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                               </div>
                             )}
                             
-                            <div className="p-2 space-y-1.5">
+                            <div className="p-2 max-w-[150px] space-y-1.5">
                               <div className="pr-6">
                                 <h4 className="text-xs font-semibold text-slate-900 leading-tight truncate">
                                   {lead.nombreCompleto || (lead as any).nombre || (lead as any).whatsapp_id}
