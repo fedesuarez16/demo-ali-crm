@@ -7,6 +7,7 @@ import { getAllLeads } from "../services/leadService";
 import { ChartAreaInteractive } from "@/components/ui/chart-area-interactive";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartConfig } from "@/components/ui/chart";
+import { Skeleton } from "@/components/ui/skeleton";
 import Link from 'next/link';
 
 export default function Page() {
@@ -71,6 +72,96 @@ export default function Page() {
     }));
   }, [leads]);
 
+  // Agrupar leads por fecha para llamadas
+  const llamadasByDate = useMemo(() => {
+    const grouped: Record<string, number> = {};
+    const today = new Date();
+    const dates: string[] = [];
+    
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      dates.push(dateStr);
+      grouped[dateStr] = 0;
+    }
+
+    leads.forEach(lead => {
+      if (lead.estado?.toLowerCase() === 'llamada') {
+        const leadDate = new Date(lead.fechaContacto || lead.created_at || new Date());
+        const dateStr = leadDate.toISOString().split('T')[0];
+        if (grouped[dateStr] !== undefined) {
+          grouped[dateStr]++;
+        }
+      }
+    });
+
+    return dates.map(date => ({
+      date,
+      leads: grouped[date],
+    }));
+  }, [leads]);
+
+  // Agrupar leads por fecha para visitas
+  const visitasByDate = useMemo(() => {
+    const grouped: Record<string, number> = {};
+    const today = new Date();
+    const dates: string[] = [];
+    
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      dates.push(dateStr);
+      grouped[dateStr] = 0;
+    }
+
+    leads.forEach(lead => {
+      if (lead.estado?.toLowerCase() === 'visita') {
+        const leadDate = new Date(lead.fechaContacto || lead.created_at || new Date());
+        const dateStr = leadDate.toISOString().split('T')[0];
+        if (grouped[dateStr] !== undefined) {
+          grouped[dateStr]++;
+        }
+      }
+    });
+
+    return dates.map(date => ({
+      date,
+      leads: grouped[date],
+    }));
+  }, [leads]);
+
+  // Agrupar leads por fecha para vender
+  const venderByDate = useMemo(() => {
+    const grouped: Record<string, number> = {};
+    const today = new Date();
+    const dates: string[] = [];
+    
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      dates.push(dateStr);
+      grouped[dateStr] = 0;
+    }
+
+    leads.forEach(lead => {
+      if (lead.estado?.toLowerCase() === 'vender') {
+        const leadDate = new Date(lead.fechaContacto || lead.created_at || new Date());
+        const dateStr = leadDate.toISOString().split('T')[0];
+        if (grouped[dateStr] !== undefined) {
+          grouped[dateStr]++;
+        }
+      }
+    });
+
+    return dates.map(date => ({
+      date,
+      leads: grouped[date],
+    }));
+  }, [leads]);
+
   // Configuración del gráfico
   const chartConfig: ChartConfig = {
     leads: {
@@ -88,6 +179,28 @@ export default function Page() {
     calientes: {
       label: "Leads Calientes",
       color: "#FF4500", // Rojo/Naranja oscuro
+    },
+  };
+
+  // Configuración para gráficos de categorías
+  const llamadasChartConfig: ChartConfig = {
+    leads: {
+      label: "Llamadas",
+      color: "#10B981", // Verde
+    },
+  };
+
+  const visitasChartConfig: ChartConfig = {
+    leads: {
+      label: "Visitas",
+      color: "#3B82F6", // Azul
+    },
+  };
+
+  const venderChartConfig: ChartConfig = {
+    leads: {
+      label: "Vender",
+      color: "#F59E0B", // Amarillo/Naranja
     },
   };
 
@@ -118,10 +231,58 @@ export default function Page() {
   if (isLoading) {
     return (
       <AppLayout>
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-600 mx-auto mb-4"></div>
-            <h2 className="text-xl font-semibold text-slate-800">Cargando métricas...</h2>
+        <div className="mb-8 m-2 space-y-6">
+          {/* Breadcrumbs skeleton */}
+          <div className="px-2 py-2 z-10 backdrop-blur bg-white/70 border-b border-slate-200 mb-6">
+            <Skeleton className="h-4 w-48" />
+          </div>
+          
+          {/* Header skeleton */}
+          <div>
+            <Skeleton className="h-8 w-32 mb-2" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+
+          {/* Cards skeleton */}
+          <div className="grid gap-4 md:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <Card key={i}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-4 rounded" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-16 mb-2" />
+                  <Skeleton className="h-3 w-32" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Main chart skeleton */}
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-48 mb-2" />
+              <Skeleton className="h-4 w-96" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-[300px] w-full" />
+            </CardContent>
+          </Card>
+
+          {/* Category charts skeleton */}
+          <div className="grid gap-4 md:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <Skeleton className="h-6 w-32 mb-2" />
+                  <Skeleton className="h-4 w-64" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-[200px] w-full" />
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
       </AppLayout>
@@ -156,14 +317,14 @@ export default function Page() {
             </nav>
           </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">Dashboard</h1>
+          <h1 className="text-xl font-semibold text-slate-800 mb-2">Dashboard</h1>
           <p className="text-gray-600">Métricas y estadísticas de leads</p>
         </div>
 
         {/* Cards de métricas */}
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="flex flex-row items-center  justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 Total de Leads
               </CardTitle>
@@ -261,6 +422,60 @@ export default function Page() {
             />
           </CardContent>
         </Card>
+
+        {/* Gráficos de categorías en una fila */}
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle>Llamadas</CardTitle>
+              <CardDescription>
+                Leads con categoría "llamada" en los últimos 30 días
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartAreaInteractive
+                data={llamadasByDate}
+                config={llamadasChartConfig}
+                dateKey="date"
+                valueKey="leads"
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Visitas</CardTitle>
+              <CardDescription>
+                Leads con categoría "visita" en los últimos 30 días
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartAreaInteractive
+                data={visitasByDate}
+                config={visitasChartConfig}
+                dateKey="date"
+                valueKey="leads"
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Vender</CardTitle>
+              <CardDescription>
+                Leads con categoría "vender" en los últimos 30 días
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartAreaInteractive
+                data={venderByDate}
+                config={venderChartConfig}
+                dateKey="date"
+                valueKey="leads"
+              />
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </AppLayout>
   );

@@ -112,6 +112,15 @@ export async function POST(request, { params }) {
     const accountId = process.env.CHATWOOT_ACCOUNT_ID;
     const apiToken = process.env.CHATWOOT_API_TOKEN;
 
+    // Log para depuración (sin mostrar el token completo por seguridad)
+    console.log('🔑 Token info (POST):', {
+      hasToken: !!apiToken,
+      tokenLength: apiToken ? apiToken.length : 0,
+      tokenPrefix: apiToken ? apiToken.substring(0, 10) + '...' : 'N/A',
+      chatwootUrl: chatwootUrl,
+      accountId: accountId
+    });
+
     if (!chatwootUrl || !accountId || !apiToken) {
       return NextResponse.json(
         { 
@@ -212,6 +221,16 @@ export async function POST(request, { params }) {
           inboxInfo = await inboxResponse.json();
           console.log('Inbox type:', inboxInfo.channel_type);
           console.log('Inbox name:', inboxInfo.name);
+          console.log('Inbox status:', inboxInfo.status);
+          console.log('Inbox channel details:', JSON.stringify(inboxInfo.channel || {}, null, 2));
+          
+          // Verificar si el inbox está conectado
+          if (inboxInfo.status !== 'connected' && inboxInfo.status !== 'active') {
+            console.warn('⚠️ El inbox de WhatsApp puede no estar conectado. Status:', inboxInfo.status);
+          }
+        } else {
+          const inboxErrorText = await inboxResponse.text();
+          console.warn('No se pudo obtener información del inbox:', inboxErrorText);
         }
       } catch (inboxError) {
         console.warn('No se pudo obtener información del inbox:', inboxError);
@@ -224,19 +243,60 @@ export async function POST(request, { params }) {
     console.log('Message content:', content);
     console.log('Conversation inbox_id:', conversationData?.inbox_id);
 
+    // Obtener el agente asignado a la conversación para enviar como agente
+    let agentId = null;
+    if (conversationData && conversationData.assignee_id) {
+      agentId = conversationData.assignee_id;
+      console.log('Using assigned agent ID:', agentId);
+    } else {
+      // Si no hay agente asignado, obtener el primer agente disponible
+      try {
+        const agentsUrl = `${baseUrl}/api/v1/accounts/${accountId}/agents`;
+        const agentsResponse = await fetch(agentsUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'api_access_token': apiToken,
+          },
+        });
+        if (agentsResponse.ok) {
+          const agents = await agentsResponse.json();
+          if (agents && agents.length > 0) {
+            agentId = agents[0].id;
+            console.log('Using first available agent ID:', agentId);
+          }
+        }
+      } catch (agentError) {
+        console.warn('No se pudo obtener agentes:', agentError);
+      }
+    }
+
     // Preparar el body del mensaje
+    // IMPORTANTE: Para mensajes salientes en Chatwoot, el mensaje debe venir de un User/Agent, no de un Contact
+    // El problema es que cuando usamos la API, a veces Chatwoot lo interpreta como mensaje del contacto
     const messageBody = {
       content: content.trim(),
       message_type: 1, // 1 = outgoing, 0 = incoming
       private: false
     };
 
-    // Para WhatsApp, algunos proveedores requieren parámetros adicionales
-    // Intentar con el formato estándar primero
+    // Intentar usar el endpoint de "send reply" si está disponible, o agregar parámetros adicionales
+    // Según la documentación de Chatwoot, el mensaje debería enviarse automáticamente como agente
+    // si la conversación tiene un agente asignado
+    let finalApiUrl = apiUrl;
+    
+    // Si hay un agente asignado, asegurarnos de que el mensaje se envíe como agente
+    if (agentId) {
+      console.log('Agent assigned, message should be sent as agent');
+      // El endpoint estándar debería funcionar, pero podemos intentar forzar el sender
+      // Nota: Chatwoot puede requerir que el token tenga permisos de usuario/agente
+    }
+
     console.log('Message body:', JSON.stringify(messageBody, null, 2));
+    console.log('Using API URL:', finalApiUrl);
 
     // Hacer petición a Chatwoot para enviar el mensaje
-    const response = await fetch(apiUrl, {
+    const response = await fetch(finalApiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -247,7 +307,28 @@ export async function POST(request, { params }) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Chatwoot Send Message API Error:', response.status, errorText);
+      console.error('❌ Chatwoot Send Message API Error:', response.status);
+      console.error('Error details:', errorText);
+      
+      // Verificar si es un error de token expirado
+      if (errorText.includes('expired') || errorText.includes('Session has expired')) {
+        console.error('🚨 ERROR: El token de API ha expirado o no es válido');
+        console.error('💡 SOLUCIÓN: Verifica que:');
+        console.error('   1. Has actualizado CHATWOOT_API_TOKEN en las variables de entorno');
+        console.error('   2. Has reiniciado el servidor después de actualizar el token');
+        console.error('   3. El token es válido y tiene los permisos correctos');
+        console.error('   4. No hay espacios o caracteres extra en el token');
+        
+        return NextResponse.json(
+          { 
+            error: 'Token de API expirado o inválido',
+            status: response.status,
+            message: 'El token de Chatwoot ha expirado. Por favor, genera un nuevo token y actualiza la variable de entorno CHATWOOT_API_TOKEN, luego reinicia el servidor.',
+            details: errorText
+          }, 
+          { status: 401 }
+        );
+      }
       
       return NextResponse.json(
         { 

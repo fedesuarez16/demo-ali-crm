@@ -21,6 +21,7 @@ import {
 } from '../services/leadService';
 import { exportLeadsToCSV } from '../utils/exportUtils';
 import { getKanbanColumns, saveKanbanColumns, migrateColumnsFromLocalStorage } from '../services/columnService';
+import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 
 export default function LeadsKanbanPage() {
@@ -301,11 +302,48 @@ export default function LeadsKanbanPage() {
   if (isLoading) {
     return (
       <AppLayout>
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-600 mx-auto mb-4"></div>
-            <h2 className="text-xl font-semibold text-slate-800">Cargando datos...</h2>
-            <p className="text-slate-500 mt-2">Preparando el tablero Kanban</p>
+        <div className="mb-8">
+          {/* Breadcrumbs skeleton */}
+          <div className="sticky top-0 z-10 backdrop-blur bg-white/70 border-b border-slate-200 mb-6">
+            <div className="px-2 py-2">
+              <Skeleton className="h-4 w-64" />
+            </div>
+            <div className="px-6 py-2 flex justify-between items-center border-t border-gray-200">
+              <Skeleton className="h-6 w-40" />
+              <div className="flex space-x-2">
+                <Skeleton className="h-8 w-8 rounded-xl" />
+                <Skeleton className="h-8 w-8 rounded-xl" />
+                <Skeleton className="h-8 w-8 rounded-xl" />
+                <Skeleton className="h-8 w-8 rounded-xl" />
+                <Skeleton className="h-8 w-8 rounded-xl" />
+              </div>
+            </div>
+          </div>
+
+          {/* Kanban board skeleton */}
+          <div className="w-full overflow-x-auto pb-1">
+            <div className="flex gap-2 min-w-max pr-2">
+              {[1, 2, 3, 4, 5].map((col) => (
+                <div key={col} className="min-w-[240px] bg-slate-100 border-gray-400 rounded-xl flex flex-col">
+                  {/* Column header skeleton */}
+                  <div className="m-2 bg-white p-1.5 rounded-xl flex items-center justify-between">
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-5 w-8 rounded-full" />
+                  </div>
+                  
+                  {/* Cards skeleton */}
+                  <div className="flex-1 px-2 pb-2 space-y-2">
+                    {[1, 2, 3].map((card) => (
+                      <div key={card} className="bg-white rounded-lg p-3 shadow-sm border border-gray-200">
+                        <Skeleton className="h-4 w-32 mb-2" />
+                        <Skeleton className="h-3 w-24 mb-1" />
+                        <Skeleton className="h-3 w-20" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </AppLayout>
@@ -635,4 +673,4 @@ export default function LeadsKanbanPage() {
       />
     </AppLayout>
   );
-} 
+}

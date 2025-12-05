@@ -15,6 +15,7 @@ import {
   getUniquePropertyInterests
 } from '../../services/leadService';
 import { exportLeadsToCSV } from '../../utils/exportUtils';
+import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 
 export default function LeadsTablePage() {
@@ -131,11 +132,59 @@ export default function LeadsTablePage() {
   if (isLoading) {
     return (
       <AppLayout>
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-            <h2 className="text-xl font-semibold text-slate-800">Cargando datos...</h2>
-            <p className="text-slate-500 mt-2">Preparando la tabla de leads</p>
+        <div className="mb-8">
+          {/* Breadcrumbs skeleton */}
+          <div className="bg-white shadow-sm border-b border-gray-200 mb-4">
+            <div className="px-4 py-2">
+              <Skeleton className="h-4 w-64" />
+            </div>
+            <div className="px-4 py-3 flex justify-between items-center border-t border-gray-100">
+              <Skeleton className="h-6 w-32" />
+              <div className="flex space-x-3">
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-8 w-32" />
+              </div>
+            </div>
+          </div>
+
+          {/* Filter skeleton */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4 p-4">
+            <Skeleton className="h-4 w-24 mb-4" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          </div>
+
+          {/* Table skeleton */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+                      <th key={i} className="px-6 py-3 text-left">
+                        <Skeleton className="h-4 w-20" />
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((row) => (
+                    <tr key={row}>
+                      {[1, 2, 3, 4, 5, 6, 7].map((cell) => (
+                        <td key={cell} className="px-6 py-4">
+                          <Skeleton className="h-4 w-full" />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </AppLayout>
