@@ -159,9 +159,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
       collapsed ? "w-16" : "w-[13.6rem]"
     )}>
       {/* Header */}
-      <div className="flex h-12 items-center justify-between px-4 border-b border-border">
+      <div className="flex h-12  bg-slate-100 items-center justify-between px-4 border-b border-border">
         {!collapsed && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center  gap-3">
             <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
               T
             </div>
@@ -210,9 +210,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
                       href={item.path}
                       className={cn(
                         "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                        "hover:bg-accent hover:text-accent-foreground",
+                        "hover:bg-slate-100 hover:text-accent-foreground",
                         isActive 
-                          ? "bg-accent text-accent-foreground font-medium" 
+                          ? "bg-slate-100 text-accent-foreground font-medium" 
                           : "text-muted-foreground"
                       )}
                     >
@@ -233,7 +233,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
 
       {/* Footer */}
       {!collapsed && (
-        <div className="border-t border-border p-4">
+        <div className="border-t border-border p-4 bg-slate-100">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
               <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">

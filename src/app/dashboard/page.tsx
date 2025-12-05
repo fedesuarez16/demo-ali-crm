@@ -233,7 +233,7 @@ export default function Page() {
       <AppLayout>
         <div className="mb-8 m-2 space-y-6">
           {/* Breadcrumbs skeleton */}
-          <div className="px-2 py-2 z-10 backdrop-blur bg-white/70 border-b border-slate-200 mb-6">
+          <div className="px-2 py-2  bg-slate-100 z-10 backdrop-blur  border-b border-slate-200 mb-6">
             <Skeleton className="h-4 w-48" />
           </div>
           
@@ -291,9 +291,9 @@ export default function Page() {
 
   return (
     <AppLayout>
-      <div className="mb-8 m-2 space-y-6">
+      <div className="mb-8 px-2 space-y-6">
          {/* Breadcrumbs */}
-         <div className="px-2 py-2  z-10 backdrop-blur bg-white/70 border-b border-slate-200 mb-6">
+         <div className="px-3 py-3 sticky top-0 z-10   bg-slate-100 border-b border-slate-200 mb-6">
             <nav className="flex" aria-label="Breadcrumb">
               <ol className="inline-flex items-center space-x-1 md:space-x-3">
                 <li className="inline-flex items-center">
@@ -306,7 +306,7 @@ export default function Page() {
                 </li>
                 <li>
                   <div className="flex items-center">
-                    <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <svg className="w-6  h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                       <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"></path>
                     </svg>
                     <span className="ml-1 text-sm font-medium text-gray-500 md:ml-2">Dashboard</span>

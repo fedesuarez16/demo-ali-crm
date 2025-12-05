@@ -352,11 +352,11 @@ export default function LeadsKanbanPage() {
 
   return (
     <AppLayout>
-      <div className="mb-8 ">
+      <div className="mb-8  ">
         {/* Nueva topbar con breadcrumbs */}
-        <div className="sticky top-0 z-10 backdrop-blur bg-white/70 border-b border-slate-200 mb-6">
+        <div className="sticky top-0 z-10 backdrop-blur bg-white border-b border-slate-200 mb-6">
           {/* Breadcrumbs */}
-          <div className="px-2 py-2">
+          <div className="px-2  bg-slate-100 py-3">
             <nav className="flex" aria-label="Breadcrumb">
               <ol className="inline-flex items-center space-x-1 md:space-x-3">
                 <li className="inline-flex items-center">
@@ -393,7 +393,7 @@ export default function LeadsKanbanPage() {
               <div className="flex items-center space-x-2">
                 <h1 className="text-md font-semibold text-slate-800 tracking-tight">Tablero de Leads</h1>
                 {searchTerm && (
-                  <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">
+                  <span className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded-full">
                     {filteredLeads.length} resultado{filteredLeads.length !== 1 ? 's' : ''}
                   </span>
                 )}
@@ -411,7 +411,7 @@ export default function LeadsKanbanPage() {
                   placeholder="Buscar por nombre o teléfono..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-64 pl-10 pr-3 py-1.5 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="block w-64 pl-10 pr-3 py-1.5 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
                 />
                 {searchTerm && (
                   <button
@@ -431,7 +431,7 @@ export default function LeadsKanbanPage() {
               
               <button
                 onClick={() => setIsAddColumnModalVisible(true)}
-                className="bg-indigo-600 hover:bg-indigo-700 px-3 py-0.5 text-white p-2 rounded-xl flex items-center justify-center"
+                className="bg-gray-600 hover:bg-gray-700 px-3 py-0.5 text-white p-2 rounded-xl flex items-center justify-center"
                 title="Agregar Columna"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -453,7 +453,7 @@ export default function LeadsKanbanPage() {
                 onClick={toggleColumnSelector}
                 className={`p-2 rounded-xl flex items-center justify-center border ${
                   isColumnSelectorVisible 
-                    ? ' border-indigo-300 text-indigo-700' 
+                    ? ' border-gray-300 text-gray-700' 
                     : 'bg-white/60 hover:bg-white border-gray-200 text-slate-700'
                 }`}
                 title={isColumnSelectorVisible ? 'Ocultar columnas' : 'Mostrar columnas'}
@@ -467,7 +467,7 @@ export default function LeadsKanbanPage() {
                 onClick={toggleFilterVisibility}
                 className={`p-2 rounded-lg flex items-center justify-center border ${
                   isFilterVisible 
-                    ? 'bg-indigo-100 border-indigo-300 text-indigo-700' 
+                    ? 'bg-gray-100 border-gray-300 text-gray-700' 
                     : 'bg-white/60 hover:bg-white border-gray-200 text-slate-700'
                 }`}
                 title={isFilterVisible ? 'Ocultar filtros' : 'Mostrar filtros'}
@@ -482,14 +482,14 @@ export default function LeadsKanbanPage() {
 
           {/* Barra de campañas */}
           {propiedadesInteres.length > 0 && (
-            <div className="px-6 py-3 border-t border-gray-200 bg-white/50">
+            <div className="px-6 py-3 border-t border-gray-200 bg-white/70">
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
                 <span className="text-xs font-medium text-gray-600 mr-1 whitespace-nowrap">Campañas:</span>
                 <button
                   onClick={() => handleFilterChange({ ...filterOptions, propiedadInteres: undefined })}
                   className={`px-3 py-1 text-xs rounded-full border transition-colors whitespace-nowrap ${
                     !filterOptions.propiedadInteres
-                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      ? 'bg-gray-600 text-white border-gray-600'
                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                   }`}
                 >
@@ -501,7 +501,7 @@ export default function LeadsKanbanPage() {
                     onClick={() => handleFilterChange({ ...filterOptions, propiedadInteres: propiedad })}
                     className={`px-3 py-1 text-xs rounded-full border transition-colors whitespace-nowrap ${
                       filterOptions.propiedadInteres === propiedad
-                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        ? 'bg-gray-600 text-white border-gray-600'
                         : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                     }`}
                   >
@@ -545,7 +545,7 @@ export default function LeadsKanbanPage() {
                       setVisibleColumns(allColumns);
                       await saveKanbanColumns(customColumns, allColumns);
                     }}
-                    className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                    className="text-xs text-gray-600 hover:text-gray-800 font-medium"
                   >
                     Seleccionar todas
                   </button>
@@ -569,7 +569,7 @@ export default function LeadsKanbanPage() {
                         type="checkbox"
                         checked={visibleColumns.includes(column)}
                         onChange={() => handleColumnToggle(column)}
-                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        className="rounded border-gray-300 text-gray-600 focus:ring-gray-500"
                       />
                       <span className="text-sm text-gray-700 capitalize">{column}</span>
                     </label>
@@ -589,7 +589,7 @@ export default function LeadsKanbanPage() {
         </div>
         
         {/* Panel principal */}
-        <div className="bg-white mb-8 overflow-hidden ">
+        <div className="bg-white px-2 mb-8 overflow-hidden ">
           <div className="">
             <LeadCards 
               leads={filteredLeads} 
@@ -615,7 +615,7 @@ export default function LeadsKanbanPage() {
                   value={newColumnName}
                   onChange={(e) => setNewColumnName(e.target.value)}
                   placeholder="Ej: seguimiento, negociación, etc."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500"
                   onKeyPress={(e) => e.key === 'Enter' && handleAddColumn()}
                 />
               </div>
@@ -635,7 +635,7 @@ export default function LeadsKanbanPage() {
                     value={newColumnColor}
                     onChange={(e) => setNewColumnColor(e.target.value)}
                     placeholder="#3b82f6"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-mono"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm font-mono"
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">Selecciona un color para los badges de esta columna</p>
@@ -654,7 +654,7 @@ export default function LeadsKanbanPage() {
                 <button
                   onClick={handleAddColumn}
                   disabled={!newColumnName.trim()}
-                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 text-sm font-medium text-white bg-gray-600 hover:bg-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Agregar
                 </button>
