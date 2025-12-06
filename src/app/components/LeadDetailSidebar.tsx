@@ -9,9 +9,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, MessageSquare, Phone, Mail, Calendar, ChevronDown, MapPin, DollarSign, Home, User, Clock, FileText, Building, Send, Plus, Minus, Wifi, WifiOff } from 'lucide-react';
+import { X, MessageSquare, Phone, Mail, Calendar, ChevronDown, MapPin, DollarSign, Home, User, Clock, FileText, Building, Send, Plus, Minus, Wifi, WifiOff, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { programarMensaje } from '../services/mensajeService';
+import { programarMensaje, programarSeguimiento } from '../services/mensajeService';
 import { useChatStatus } from '../../hooks/useChatStatus';
 import { updateLead } from '../services/leadService';
 
@@ -46,6 +46,7 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
   const [isSavingNotas, setIsSavingNotas] = useState(false);
   const [seguimientosCount, setSeguimientosCount] = useState(lead?.seguimientos_count || 0);
   const [isSavingSeguimientos, setIsSavingSeguimientos] = useState(false);
+  const [isProgramandoSeguimiento, setIsProgramandoSeguimiento] = useState(false);
   
   // Hook para verificar el estado del chat via n8n webhook
   const phoneNumber = (lead as any)?.whatsapp_id || lead?.telefono;
@@ -190,6 +191,59 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
       alert('Error al guardar el contador de seguimientos');
     } finally {
       setIsSavingSeguimientos(false);
+    }
+  };
+
+  // Función para programar un seguimiento
+  const handleProgramarSeguimiento = async () => {
+    if (!lead) return;
+    
+    // Obtener remote_jid del lead
+    const remoteJid = (lead as any).whatsapp_id || lead.telefono || '';
+    
+    if (!remoteJid) {
+      alert('❌ No se encontró un número de teléfono válido para este lead');
+      return;
+    }
+    
+    setIsProgramandoSeguimiento(true);
+    try {
+      // Preparar datos del seguimiento
+      const seguimientoData: any = {
+        remote_jid: remoteJid,
+        tipo_lead: lead.estado || null,
+        seguimientos_count: (seguimientosCount || 0) + 1
+      };
+      
+      // Agregar fecha_ultima_interaccion si existe
+      if (lead.ultima_interaccion) {
+        seguimientoData.fecha_ultima_interaccion = lead.ultima_interaccion;
+      } else if (lead.fechaContacto) {
+        seguimientoData.fecha_ultima_interaccion = lead.fechaContacto;
+      }
+      
+      // Agregar chatwoot_conversation_id si existe (puede venir del lead)
+      if ((lead as any).chatwoot_conversation_id) {
+        seguimientoData.chatwoot_conversation_id = (lead as any).chatwoot_conversation_id;
+      }
+      
+      const success = await programarSeguimiento(seguimientoData);
+
+      if (success) {
+        alert('✅ Seguimiento programado exitosamente para dentro de 23 horas');
+        // Incrementar el contador de seguimientos
+        const newCount = (seguimientosCount || 0) + 1;
+        setSeguimientosCount(newCount);
+        // Actualizar en la base de datos
+        await updateLead(lead.id, { seguimientos_count: newCount });
+      } else {
+        alert('❌ Error al programar el seguimiento. Intenta nuevamente.');
+      }
+    } catch (error) {
+      console.error('Error programando seguimiento:', error);
+      alert('❌ Error al programar el seguimiento. Intenta nuevamente.');
+    } finally {
+      setIsProgramandoSeguimiento(false);
     }
   };
   
@@ -625,6 +679,27 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
             
             {/* Quick action buttons */}
             <div className="space-y-2">
+              {/* Botón para programar seguimiento */}
+              <Button 
+                variant="default" 
+                size="sm"
+                onClick={handleProgramarSeguimiento}
+                disabled={isProgramandoSeguimiento || !lead}
+                className="w-full"
+              >
+                {isProgramandoSeguimiento ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                    Programando...
+                  </>
+                ) : (
+                  <>
+                    <Bell className="h-4 w-4 mr-2" />
+                    Activar Seguimiento
+                  </>
+                )}
+              </Button>
+              
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" size="sm">
                   <Phone className="h-4 w-4 mr-2" />

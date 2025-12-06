@@ -145,3 +145,65 @@ export const marcarMensajeEnviado = async (mensajeId: number): Promise<boolean> 
     return false;
   }
 };
+
+/**
+ * Programa un seguimiento para un lead en cola_seguimientos
+ * Programa para dentro de 23 horas desde ahora
+ */
+export const programarSeguimiento = async (seguimientoData: {
+  remote_jid: string;
+  session_id?: string;
+  tipo_lead?: string;
+  fecha_ultima_interaccion?: string;
+  chatwoot_conversation_id?: number;
+  seguimientos_count?: number;
+}): Promise<boolean> => {
+  try {
+    console.log('Programando seguimiento:', seguimientoData);
+    
+    // Calcular fecha programada: ahora + 23 horas
+    const ahora = new Date();
+    const fechaProgramada = new Date(ahora.getTime() + (23 * 60 * 60 * 1000)); // 23 horas en milisegundos
+    
+    // Preparar datos para insertar según la estructura real de la tabla
+    const dataToInsert: any = {
+      remote_jid: seguimientoData.remote_jid,
+      session_id: seguimientoData.session_id || seguimientoData.remote_jid, // Usar remote_jid como fallback si no hay session_id
+      fecha_programada: fechaProgramada.toISOString().replace('T', ' ').slice(0, 19), // Formato timestamp sin timezone
+      estado: 'pendiente'
+    };
+    
+    // Agregar campos opcionales si existen
+    if (seguimientoData.tipo_lead) {
+      dataToInsert.tipo_lead = seguimientoData.tipo_lead;
+    }
+    
+    if (seguimientoData.fecha_ultima_interaccion) {
+      dataToInsert.fecha_ultima_interaccion = seguimientoData.fecha_ultima_interaccion;
+    }
+    
+    if (seguimientoData.chatwoot_conversation_id) {
+      dataToInsert.chatwoot_conversation_id = seguimientoData.chatwoot_conversation_id;
+    }
+    
+    if (seguimientoData.seguimientos_count !== undefined && seguimientoData.seguimientos_count !== null) {
+      dataToInsert.seguimientos_count = seguimientoData.seguimientos_count;
+    }
+    
+    const { data, error } = await (getSupabase() as any)
+      .from('cola_seguimientos')
+      .insert([dataToInsert])
+      .select();
+    
+    if (error) {
+      console.error('Error programando seguimiento:', error.message, error);
+      return false;
+    }
+    
+    console.log('Seguimiento programado exitosamente:', data);
+    return true;
+  } catch (e) {
+    console.error('Exception programando seguimiento:', e);
+    return false;
+  }
+};

@@ -441,8 +441,8 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
                       // Fallback
                       return (
                         <h3 className="font-medium text-gray-900 text-sm truncate">
-                          {getContactInfo(chat)}
-                        </h3>
+                    {getContactInfo(chat)}
+                  </h3>
                       );
                     }
                   })()}
