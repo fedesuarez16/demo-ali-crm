@@ -49,6 +49,19 @@ export async function GET(request, { params }) {
       const errorText = await response.text();
       console.error('Chatwoot Messages API Error:', response.status, errorText);
       
+      // Detectar si el error es por token expirado
+      if (errorText.includes('expired') || errorText.includes('Session has expired') || errorText.includes('Invalid OAuth access token')) {
+        return NextResponse.json(
+          { 
+            error: 'Token de acceso expirado',
+            message: 'El token de acceso de WhatsApp Business API ha expirado. Por favor, genera un nuevo token de larga duración siguiendo la guía FACEBOOK_TOKEN_SETUP.md',
+            details: 'El token de acceso de Facebook/WhatsApp se vence cada 1-2 horas. Necesitas generar un token de larga duración (60 días) o un Page Access Token permanente.',
+            solution: 'Consulta FACEBOOK_TOKEN_SETUP.md para instrucciones detalladas'
+          }, 
+          { status: 401 }
+        );
+      }
+      
       return NextResponse.json(
         { 
           error: 'Error al obtener mensajes de Chatwoot',
@@ -173,6 +186,19 @@ export async function POST(request, { params }) {
     if (!conversationResponse.ok) {
       const errorText = await conversationResponse.text();
       console.error('Error al obtener conversación:', conversationResponse.status, errorText);
+      
+      // Detectar si el error es por token expirado
+      if (errorText.includes('expired') || errorText.includes('Session has expired') || errorText.includes('Invalid OAuth access token')) {
+        return NextResponse.json(
+          { 
+            error: 'Token de acceso expirado',
+            message: 'El token de acceso de WhatsApp Business API ha expirado. Por favor, genera un nuevo token de larga duración siguiendo la guía FACEBOOK_TOKEN_SETUP.md',
+            details: 'El token de acceso de Facebook/WhatsApp se vence cada 1-2 horas. Necesitas generar un token de larga duración (60 días) o un Page Access Token permanente.',
+            solution: 'Consulta FACEBOOK_TOKEN_SETUP.md para instrucciones detalladas'
+          }, 
+          { status: 401 }
+        );
+      }
     } else {
       conversationData = await conversationResponse.json();
       console.log('Conversation status:', conversationData.status);
@@ -310,18 +336,49 @@ export async function POST(request, { params }) {
       console.error('❌ Chatwoot Send Message API Error:', response.status);
       console.error('Error details:', errorText);
       
-      // Verificar si es un error de token expirado
-      if (errorText.includes('expired') || errorText.includes('Session has expired')) {
-        console.error('🚨 ERROR: El token de API ha expirado o no es válido');
+      // Verificar si es un error de token expirado de WhatsApp Business API
+      if (errorText.includes('Error validating access token') || 
+          errorText.includes('Session has expired') || 
+          errorText.includes('expired') ||
+          errorText.includes('Invalid OAuth access token')) {
+        console.error('🚨 ERROR: El token de WhatsApp Business API ha expirado');
+        console.error('💡 SOLUCIÓN: El token de acceso de Facebook/WhatsApp se vence cada 1-2 horas');
+        console.error('   Necesitas generar un token de larga duración (60 días) o un Page Access Token permanente');
+        console.error('   Consulta el archivo FACEBOOK_TOKEN_SETUP.md para instrucciones detalladas');
+        console.error('   Pasos rápidos:');
+        console.error('   1. Ve a Facebook Developers → Graph API Explorer');
+        console.error('   2. Genera un Page Access Token (no expira)');
+        console.error('   3. Actualiza el token en Chatwoot → Settings → Inboxes → WhatsApp → Access Token');
+        
+        return NextResponse.json(
+          { 
+            error: 'Token de WhatsApp Business API expirado',
+            status: response.status,
+            message: 'El token de acceso de WhatsApp Business API ha expirado. Los tokens de corta duración se vencen cada 1-2 horas.',
+            solution: 'Genera un token de larga duración (60 días) o un Page Access Token permanente siguiendo la guía en FACEBOOK_TOKEN_SETUP.md',
+            details: errorText,
+            quickFix: {
+              step1: 'Ve a Facebook Developers → Graph API Explorer',
+              step2: 'Selecciona tu Página de WhatsApp Business',
+              step3: 'Genera un Page Access Token (no expira)',
+              step4: 'Actualiza el token en Chatwoot → Settings → Inboxes → WhatsApp'
+            }
+          }, 
+          { status: 401 }
+        );
+      }
+      
+      // Verificar si es un error del token de Chatwoot
+      if (errorText.includes('Unauthorized') || errorText.includes('Invalid API token')) {
+        console.error('🚨 ERROR: El token de Chatwoot API ha expirado o no es válido');
         console.error('💡 SOLUCIÓN: Verifica que:');
         console.error('   1. Has actualizado CHATWOOT_API_TOKEN en las variables de entorno');
         console.error('   2. Has reiniciado el servidor después de actualizar el token');
         console.error('   3. El token es válido y tiene los permisos correctos');
-        console.error('   4. No hay espacios o caracteres extra en el token');
         
         return NextResponse.json(
           { 
-            error: 'Token de API expirado o inválido',
+            error: 'Token de Chatwoot API expirado o inválido',
             status: response.status,
             message: 'El token de Chatwoot ha expirado. Por favor, genera un nuevo token y actualiza la variable de entorno CHATWOOT_API_TOKEN, luego reinicia el servidor.',
             details: errorText
