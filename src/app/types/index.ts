@@ -34,6 +34,7 @@ export interface Lead {
   updated_at?: string;
   seguimientos_count?: number;
   notas?: string;
+  estado_chat?: number; // Estado del chat: 1 = activo, 0 = inactivo (independiente del estado del lead)
 }
 
 export interface FilterOptions {

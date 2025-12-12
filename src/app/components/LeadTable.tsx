@@ -21,11 +21,16 @@ const LeadTable: React.FC<LeadTableProps> = ({ leads, visibleColumns }) => {
 
   const defaultStatuses = ['frío', 'tibio', 'caliente', 'llamada', 'visita'] as const;
   const statusOrder = visibleColumns && visibleColumns.length > 0 
-    ? visibleColumns
+    ? visibleColumns.filter(col => col !== 'activo' && col !== 'inicial') // Filtrar estados temporales
     : defaultStatuses;
 
   // Agrupar por estado según el orden solicitado
-  const grouped = statusOrder.map(status => leads.filter(l => (l.estado as unknown as string) === status));
+  // También filtrar leads con estados 'activo' o 'inicial' que no deberían mostrarse
+  const filteredLeads = leads.filter(l => {
+    const estado = (l.estado as unknown as string);
+    return estado !== 'activo' && estado !== 'inicial';
+  });
+  const grouped = statusOrder.map(status => filteredLeads.filter(l => (l.estado as unknown as string) === status));
 
   const renderLead = (lead: Lead) => (
     <div className="rounded border border-slate-200 bg-white p-1 shadow-sm">

@@ -17,7 +17,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   return (
     <div className="bg-white h-full min-h-screen">
       <Sidebar onCollapse={handleSidebarCollapse} />
-      <div className={`${sidebarCollapsed ? 'pl-16' : 'pl-[13.6rem]'} transition-all duration-300`}>
+      {/* En mobile: sin padding porque la sidebar no ocupa espacio (está desacoplada) */}
+      {/* En desktop: padding según el estado de la sidebar */}
+      <div className={`lg:transition-all lg:duration-300 ${sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-[13.6rem]'}`}>
         <main className="">
           {children}
         </main>

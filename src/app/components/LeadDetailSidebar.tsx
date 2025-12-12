@@ -348,6 +348,11 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
       const data = await response.json();
 
       if (response.ok) {
+        // Actualizar estado_chat a 1 cuando se activa el agente
+        if (lead) {
+          console.log('🔄 Actualizando estado_chat a 1 después de activar agente...');
+          await updateLead(lead.id, { estado_chat: 1 });
+        }
         alert(`✅ JID agregado exitosamente a la campaña Redis\n\nJID: ${jid}\nTTL: 24 horas`);
       } else {
         alert(`❌ Error al agregar JID: ${data.error}`);
@@ -382,6 +387,11 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
       const data = await response.json();
 
       if (response.ok) {
+        // Actualizar estado_chat a 0 cuando se desactiva el agente
+        if (lead) {
+          console.log('🔄 Actualizando estado_chat a 0 después de desactivar agente...');
+          await updateLead(lead.id, { estado_chat: 0 });
+        }
         alert(`✅ JID eliminado exitosamente de la campaña Redis\n\nJID: ${jid}`);
       } else {
         alert(`❌ Error al eliminar JID: ${data.message || data.error}`);

@@ -5,6 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import AppLayout from '../components/AppLayout';
 import WhatsAppView from '../components/WhatsAppView';
 import AgentStatusToggle from '../components/AgentStatusToggle';
+import { updateLead, getAllLeads } from '../services/leadService';
+import { Lead } from '../types';
 
 interface Message {
   id: string;
@@ -17,6 +19,10 @@ function ChatPageContent() {
   const searchParams = useSearchParams();
   const leadId = searchParams?.get('leadId');
   const phoneNumber = searchParams?.get('phoneNumber');
+  
+  const [lead, setLead] = useState<Lead | null>(null);
+  const [isLoadingLead, setIsLoadingLead] = useState(false);
+  const [isTogglingChat, setIsTogglingChat] = useState(false);
   
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -34,6 +40,61 @@ function ChatPageContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [activeView, setActiveView] = useState<'assistant' | 'whatsapp'>('whatsapp');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Cargar el lead cuando se tiene leadId o phoneNumber
+  useEffect(() => {
+    const loadLead = async () => {
+      if (!leadId && !phoneNumber) return;
+      
+      setIsLoadingLead(true);
+      try {
+        const allLeads = await getAllLeads();
+        
+        let foundLead: Lead | null = null;
+        if (leadId) {
+          foundLead = allLeads.find(l => l.id === leadId) || null;
+        } else if (phoneNumber) {
+          // Normalizar el número de teléfono para comparación
+          const normalizedPhone = phoneNumber.replace(/[^\d+]/g, '').replace(/^\+/, '');
+          foundLead = allLeads.find(l => {
+            const leadPhone = (l.telefono || (l as any).whatsapp_id || '').replace(/[^\d+]/g, '').replace(/^\+/, '');
+            return leadPhone === normalizedPhone || leadPhone.includes(normalizedPhone) || normalizedPhone.includes(leadPhone);
+          }) || null;
+        }
+        
+        setLead(foundLead);
+      } catch (error) {
+        console.error('Error loading lead:', error);
+      } finally {
+        setIsLoadingLead(false);
+      }
+    };
+    
+    loadLead();
+  }, [leadId, phoneNumber]);
+  
+  // Función para activar/desactivar el chat
+  const handleToggleChat = async () => {
+    if (!lead) return;
+    
+    setIsTogglingChat(true);
+    try {
+      const newEstadoChat = lead.estado_chat === 1 ? 0 : 1;
+      const updatedLead = await updateLead(lead.id, { estado_chat: newEstadoChat });
+      
+      if (updatedLead) {
+        setLead(updatedLead);
+        console.log(`✅ Chat ${newEstadoChat === 1 ? 'activado' : 'desactivado'} exitosamente`);
+      } else {
+        alert('Error al actualizar el estado del chat');
+      }
+    } catch (error) {
+      console.error('Error toggling chat:', error);
+      alert('Error al actualizar el estado del chat');
+    } finally {
+      setIsTogglingChat(false);
+    }
+  };
 
   // Ejemplo de sugerencias para el chat
   const suggestions = [
@@ -91,12 +152,12 @@ function ChatPageContent() {
     <AppLayout>
       <div className="flex flex-col h-[calc(100vh-10px)]">
         {/* Encabezado con tabs */}
-        <div className="border-b  bg-slate-100 border-gray-200 py-[6px] px-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h1 className="text-lg font-medium text-gray-800">Centro de Comunicación</h1>
+        <div className="border-b bg-slate-100 border-gray-200 py-[6px] px-4 sm:px-6">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+              <h1 className="text-base sm:text-lg font-medium text-gray-800 truncate">Centro de Comunicación</h1>
               {(leadId || phoneNumber) && (
-                <div className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                <div className="hidden sm:inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
@@ -104,13 +165,62 @@ function ChatPageContent() {
                 </div>
               )}
             </div>
-            <AgentStatusToggle variant="dark" className="py-1 px-3 text-sm" />
+            
+            {/* Toggle de activar/desactivar chat del lead - Siempre visible cuando hay lead */}
+            <div className="flex items-center gap-2">
+              {lead ? (
+                <button
+                  onClick={handleToggleChat}
+                  disabled={isTogglingChat || isLoadingLead}
+                  className={`inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs font-medium transition-colors shadow-sm ${
+                    lead.estado_chat === 1
+                      ? 'bg-green-100 text-green-800 hover:bg-green-200 border border-green-300'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300'
+                  } ${isTogglingChat || isLoadingLead ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title={lead.estado_chat === 1 ? 'Desactivar chat del lead' : 'Activar chat del lead'}
+                >
+                  {isTogglingChat ? (
+                    <>
+                      <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-current"></div>
+                      <span className="hidden sm:inline">{lead.estado_chat === 1 ? 'Desactivando...' : 'Activando...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      {lead.estado_chat === 1 ? (
+                        <>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-3.5 sm:w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span className="hidden sm:inline">Chat Activo</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-3.5 sm:w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          <span className="hidden sm:inline">Chat Inactivo</span>
+                        </>
+                      )}
+                    </>
+                  )}
+                </button>
+              ) : (leadId || phoneNumber) && isLoadingLead ? (
+                <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs">
+                  <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-gray-400"></div>
+                  <span className="hidden sm:inline">Cargando...</span>
+                </div>
+              ) : null}
+              
+              <div className="hidden sm:block">
+                <AgentStatusToggle variant="dark" className="py-1 px-3 text-sm" />
+              </div>
+            </div>
           </div>
         </div>
         
         {/* Contenido condicional basado en el tab activo */}
         {activeView === 'whatsapp' ? (
-          <div className="flex-1 overflow-hidden h-full">
+          <div className="flex-1 overflow-hidden h-full w-full">
             <WhatsAppView targetPhoneNumber={phoneNumber} />
           </div>
         ) : (

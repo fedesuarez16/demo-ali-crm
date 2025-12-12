@@ -2,12 +2,82 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useChatMessages } from '../../hooks/useChatMessages';
+import { updateLead, getAllLeads } from '../services/leadService';
 
 const ChatConversation = ({ conversation, onBack }) => {
   const { messages, loading, error, refreshMessages, sendMessage } = useChatMessages(conversation?.id);
   const messagesEndRef = useRef(null);
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
+  const [lead, setLead] = useState(null);
+  const [isLoadingLead, setIsLoadingLead] = useState(false);
+  const [isTogglingChat, setIsTogglingChat] = useState(false);
+
+  // Cargar el lead cuando hay una conversación
+  useEffect(() => {
+    const loadLead = async () => {
+      if (!conversation) {
+        setLead(null);
+        return;
+      }
+
+      setIsLoadingLead(true);
+      try {
+        // Obtener el número de teléfono de la conversación
+        const phoneNumber = conversation.enriched_phone_number || 
+                           conversation.last_non_activity_message?.sender?.phone_number ||
+                           conversation.contact?.phone_number ||
+                           conversation.enriched_identifier?.replace('@s.whatsapp.net', '') ||
+                           null;
+
+        if (!phoneNumber) {
+          setLead(null);
+          return;
+        }
+
+        const allLeads = await getAllLeads();
+        // Normalizar el número de teléfono para comparación
+        const normalizedPhone = phoneNumber.replace(/[^\d+]/g, '').replace(/^\+/, '');
+        
+        const foundLead = allLeads.find(l => {
+          const leadPhone = (l.telefono || l.whatsapp_id || '').replace(/[^\d+]/g, '').replace(/^\+/, '');
+          return leadPhone === normalizedPhone || leadPhone.includes(normalizedPhone) || normalizedPhone.includes(leadPhone);
+        }) || null;
+
+        setLead(foundLead);
+      } catch (error) {
+        console.error('Error loading lead:', error);
+        setLead(null);
+      } finally {
+        setIsLoadingLead(false);
+      }
+    };
+
+    loadLead();
+  }, [conversation]);
+
+  // Función para activar/desactivar el chat
+  const handleToggleChat = async () => {
+    if (!lead) return;
+    
+    setIsTogglingChat(true);
+    try {
+      const newEstadoChat = lead.estado_chat === 1 ? 0 : 1;
+      const updatedLead = await updateLead(lead.id, { estado_chat: newEstadoChat });
+      
+      if (updatedLead) {
+        setLead(updatedLead);
+        console.log(`✅ Chat ${newEstadoChat === 1 ? 'activado' : 'desactivado'} exitosamente`);
+      } else {
+        alert('Error al actualizar el estado del chat');
+      }
+    } catch (error) {
+      console.error('Error toggling chat:', error);
+      alert('Error al actualizar el estado del chat');
+    } finally {
+      setIsTogglingChat(false);
+    }
+  };
 
   // Scroll al final cuando se cargan nuevos mensajes
   useEffect(() => {
@@ -134,6 +204,45 @@ const ChatConversation = ({ conversation, onBack }) => {
             {conversation.last_non_activity_message?.sender?.phone_number || `Chat #${conversation.id}`}
           </p>
         </div>
+
+        {/* Botón de activar/desactivar chat del lead */}
+        {lead && (
+          <button
+            onClick={handleToggleChat}
+            disabled={isTogglingChat || isLoadingLead}
+            className={`inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs font-medium transition-colors shadow-sm mr-2 ${
+              lead.estado_chat === 1
+                ? 'bg-green-100 text-green-800 hover:bg-green-200 border border-green-300'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300'
+            } ${isTogglingChat || isLoadingLead ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title={lead.estado_chat === 1 ? 'Desactivar chat del lead' : 'Activar chat del lead'}
+          >
+            {isTogglingChat ? (
+              <>
+                <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-current"></div>
+                <span className="hidden sm:inline">{lead.estado_chat === 1 ? 'Desactivando...' : 'Activando...'}</span>
+              </>
+            ) : (
+              <>
+                {lead.estado_chat === 1 ? (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-3.5 sm:w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="hidden sm:inline">Chat Activo</span>
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-3.5 sm:w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <span className="hidden sm:inline">Chat Inactivo</span>
+                  </>
+                )}
+              </>
+            )}
+          </button>
+        )}
 
         <button
           onClick={refreshMessages}

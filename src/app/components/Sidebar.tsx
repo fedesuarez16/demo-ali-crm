@@ -23,8 +23,35 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
-  const [collapsed, setCollapsed] = useState(false);
+  // En mobile, la sidebar debe estar cerrada por defecto
+  // En desktop, abierta por defecto
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 1024; // lg breakpoint
+    }
+    return true; // Por defecto cerrada (mobile-first)
+  });
   const pathname = usePathname();
+  
+  // Ajustar según el tamaño de la ventana
+  useEffect(() => {
+    const handleResize = () => {
+      const isDesktop = window.innerWidth >= 1024;
+      if (isDesktop && collapsed) {
+        setCollapsed(false);
+        if (onCollapse) onCollapse(false);
+      } else if (!isDesktop && !collapsed) {
+        setCollapsed(true);
+        if (onCollapse) onCollapse(true);
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    // Ejecutar una vez al montar
+    handleResize();
+    
+    return () => window.removeEventListener('resize', handleResize);
+  }, [collapsed, onCollapse]);
 
   const menuCategories: MenuCategory[] = [
     {
@@ -154,10 +181,41 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
   };
 
   return (
-    <div className={cn(
-      "flex h-screen flex-col bg-card border-r border-border transition-all duration-300 z-10 fixed left-0 top-0",
-      collapsed ? "w-16" : "w-[13.6rem]"
-    )}>
+    <>
+      {/* Botón flotante para abrir sidebar - Solo en mobile, absolute en esquina superior izquierda */}
+      <button
+        onClick={toggleSidebar}
+        className="lg:hidden fixed top-4 left-4 z-[100] bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg p-3 shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
+        aria-label="Abrir menú"
+      >
+        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
+      {/* Overlay para cerrar sidebar en mobile */}
+      {!collapsed && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/50 z-[90]"
+          onClick={() => {
+            setCollapsed(true);
+            if (onCollapse) onCollapse(true);
+          }}
+        />
+      )}
+
+      {/* Sidebar */}
+      <div className={cn(
+        "flex h-screen flex-col bg-card border-r border-border transition-all duration-300 z-[95]",
+        // En desktop: siempre visible, fixed
+        "lg:fixed lg:left-0 lg:top-0",
+        // En mobile: overlay que se desliza desde la izquierda, NO ocupa espacio cuando está cerrada
+        "fixed left-0 top-0",
+        collapsed ? "w-16" : "w-[13.6rem]",
+        // En mobile: transform para deslizar
+        "lg:translate-x-0",
+        collapsed ? "-translate-x-full lg:translate-x-0" : "translate-x-0"
+      )}>
       {/* Header */}
       <div className="flex h-12  bg-slate-100 items-center justify-between px-4 border-b border-border">
         {!collapsed && (
@@ -253,7 +311,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 

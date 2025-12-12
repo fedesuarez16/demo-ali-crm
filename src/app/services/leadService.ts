@@ -202,12 +202,18 @@ const groupSimilarCampaigns = (campaigns: string[]): { groups: Map<string, strin
 
 // Map a DB row (snake_case or camelCase) into our Lead type
 const mapLeadRow = (row: any): Lead => {
+  // Si el estado es null, 'inicial' o 'activo', calificar automáticamente
+  let estado = row.estado;
+  if (!estado || estado === 'inicial' || estado === 'activo') {
+    estado = calificarLead(row);
+  }
+  
   return {
     id: String(row.id),
     nombreCompleto: row.nombre ?? '',
     email: '', // No existe en la tabla
     telefono: row.whatsapp_id ?? '',
-    estado: (row.estado || 'inicial') as Lead['estado'], // Acepta cualquier estado, incluyendo personalizados
+    estado: estado as Lead['estado'], // Acepta cualquier estado, incluyendo personalizados
     presupuesto: Number(row.presupuesto ?? 0),
     zonaInteres: row.zona ?? '',
     tipoPropiedad: (row.tipo_propiedad ?? 'departamento') as Lead['tipoPropiedad'],
@@ -232,6 +238,7 @@ const mapLeadRow = (row: any): Lead => {
     updated_at: row.updated_at ?? undefined,
     seguimientos_count: row.seguimientos_count ?? 0,
     notas: row.notas ?? undefined,
+    estado_chat: row.estado_chat ?? undefined,
   };
 };
 
@@ -248,6 +255,32 @@ export const getAllLeads = async (): Promise<Lead[]> => {
       return [];
     }
     const normalized: Lead[] = ((data as any[]) || []).map(mapLeadRow);
+    
+    // Recalificar automáticamente leads con estado "activo" o "inicial" (estos estados NO deben existir)
+    // También recalificar leads con estado null o undefined
+    const leadsToRecalify = normalized.filter(lead => 
+      !lead.estado || lead.estado === 'activo' || lead.estado === 'inicial'
+    );
+    
+    if (leadsToRecalify.length > 0) {
+      console.log(`🔄 Recalificando ${leadsToRecalify.length} leads con estado inválido (null, "activo" o "inicial")`);
+      // Recalificar en lote (sin esperar a que termine para no bloquear la UI)
+      Promise.all(
+        leadsToRecalify.map(async (lead) => {
+          const leadData = data.find((d: any) => String(d.id) === lead.id);
+          if (leadData) {
+            const newEstado = calificarLead(leadData);
+            // Siempre actualizar si el estado anterior era inválido
+            if (!lead.estado || lead.estado === 'activo' || lead.estado === 'inicial' || newEstado !== lead.estado) {
+              await updateLeadStatus(lead.id, newEstado);
+              // Actualizar en el array normalizado
+              lead.estado = newEstado as Lead['estado'];
+            }
+          }
+        })
+      ).catch(err => console.error('Error recalificando leads:', err));
+    }
+    
     // Sort desc by fechaContacto
     normalized.sort((a, b) => new Date(b.fechaContacto).getTime() - new Date(a.fechaContacto).getTime());
     cachedLeads = normalized;
@@ -334,12 +367,17 @@ export const getUniqueZones = (): string[] => {
  * Obtiene estados únicos para los filtros
  */
 export const getUniqueStatuses = (): string[] => {
-  // Definir todos los estados válidos del sistema
+  // Definir todos los estados válidos del sistema (excluyendo 'activo' e 'inicial' que son temporales)
   const allStatuses: LeadStatus[] = ['frío', 'tibio', 'caliente', 'llamada', 'visita'];
   
-  // Añadir cualquier estado adicional que pueda existir en los datos
+  // Añadir cualquier estado adicional que pueda existir en los datos, pero excluir 'activo' e 'inicial'
   const dataStatuses = new Set<string>();
-  cachedLeads.forEach(lead => dataStatuses.add(lead.estado));
+  cachedLeads.forEach(lead => {
+    // Filtrar estados temporales que no deberían aparecer como columnas
+    if (lead.estado && lead.estado !== 'activo' && lead.estado !== 'inicial') {
+      dataStatuses.add(lead.estado);
+    }
+  });
   
   // Combinar todos los estados
   const combinedStatuses = new Set<string>([...allStatuses, ...dataStatuses]);
@@ -347,7 +385,7 @@ export const getUniqueStatuses = (): string[] => {
   // Ordenar los estados en un orden lógico de flujo de trabajo
   const orderedStatuses: LeadStatus[] = ['frío', 'tibio', 'caliente', 'llamada', 'visita'];
   
-  // Devolver los estados en el orden definido
+  // Devolver los estados en el orden definido, excluyendo 'activo' e 'inicial'
   return orderedStatuses.filter(status => combinedStatuses.has(status));
 };
 
@@ -476,6 +514,80 @@ export const updateAllHotLeadsToFrio = async (): Promise<boolean> => {
 };
 
 /**
+ * Califica automáticamente un lead según los datos disponibles
+ * - Si solo tiene whatsapp_id y nombre (2 datos): "frio"
+ * - Si tiene 3 o más datos (whatsapp_id, nombre, y al menos otro): "tibio"
+ */
+const calificarLead = (leadData: any): 'frio' | 'tibio' => {
+  // Contar cuántos datos tiene el lead (excluyendo campos técnicos y null/vacíos)
+  let datosCount = 0;
+  
+  // whatsapp_id siempre está presente (campo requerido)
+  if (leadData.whatsapp_id && leadData.whatsapp_id.trim() !== '') {
+    datosCount++;
+  }
+  
+  // nombre
+  if (leadData.nombre != null && typeof leadData.nombre === 'string' && leadData.nombre.trim() !== '') {
+    datosCount++;
+  }
+  
+  // presupuesto (solo si es mayor a 0)
+  if (leadData.presupuesto != null && leadData.presupuesto !== 0) {
+    datosCount++;
+  }
+  
+  // zona
+  if (leadData.zona != null && typeof leadData.zona === 'string' && leadData.zona.trim() !== '') {
+    datosCount++;
+  }
+  
+  // tipo_propiedad
+  if (leadData.tipo_propiedad != null && typeof leadData.tipo_propiedad === 'string' && leadData.tipo_propiedad.trim() !== '') {
+    datosCount++;
+  }
+  
+  // forma_pago
+  if (leadData.forma_pago != null && typeof leadData.forma_pago === 'string' && leadData.forma_pago.trim() !== '') {
+    datosCount++;
+  }
+  
+  // intencion
+  if (leadData.intencion != null && typeof leadData.intencion === 'string' && leadData.intencion.trim() !== '') {
+    datosCount++;
+  }
+  
+  // caracteristicas_buscadas
+  if (leadData.caracteristicas_buscadas != null && typeof leadData.caracteristicas_buscadas === 'string' && leadData.caracteristicas_buscadas.trim() !== '') {
+    datosCount++;
+  }
+  
+  // caracteristicas_venta
+  if (leadData.caracteristicas_venta != null && typeof leadData.caracteristicas_venta === 'string' && leadData.caracteristicas_venta.trim() !== '') {
+    datosCount++;
+  }
+  
+  // propiedades_mostradas
+  if (leadData.propiedades_mostradas != null && typeof leadData.propiedades_mostradas === 'string' && leadData.propiedades_mostradas.trim() !== '') {
+    datosCount++;
+  }
+  
+  // propiedad_interes
+  if (leadData.propiedad_interes != null && typeof leadData.propiedad_interes === 'string' && leadData.propiedad_interes.trim() !== '') {
+    datosCount++;
+  }
+  
+  // notas
+  if (leadData.notas != null && typeof leadData.notas === 'string' && leadData.notas.trim() !== '') {
+    datosCount++;
+  }
+  
+  // Si tiene 2 o menos datos (solo whatsapp_id y nombre) → "frio"
+  // Si tiene 3 o más datos → "tibio"
+  return datosCount <= 2 ? 'frio' : 'tibio';
+};
+
+/**
  * Crea un nuevo lead
  */
 export const createLead = async (leadData: Partial<Lead>): Promise<Lead | null> => {
@@ -493,13 +605,23 @@ export const createLead = async (leadData: Partial<Lead>): Promise<Lead | null> 
       intencion: leadData.motivoInteres || leadData.intencion || null,
       caracteristicas_buscadas: leadData.observaciones || leadData.caracteristicas_buscadas || null,
       caracteristicas_venta: leadData.caracteristicas_venta || null,
-      estado: leadData.estado || 'inicial',
       propiedades_mostradas: leadData.propiedades_mostradas || null,
       propiedad_interes: leadData.propiedad_interes || null,
       ultima_interaccion: new Date().toISOString(),
       seguimientos_count: leadData.seguimientos_count ?? 0,
       notas: leadData.notas ?? null,
     };
+    
+    // Calificar automáticamente el lead SIEMPRE (a menos que se especifique manualmente un estado diferente)
+    // Los estados válidos para calificación automática son: 'frio' y 'tibio'
+    // Si se especifica otro estado manualmente (como 'caliente', 'llamada', 'visita', etc.), se respeta
+    // NUNCA usar 'inicial' o 'activo' - estos estados no deben existir
+    if (!leadData.estado || leadData.estado === 'inicial' || leadData.estado === 'activo') {
+      dataToInsert.estado = calificarLead(dataToInsert);
+    } else {
+      // Si se especifica un estado válido, usarlo
+      dataToInsert.estado = leadData.estado;
+    }
     
     const { data, error } = await (getSupabase() as any)
       .from('leads')
@@ -532,6 +654,17 @@ export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promi
   try {
     console.log(`Updating lead ${leadId} in Supabase:`, leadData);
     
+    // Primero obtener el lead actual para evaluar la calificación completa
+    const { data: currentLead, error: fetchError } = await (getSupabase() as any)
+      .from('leads')
+      .select('*')
+      .eq('id', leadId)
+      .single();
+    
+    if (fetchError) {
+      console.error('Error fetching current lead:', fetchError);
+    }
+    
     // Preparar datos para actualizar según la estructura real de la tabla
     const dataToUpdate: any = {};
     
@@ -541,9 +674,6 @@ export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promi
     }
     if (leadData.telefono !== undefined) {
       dataToUpdate.whatsapp_id = leadData.telefono;
-    }
-    if (leadData.estado !== undefined) {
-      dataToUpdate.estado = leadData.estado;
     }
     if (leadData.presupuesto !== undefined) {
       dataToUpdate.presupuesto = leadData.presupuesto;
@@ -583,6 +713,23 @@ export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promi
     }
     if (leadData.notas !== undefined) {
       dataToUpdate.notas = leadData.notas;
+    }
+    if (leadData.estado_chat !== undefined) {
+      dataToUpdate.estado_chat = leadData.estado_chat;
+    }
+    
+    // Calificar automáticamente el lead si no se especificó un estado manualmente
+    // O si el estado actual es "activo" o "inicial" (estados que NO deben existir - recalificar inmediatamente)
+    // Combinar datos actuales con los nuevos para evaluar la calificación completa
+    const currentEstado = currentLead?.estado;
+    if (leadData.estado === undefined || 
+        leadData.estado === 'inicial' || leadData.estado === 'activo' ||
+        currentEstado === 'inicial' || currentEstado === 'activo') {
+      const combinedData = { ...currentLead, ...dataToUpdate };
+      dataToUpdate.estado = calificarLead(combinedData);
+    } else {
+      // Si se especificó un estado manualmente válido, respetarlo
+      dataToUpdate.estado = leadData.estado;
     }
     
     // Actualizar ultima_interaccion
