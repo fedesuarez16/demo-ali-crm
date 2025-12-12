@@ -27,31 +27,25 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
   // En desktop, abierta por defecto
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
-      return window.innerWidth < 1024; // lg breakpoint
+      return window.innerWidth < 1024; // lg breakpoint - cerrada en mobile, abierta en desktop
     }
     return true; // Por defecto cerrada (mobile-first)
   });
   const pathname = usePathname();
   
-  // Ajustar según el tamaño de la ventana
+  // Ajustar según el tamaño de la ventana solo al montar (una sola vez)
   useEffect(() => {
-    const handleResize = () => {
+    // Solo ejecutar al montar para establecer el estado inicial correcto
+    if (typeof window !== 'undefined') {
       const isDesktop = window.innerWidth >= 1024;
-      if (isDesktop && collapsed) {
+      if (isDesktop) {
+        // En desktop, abrir sidebar
         setCollapsed(false);
         if (onCollapse) onCollapse(false);
-      } else if (!isDesktop && !collapsed) {
-        setCollapsed(true);
-        if (onCollapse) onCollapse(true);
       }
-    };
-    
-    window.addEventListener('resize', handleResize);
-    // Ejecutar una vez al montar
-    handleResize();
-    
-    return () => window.removeEventListener('resize', handleResize);
-  }, [collapsed, onCollapse]);
+      // En mobile, ya está cerrada por defecto (collapsed = true)
+    }
+  }, []); // Solo ejecutar al montar - sin dependencias para evitar loops
 
   const menuCategories: MenuCategory[] = [
     {
@@ -174,6 +168,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
 
   const toggleSidebar = () => {
     const newCollapsedState = !collapsed;
+    console.log('🔄 Toggle sidebar:', { from: collapsed, to: newCollapsedState });
     setCollapsed(newCollapsedState);
     if (onCollapse) {
       onCollapse(newCollapsedState);
@@ -185,7 +180,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
       {/* Botón flotante para abrir sidebar - Solo en mobile, absolute en esquina superior izquierda */}
       <button
         onClick={toggleSidebar}
-        className="lg:hidden fixed top-4 left-4 z-[100] bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg p-3 shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
+        className="lg:hidden fixed top-4 left-4 z-[100] bg-black hover:bg-black text-white rounded-lg p-3 shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
         aria-label="Abrir menú"
       >
         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -207,14 +202,17 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
       {/* Sidebar */}
       <div className={cn(
         "flex h-screen flex-col bg-card border-r border-border transition-all duration-300 z-[95]",
+        // Ancho según estado
+        collapsed ? "w-16" : "w-[13.6rem]",
         // En desktop: siempre visible, fixed
         "lg:fixed lg:left-0 lg:top-0",
         // En mobile: overlay que se desliza desde la izquierda, NO ocupa espacio cuando está cerrada
         "fixed left-0 top-0",
-        collapsed ? "w-16" : "w-[13.6rem]",
-        // En mobile: transform para deslizar
-        "lg:translate-x-0",
-        collapsed ? "-translate-x-full lg:translate-x-0" : "translate-x-0"
+        // Transform: en mobile, oculta cuando collapsed=true, visible cuando collapsed=false
+        // IMPORTANTE: El orden importa - primero el transform mobile, luego el override de desktop
+        collapsed 
+          ? "-translate-x-full lg:translate-x-0" 
+          : "translate-x-0"
       )}>
       {/* Header */}
       <div className="flex h-12  bg-slate-100 items-center justify-between px-4 border-b border-border">
