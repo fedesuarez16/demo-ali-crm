@@ -30,6 +30,8 @@ export async function GET(request) {
     const labelFilter = searchParams.get('label');
     const assigneeId = searchParams.get('assignee_id');
     const status = searchParams.get('status');
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const perPage = parseInt(searchParams.get('per_page') || '20', 10);
     
     // Validar variables de entorno
     const chatwootUrl = process.env.CHATWOOT_URL;
@@ -54,6 +56,9 @@ export async function GET(request) {
     const baseUrl = chatwootUrl.endsWith('/') ? chatwootUrl.slice(0, -1) : chatwootUrl;
     // Agregar el parámetro para incluir información de contacto
     let apiUrl = `${baseUrl}/api/v1/accounts/${accountId}/conversations?include_contact=true`;
+    
+    // Agregar parámetros de paginación
+    apiUrl += `&page=${page}&per_page=${perPage}`;
     
     // Agregar filtros opcionales
     if (labelFilter && labelFilter !== 'all') {
@@ -99,6 +104,51 @@ export async function GET(request) {
     }
 
     const data = await response.json();
+    
+    // Extraer información de paginación de la respuesta de Chatwoot
+    let pagination = {
+      current_page: page,
+      per_page: perPage,
+      total_pages: 1,
+      total_count: 0,
+      has_more: false
+    };
+    
+    // Chatwoot puede devolver paginación en diferentes lugares
+    if (data.meta) {
+      pagination = {
+        current_page: data.meta.current_page || page,
+        per_page: data.meta.per_page || perPage,
+        total_pages: data.meta.total_pages || 1,
+        total_count: data.meta.count || 0,
+        has_more: (data.meta.current_page || page) < (data.meta.total_pages || 1)
+      };
+    } else if (data.pagination) {
+      pagination = {
+        current_page: data.pagination.current_page || page,
+        per_page: data.pagination.per_page || perPage,
+        total_pages: data.pagination.total_pages || 1,
+        total_count: data.pagination.total_count || 0,
+        has_more: (data.pagination.current_page || page) < (data.pagination.total_pages || 1)
+      };
+    } else if (data.data?.meta) {
+      // A veces la paginación está en data.meta
+      pagination = {
+        current_page: data.data.meta.current_page || page,
+        per_page: data.data.meta.per_page || perPage,
+        total_pages: data.data.meta.total_pages || 1,
+        total_count: data.data.meta.count || 0,
+        has_more: (data.data.meta.current_page || page) < (data.data.meta.total_pages || 1)
+      };
+    }
+    
+    console.log('📊 Paginación detectada:', pagination);
+    console.log('📊 Estructura de data:', {
+      hasMeta: !!data.meta,
+      hasPagination: !!data.pagination,
+      hasDataMeta: !!data.data?.meta,
+      dataKeys: Object.keys(data)
+    });
     
     try {
     console.log('Chatwoot API Response structure keys:', Object.keys(data));
@@ -270,6 +320,27 @@ export async function GET(request) {
 
     console.log(`Found ${conversations.length} total conversations, ${whatsappChats.length} WhatsApp conversations`);
     
+    // Si no hay información de paginación de Chatwoot, calcular si hay más basándose en la cantidad recibida
+    // Si recibimos exactamente perPage conversaciones, probablemente hay más
+    if (!pagination.has_more && conversations.length >= perPage) {
+      // Si recibimos el número completo de conversaciones solicitadas, asumimos que puede haber más
+      pagination.has_more = true;
+      console.log('📊 Calculando has_more basado en cantidad recibida:', {
+        received: conversations.length,
+        perPage: perPage,
+        has_more: pagination.has_more
+      });
+    }
+    
+    // Si recibimos menos de perPage, definitivamente no hay más
+    if (conversations.length < perPage) {
+      pagination.has_more = false;
+      console.log('📊 No hay más conversaciones (recibidas < per_page):', {
+        received: conversations.length,
+        perPage: perPage
+      });
+    }
+    
     // Log de ejemplo de chat enriquecido
     try {
       if (whatsappChats.length > 0) {
@@ -290,6 +361,7 @@ export async function GET(request) {
       data: whatsappChats,
       total: whatsappChats.length,
       totalConversations: conversations.length,
+      pagination: pagination,
       filters: {
         label: labelFilter,
         assignee_id: assigneeId,

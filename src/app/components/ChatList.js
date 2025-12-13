@@ -5,7 +5,7 @@ import { useChats } from '../../hooks/useChats';
 
 const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
   // Obtener chats sin filtrar por agente (mostrar todas las conversaciones)
-  const { chats, loading, error, refreshChats } = useChats(null);
+  const { chats, loading, loadingMore, error, refreshChats, loadMoreChats, pagination } = useChats(null);
 
   // Función para obtener el nombre del contacto
   const getContactName = (chat) => {
@@ -468,6 +468,40 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
             </div>
           </div>
         ))}
+        
+        {/* Botón "Cargar más" */}
+        {pagination && pagination.has_more && (
+          <div className="flex justify-center py-4">
+            <button
+              onClick={loadMoreChats}
+              disabled={loadingMore}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {loadingMore ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Cargando...</span>
+                </>
+              ) : (
+                <>
+                  <span>Cargar más</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+        
+        {/* Debug info - remover en producción */}
+        {process.env.NODE_ENV === 'development' && pagination && (
+          <div className="text-xs text-gray-400 px-4 pb-2">
+            Página {pagination.current_page} de {pagination.total_pages || '?'} | 
+            {pagination.has_more ? ' Hay más' : ' No hay más'} | 
+            Total: {chats.length} chats
+          </div>
+        )}
       </div>
     </div>
   );
