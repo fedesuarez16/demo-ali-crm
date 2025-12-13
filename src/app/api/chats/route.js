@@ -81,13 +81,54 @@ export async function GET(request) {
     console.log('Filters applied:', { labelFilter, assigneeId, status });
 
     // Hacer petición a Chatwoot
-    const response = await fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'api_access_token': apiToken,
-      },
-    });
+    let response;
+    try {
+      response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'api_access_token': apiToken,
+        },
+      });
+    } catch (fetchError) {
+      console.error('Error fetching from Chatwoot:', fetchError);
+      
+      // Manejar errores de red específicos
+      if (fetchError.code === 'ENOTFOUND' || fetchError.message?.includes('getaddrinfo')) {
+        return NextResponse.json(
+          { 
+            error: 'Error de conexión con Chatwoot',
+            message: `No se pudo conectar con el servidor de Chatwoot. El hostname "${chatwootUrl}" no se puede resolver.`,
+            details: 'Verifica que la URL de Chatwoot en las variables de entorno sea correcta y que el servidor esté accesible.',
+            code: fetchError.code || 'NETWORK_ERROR'
+          }, 
+          { status: 503 }
+        );
+      }
+      
+      if (fetchError.message?.includes('timeout') || fetchError.message?.includes('ETIMEDOUT')) {
+        return NextResponse.json(
+          { 
+            error: 'Timeout al conectar con Chatwoot',
+            message: 'El servidor de Chatwoot no respondió a tiempo.',
+            details: 'Verifica que el servidor esté funcionando y accesible.',
+            code: 'TIMEOUT'
+          }, 
+          { status: 504 }
+        );
+      }
+      
+      // Error genérico de red
+      return NextResponse.json(
+        { 
+          error: 'Error de red',
+          message: `Error al conectar con Chatwoot: ${fetchError.message}`,
+          details: 'Verifica tu conexión a internet y que el servidor de Chatwoot esté accesible.',
+          code: fetchError.code || 'NETWORK_ERROR'
+        }, 
+        { status: 503 }
+      );
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -103,7 +144,31 @@ export async function GET(request) {
       );
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (jsonError) {
+      console.error('Error parsing JSON response:', jsonError);
+      return NextResponse.json(
+        { 
+          error: 'Error al parsear respuesta de Chatwoot',
+          message: jsonError.message 
+        }, 
+        { status: 500 }
+      );
+    }
+    
+    // Validar que data sea un objeto
+    if (!data || typeof data !== 'object') {
+      console.error('Invalid data structure:', typeof data, data);
+      return NextResponse.json(
+        { 
+          error: 'Respuesta inválida de Chatwoot',
+          message: 'La respuesta no es un objeto válido'
+        }, 
+        { status: 500 }
+      );
+    }
     
     // Extraer información de paginación de la respuesta de Chatwoot
     let pagination = {
@@ -115,31 +180,36 @@ export async function GET(request) {
     };
     
     // Chatwoot puede devolver paginación en diferentes lugares
-    if (data.meta) {
-      pagination = {
-        current_page: data.meta.current_page || page,
-        per_page: data.meta.per_page || perPage,
-        total_pages: data.meta.total_pages || 1,
-        total_count: data.meta.count || 0,
-        has_more: (data.meta.current_page || page) < (data.meta.total_pages || 1)
-      };
-    } else if (data.pagination) {
-      pagination = {
-        current_page: data.pagination.current_page || page,
-        per_page: data.pagination.per_page || perPage,
-        total_pages: data.pagination.total_pages || 1,
-        total_count: data.pagination.total_count || 0,
-        has_more: (data.pagination.current_page || page) < (data.pagination.total_pages || 1)
-      };
-    } else if (data.data?.meta) {
-      // A veces la paginación está en data.meta
-      pagination = {
-        current_page: data.data.meta.current_page || page,
-        per_page: data.data.meta.per_page || perPage,
-        total_pages: data.data.meta.total_pages || 1,
-        total_count: data.data.meta.count || 0,
-        has_more: (data.data.meta.current_page || page) < (data.data.meta.total_pages || 1)
-      };
+    try {
+      if (data.meta && typeof data.meta === 'object') {
+        pagination = {
+          current_page: data.meta.current_page || page,
+          per_page: data.meta.per_page || perPage,
+          total_pages: data.meta.total_pages || 1,
+          total_count: data.meta.count || 0,
+          has_more: (data.meta.current_page || page) < (data.meta.total_pages || 1)
+        };
+      } else if (data.pagination && typeof data.pagination === 'object') {
+        pagination = {
+          current_page: data.pagination.current_page || page,
+          per_page: data.pagination.per_page || perPage,
+          total_pages: data.pagination.total_pages || 1,
+          total_count: data.pagination.total_count || 0,
+          has_more: (data.pagination.current_page || page) < (data.pagination.total_pages || 1)
+        };
+      } else if (data.data?.meta && typeof data.data.meta === 'object') {
+        // A veces la paginación está en data.meta
+        pagination = {
+          current_page: data.data.meta.current_page || page,
+          per_page: data.data.meta.per_page || perPage,
+          total_pages: data.data.meta.total_pages || 1,
+          total_count: data.data.meta.count || 0,
+          has_more: (data.data.meta.current_page || page) < (data.data.meta.total_pages || 1)
+        };
+      }
+    } catch (paginationError) {
+      console.error('Error extracting pagination:', paginationError);
+      // Continuar con paginación por defecto
     }
     
     console.log('📊 Paginación detectada:', pagination);
@@ -151,26 +221,28 @@ export async function GET(request) {
     });
     
     try {
-    console.log('Chatwoot API Response structure keys:', Object.keys(data));
-    if (data.data) {
+      console.log('Chatwoot API Response structure keys:', Object.keys(data));
+      if (data.data) {
         console.log('data.data type:', typeof data.data, 'isArray:', Array.isArray(data.data));
         if (data.data.payload && Array.isArray(data.data.payload)) {
-        console.log(`Found ${data.data.payload.length} conversations in payload`);
+          console.log(`Found ${data.data.payload.length} conversations in payload`);
           // Log de la primera conversación para ver estructura (solo si existe)
           if (data.data.payload.length > 0) {
             const firstChat = data.data.payload[0];
-            console.log('📋 Primera conversación ID:', firstChat.id);
-            console.log('📋 Campos disponibles:', Object.keys(firstChat));
-            
-            // Log seguro de las propiedades más importantes
-            if (firstChat.meta) {
-              console.log('  - meta:', Object.keys(firstChat.meta));
-            }
-            if (firstChat.additional_attributes) {
-              console.log('  - additional_attributes:', firstChat.additional_attributes);
-            }
-            if (firstChat.last_non_activity_message) {
-              console.log('  - last_non_activity_message keys:', Object.keys(firstChat.last_non_activity_message));
+            if (firstChat && typeof firstChat === 'object') {
+              console.log('📋 Primera conversación ID:', firstChat.id);
+              console.log('📋 Campos disponibles:', Object.keys(firstChat));
+              
+              // Log seguro de las propiedades más importantes
+              if (firstChat.meta) {
+                console.log('  - meta:', Object.keys(firstChat.meta));
+              }
+              if (firstChat.additional_attributes) {
+                console.log('  - additional_attributes:', firstChat.additional_attributes);
+              }
+              if (firstChat.last_non_activity_message) {
+                console.log('  - last_non_activity_message keys:', Object.keys(firstChat.last_non_activity_message));
+              }
             }
           }
         }
@@ -183,40 +255,56 @@ export async function GET(request) {
     let conversations = [];
     
     try {
-    if (Array.isArray(data)) {
-      // Si la respuesta directa es un array
-      conversations = data;
+      if (Array.isArray(data)) {
+        // Si la respuesta directa es un array
+        conversations = data;
         console.log('Conversations found in root array');
-    } else if (data.data && data.data.payload && Array.isArray(data.data.payload)) {
-      // Si los datos están en data.data.payload (estructura real de Chatwoot)
-      conversations = data.data.payload;
-        console.log('Conversations found in data.data.payload');
-    } else if (data.data && Array.isArray(data.data)) {
-      // Si los datos están en data.data
-      conversations = data.data;
-        console.log('Conversations found in data.data');
-    } else if (data.payload && Array.isArray(data.payload)) {
-      // Si los datos están en data.payload
-      conversations = data.payload;
-        console.log('Conversations found in data.payload');
-    } else {
-        console.warn('Unexpected API response structure:', Object.keys(data));
+      } else if (data && typeof data === 'object') {
+        if (data.data && typeof data.data === 'object') {
+          if (data.data.payload && Array.isArray(data.data.payload)) {
+            // Si los datos están en data.data.payload (estructura real de Chatwoot)
+            conversations = data.data.payload;
+            console.log('Conversations found in data.data.payload');
+          } else if (Array.isArray(data.data)) {
+            // Si los datos están en data.data
+            conversations = data.data;
+            console.log('Conversations found in data.data');
+          }
+        } else if (data.payload && Array.isArray(data.payload)) {
+          // Si los datos están en data.payload
+          conversations = data.payload;
+          console.log('Conversations found in data.payload');
+        } else {
+          console.warn('Unexpected API response structure:', Object.keys(data));
+          conversations = [];
+        }
+      } else {
+        console.warn('Data is not an object or array:', typeof data);
         conversations = [];
       }
     } catch (parseError) {
       console.error('Error parsing conversations structure:', parseError);
+      console.error('Parse error details:', parseError.message, parseError.stack);
       conversations = [];
     }
     
     // Verificar que conversations sea un array válido
     if (!Array.isArray(conversations)) {
-      console.error('Conversations is not an array:', typeof conversations);
+      console.error('Conversations is not an array:', typeof conversations, conversations);
       conversations = [];
     }
+    
+    console.log(`Total conversations extracted: ${conversations.length}`);
     
     // Enriquecer conversaciones con información de contacto adicional
     const enrichedConversations = conversations.map(chat => {
       try {
+        // Validar que chat sea un objeto válido
+        if (!chat || typeof chat !== 'object') {
+          console.warn('Chat inválido encontrado:', chat);
+          return null;
+        }
+        
         // Intentar extraer número de teléfono de múltiples fuentes
         let phoneNumber = null;
         let identifier = null;
@@ -287,8 +375,11 @@ export async function GET(request) {
           enriched_phone_candidates: phoneCandidates.filter(Boolean)
         };
       } catch (error) {
-        console.error('Error enriching chat:', chat.id, error);
-        // Devolver el chat sin enriquecer si hay error
+        console.error('Error enriching chat:', chat?.id || 'unknown', error);
+        // Devolver el chat sin enriquecer si hay error, o null si no es válido
+        if (!chat || typeof chat !== 'object') {
+          return null;
+        }
         return {
           ...chat,
           enriched_phone_number: null,
@@ -297,7 +388,7 @@ export async function GET(request) {
           enriched_phone_candidates: []
         };
       }
-    });
+    }).filter(chat => chat !== null); // Filtrar chats nulos
     
     // Filtrar solo conversaciones de WhatsApp
     const whatsappChats = enrichedConversations.filter(chat => {

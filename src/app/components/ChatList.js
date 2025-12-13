@@ -1,11 +1,58 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useChats } from '../../hooks/useChats';
 
 const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
   // Obtener chats sin filtrar por agente (mostrar todas las conversaciones)
   const { chats, loading, loadingMore, error, refreshChats, loadMoreChats, pagination } = useChats(null);
+  
+  // Estado para rastrear qué chats han sido leídos (usando localStorage para persistencia)
+  const [readChats, setReadChats] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('readChats');
+      return stored ? JSON.parse(stored) : {};
+    }
+    return {};
+  });
+  
+  // Guardar en localStorage cuando cambie readChats
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('readChats', JSON.stringify(readChats));
+    }
+  }, [readChats]);
+  
+  // Marcar un chat como leído
+  const markAsRead = (chatId) => {
+    setReadChats(prev => ({
+      ...prev,
+      [chatId]: true
+    }));
+  };
+  
+  // Marcar un chat como no leído
+  const markAsUnread = (chatId) => {
+    setReadChats(prev => {
+      const newRead = { ...prev };
+      delete newRead[chatId];
+      return newRead;
+    });
+  };
+  
+  // Verificar si un chat está leído
+  const isChatRead = (chatId) => {
+    return readChats[chatId] === true;
+  };
+  
+  // Manejar selección de chat y marcarlo como leído
+  const handleChatSelect = (chat) => {
+    if (onSelectChat) {
+      onSelectChat(chat);
+    }
+    // Marcar como leído cuando se selecciona
+    markAsRead(chat.id);
+  };
 
   // Función para obtener el nombre del contacto
   const getContactName = (chat) => {
@@ -284,8 +331,8 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
   // Función para obtener el color del estado
   const getStatusColor = (status) => {
     switch (status) {
-      case 'open':
-        return 'bg-green-100 text-green-800';
+      case '':
+        return '';
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
       case 'resolved':
@@ -388,20 +435,70 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
 
       {/* Lista de chats - scrolleable */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {chats.map((chat) => (
+        {chats.map((chat) => {
+          const isRead = isChatRead(chat.id);
+          const isSelected = selectedChat?.id === chat.id;
+          
+          return (
           <div 
             key={chat.id} 
-            onClick={() => onSelectChat && onSelectChat(chat)}
-            className={`bg-white border-b border-gray-200 rounded-lg py-3 px-3 hover:shadow-sm transition-all cursor-pointer ${
-              selectedChat?.id === chat.id 
+            onClick={() => handleChatSelect(chat)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              // Toggle read/unread con clic derecho
+              if (isRead) {
+                markAsUnread(chat.id);
+              } else {
+                markAsRead(chat.id);
+              }
+            }}
+            className={`bg-white border-b border-gray-200 rounded-lg py-3 px-3 hover:shadow-sm transition-all cursor-pointer relative group ${
+              isSelected 
                 ? 'border-gray-100 bg-green-50' 
                 : 'border-gray-200 hover:border-gray-300'
-            }`}
+            } ${!isRead ? 'bg-blue-50/30' : ''}`}
           >
+            {/* Indicador de no leído - Punto azul en la esquina superior derecha */}
+            {!isRead && (
+              <div className="absolute top-2 right-2 w-2.5 h-2.5 bg-blue-500 rounded-full z-10"></div>
+            )}
+            
+            {/* Botón para marcar como leído/no leído - Aparece al hacer hover */}
+            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isRead) {
+                    markAsUnread(chat.id);
+                  } else {
+                    markAsRead(chat.id);
+                  }
+                }}
+                className={`p-1.5 rounded-full transition-colors ${
+                  isRead 
+                    ? 'bg-gray-200 hover:bg-gray-300 text-gray-600' 
+                    : 'bg-blue-500 hover:bg-blue-600 text-white'
+                }`}
+                title={isRead ? 'Marcar como no leído' : 'Marcar como leído'}
+              >
+                {isRead ? (
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" />
+                  </svg>
+                )}
+              </button>
+            </div>
+            
             {/* Header del chat simplificado */}
             <div className="flex justify-between items-center">
               <div className="flex items-center flex-1 min-w-0">
-                <div className="w-7 h-7 bg-green-500 rounded-full flex items-center justify-center mr-2 flex-shrink-0">
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center mr-2 flex-shrink-0 ${
+                  !isRead ? 'bg-blue-500' : 'bg-green-500'
+                }`}>
                   <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
                   </svg>
@@ -449,9 +546,7 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
                 </div>
               </div>
               
-              <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ml-2 ${getStatusColor(chat.status)}`}>
-                {chat.status}
-              </span>
+              
             </div>
 
             {/* Último mensaje y fecha simplificados */}
@@ -467,7 +562,8 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
         
         {/* Botón "Cargar más" */}
         {pagination && pagination.has_more && (
