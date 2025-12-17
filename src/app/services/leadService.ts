@@ -718,19 +718,25 @@ export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promi
       dataToUpdate.estado_chat = leadData.estado_chat;
     }
     
-    // Calificar automáticamente el lead si no se especificó un estado manualmente
-    // O si el estado actual es "activo" o "inicial" (estados que NO deben existir - recalificar inmediatamente)
-    // Combinar datos actuales con los nuevos para evaluar la calificación completa
+    // Solo recalificar automáticamente si el estado actual es inválido ('inicial' o 'activo')
+    // NO recalificar si el estado es válido y no se está cambiando explícitamente
     const currentEstado = currentLead?.estado;
-    if (leadData.estado === undefined || 
-        leadData.estado === 'inicial' || leadData.estado === 'activo' ||
-        currentEstado === 'inicial' || currentEstado === 'activo') {
+    if (leadData.estado !== undefined) {
+      // Si se especificó un estado manualmente, respetarlo
+      if (leadData.estado === 'inicial' || leadData.estado === 'activo') {
+        // Si se intenta establecer un estado inválido, recalificar automáticamente
+        const combinedData = { ...currentLead, ...dataToUpdate };
+        dataToUpdate.estado = calificarLead(combinedData);
+      } else {
+        // Si se especifica un estado válido, usarlo
+        dataToUpdate.estado = leadData.estado;
+      }
+    } else if (currentEstado === 'inicial' || currentEstado === 'activo') {
+      // Solo recalificar si el estado actual es inválido
       const combinedData = { ...currentLead, ...dataToUpdate };
       dataToUpdate.estado = calificarLead(combinedData);
-    } else {
-      // Si se especificó un estado manualmente válido, respetarlo
-      dataToUpdate.estado = leadData.estado;
     }
+    // Si el estado actual es válido y no se especifica un nuevo estado, NO cambiar el estado
     
     // Actualizar ultima_interaccion
     dataToUpdate.ultima_interaccion = new Date().toISOString();
