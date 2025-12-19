@@ -182,7 +182,7 @@ const ChatConversation = ({ conversation, onBack }) => {
   return (
     <div className="flex-1 flex flex-col bg-white">
       {/* Header del chat */}
-      <div className="bg-gray-50 border-b border-gray-200 px-4 py-3 flex items-center">
+      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center">
         <button
           onClick={onBack}
           className="lg:hidden mr-3 p-1 hover:bg-gray-200 rounded-full"
@@ -296,7 +296,7 @@ const ChatConversation = ({ conversation, onBack }) => {
       </div>
 
       {/* Área de entrada de mensaje */}
-      <div className="bg-white border-t border-gray-200 p-4">
+      <div className="bg-gray-50  p-4">
         <form 
           onSubmit={async (e) => {
             e.preventDefault();

@@ -19,11 +19,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 
 export default function LeadsTablePage() {
+  // Todos los hooks deben estar al inicio, antes de cualquier return condicional
   const [leads, setLeads] = useState<Lead[]>([]);
   const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({});
   const [isFilterVisible, setIsFilterVisible] = useState(false); // Por defecto cerrado
   const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
   
   const [zonas, setZonas] = useState<string[]>([]);
   const [estados, setEstados] = useState<string[]>([]);
@@ -52,12 +54,22 @@ export default function LeadsTablePage() {
       setLeads(allLeads);
       setFilteredLeads(allLeads);
       
-      // Cargar opciones para los filtros
+      // Cargar opciones para los filtros (usar los leads recién cargados)
       setZonas(getUniqueZones());
       setEstados(getUniqueStatuses());
       setTiposPropiedad(getUniquePropertyTypes());
       setMotivosInteres(getUniqueInterestReasons());
-      setPropiedadesInteres(getUniquePropertyInterests());
+      
+      // Obtener propiedades de interés directamente de los leads cargados
+      const propiedadesSet = new Set<string>();
+      allLeads.forEach(lead => {
+        const propiedadInteres = (lead as any).propiedad_interes;
+        if (propiedadInteres && typeof propiedadInteres === 'string' && propiedadInteres.trim() !== '') {
+          propiedadesSet.add(propiedadInteres.trim());
+        }
+      });
+      const propiedadesArray = Array.from(propiedadesSet).sort();
+      setPropiedadesInteres(propiedadesArray);
       
       setIsLoading(false);
     };
@@ -65,11 +77,50 @@ export default function LeadsTablePage() {
     loadData();
   }, []);
   
-  // Aplicar filtros cuando cambien las opciones
+  // Aplicar filtros y búsqueda cuando cambien las opciones
   useEffect(() => {
-    const filtered = filterLeads(filterOptions);
-    setFilteredLeads(filtered);
-  }, [filterOptions]);
+    // Validar que filterOptions y searchTerm sean válidos
+    if (!filterOptions || typeof searchTerm !== 'string') {
+      return;
+    }
+    
+    try {
+      let filtered = filterLeads(filterOptions);
+      
+      // Validar que filtered sea un array
+      if (!Array.isArray(filtered)) {
+        console.error('filterLeads did not return an array:', filtered);
+        return;
+      }
+      
+      // Aplicar búsqueda por texto si hay término de búsqueda
+      if (searchTerm && searchTerm.trim()) {
+        const searchLower = searchTerm.toLowerCase().trim();
+        const searchTermTrimmed = searchTerm.trim();
+        filtered = filtered.filter(lead => {
+          try {
+            if (!lead) return false;
+            
+            const nombre = (lead.nombreCompleto || (lead as any).nombre || '').toLowerCase();
+            const telefono = String((lead as any).whatsapp_id || lead.telefono || '');
+            const email = (lead.email || '').toLowerCase();
+            
+            return nombre.includes(searchLower) || 
+                   telefono.includes(searchTermTrimmed) ||
+                   email.includes(searchLower);
+          } catch (e) {
+            console.error('Error filtering lead:', e, lead);
+            return false;
+          }
+        });
+      }
+      
+      setFilteredLeads(filtered);
+    } catch (error) {
+      console.error('Error in filter effect:', error);
+      // En caso de error, mantener el estado anterior (no hacer nada)
+    }
+  }, [filterOptions, searchTerm]);
   
   const handleFilterChange = (newFilterOptions: FilterOptions) => {
     setFilterOptions(newFilterOptions);
@@ -77,6 +128,7 @@ export default function LeadsTablePage() {
   
   const handleResetFilters = () => {
     setFilterOptions({});
+    setSearchTerm('');
   };
 
   const handleExportCSV = () => {
@@ -230,7 +282,41 @@ export default function LeadsTablePage() {
 
           {/* Título y acciones */}
           <div className="px-4 py-3 flex justify-between items-center border-t border-gray-100">
-            <h1 className="text-xl font-bold text-slate-800">Tabla de Leads</h1>
+            <div className="flex items-center space-x-4">
+              <h1 className="text-xl font-bold text-slate-800">Tabla de Leads</h1>
+              {searchTerm && (
+                <span className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded-full">
+                  {filteredLeads.length} resultado{filteredLeads.length !== 1 ? 's' : ''}
+                </span>
+              )}
+              
+              {/* Barra de búsqueda */}
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre o teléfono..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="block w-64 pl-10 pr-3 py-1.5 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    title="Limpiar búsqueda"
+                  >
+                    <svg className="h-4 w-4 text-gray-400 hover:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="flex space-x-3">
               <button
                 onClick={() => setIsAddColumnModalVisible(true)}

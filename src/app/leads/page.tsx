@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useDeferredValue } from 'react';
 import AppLayout from '../components/AppLayout';
 import LeadCards from '../components/LeadCards';
 import LeadFilter from '../components/LeadFilter';
@@ -25,12 +25,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 
 export default function LeadsKanbanPage() {
+  // Todos los hooks deben estar al inicio, antes de cualquier return condicional
   const [leads, setLeads] = useState<Lead[]>([]);
   const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({});
   const [isFilterVisible, setIsFilterVisible] = useState(false); // Por defecto cerrado
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   
   const [zonas, setZonas] = useState<string[]>([]);
   const [estados, setEstados] = useState<string[]>([]);
@@ -99,26 +101,69 @@ export default function LeadsKanbanPage() {
     loadData();
   }, []);
   
-  // Aplicar filtros y búsqueda cuando cambien las opciones
-  useEffect(() => {
-    let filtered = filterLeads(filterOptions);
-    
-    // Aplicar búsqueda por texto si hay término de búsqueda
-    if (searchTerm.trim()) {
-      const searchLower = searchTerm.toLowerCase().trim();
-      filtered = filtered.filter(lead => {
-        const nombre = (lead.nombreCompleto || (lead as any).nombre || '').toLowerCase();
-        const telefono = ((lead as any).whatsapp_id || lead.telefono || '').toString();
-        const email = (lead.email || '').toLowerCase();
-        
-        return nombre.includes(searchLower) || 
-               telefono.includes(searchTerm.trim()) ||
-               email.includes(searchLower);
-      });
+  // Usar useMemo con deferredSearchTerm para evitar recálculos excesivos
+  const filteredLeadsMemo = useMemo(() => {
+    try {
+      // Validar que leads sea un array
+      if (!Array.isArray(leads)) {
+        return [];
+      }
+      
+      // Si no hay leads, retornar array vacío
+      if (leads.length === 0) {
+        return [];
+      }
+      
+      // Validar que filterOptions y deferredSearchTerm sean válidos
+      if (!filterOptions || typeof deferredSearchTerm !== 'string') {
+        return leads;
+      }
+      
+      let filtered = filterLeads(filterOptions);
+      
+      // Validar que filtered sea un array
+      if (!Array.isArray(filtered)) {
+        console.error('filterLeads did not return an array:', filtered);
+        return leads;
+      }
+      
+      // Aplicar búsqueda por texto si hay término de búsqueda
+      if (deferredSearchTerm && deferredSearchTerm.trim()) {
+        const searchLower = deferredSearchTerm.toLowerCase().trim();
+        const searchTermTrimmed = deferredSearchTerm.trim();
+        filtered = filtered.filter(lead => {
+          try {
+            if (!lead) return false;
+            
+            const nombre = (lead.nombreCompleto || (lead as any).nombre || '').toLowerCase();
+            const telefono = String((lead as any).whatsapp_id || lead.telefono || '');
+            const email = (lead.email || '').toLowerCase();
+            
+            return nombre.includes(searchLower) || 
+                   telefono.includes(searchTermTrimmed) ||
+                   email.includes(searchLower);
+          } catch (e) {
+            console.error('Error filtering lead:', e, lead);
+            return false;
+          }
+        });
+      }
+      
+      // Asegurar que siempre retornamos un array
+      return Array.isArray(filtered) ? filtered : [];
+    } catch (error) {
+      console.error('Error in filter memo:', error);
+      // Siempre retornar un array válido
+      return Array.isArray(leads) ? leads : [];
     }
-    
-    setFilteredLeads(filtered);
-  }, [filterOptions, searchTerm]);
+  }, [leads, filterOptions, deferredSearchTerm]);
+
+  // Actualizar filteredLeads cuando cambie el memo
+  useEffect(() => {
+    if (Array.isArray(filteredLeadsMemo)) {
+      setFilteredLeads(filteredLeadsMemo);
+    }
+  }, [filteredLeadsMemo]);
   
   const handleFilterChange = (newFilterOptions: FilterOptions) => {
     setFilterOptions(newFilterOptions);

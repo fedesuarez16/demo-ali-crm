@@ -22,42 +22,70 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
   
   // Memo para agrupar los leads por estado y ordenarlos por ultima_interaccion
   const groupedLeads = useMemo(() => {
-    const result: Record<string, Lead[]> = {};
-    
-    // Inicializar todas las columnas visibles
-    statusOrder.forEach(status => {
-      result[status] = [];
-    });
-    
-    leads.forEach(lead => {
-      const leadStatus = lead.estado;
-      // Si el estado coincide con alguna de nuestras columnas visibles, lo añadimos ahí
-      if (statusOrder.includes(leadStatus)) {
-        if (!result[leadStatus]) {
-          result[leadStatus] = [];
-        }
-        result[leadStatus].push(lead);
-      } else {
-        // Si el estado no existe en nuestras columnas visibles, crear una nueva columna para él
-        // Esto permite que los estados personalizados se muestren correctamente
-        if (!result[leadStatus]) {
-          result[leadStatus] = [];
-        }
-        result[leadStatus].push(lead);
+    try {
+      const result: Record<string, Lead[]> = {};
+      
+      // Validar que leads sea un array
+      if (!Array.isArray(leads)) {
+        console.error('Leads is not an array:', leads);
+        return {};
       }
-    });
-    
-    // Ordenar cada columna por ultima_interaccion (más reciente primero)
-    Object.keys(result).forEach(status => {
-      result[status].sort((a: Lead, b: Lead) => {
-        // Priorizar ultima_interaccion sobre fechaContacto
-        const dateA = new Date(a.ultima_interaccion || a.created_at || a.fechaContacto).getTime();
-        const dateB = new Date(b.ultima_interaccion || b.created_at || b.fechaContacto).getTime();
-        return dateB - dateA; // Orden descendente (más reciente primero)
+      
+      // Inicializar todas las columnas visibles
+      if (Array.isArray(statusOrder)) {
+        statusOrder.forEach(status => {
+          result[status] = [];
+        });
+      }
+      
+      leads.forEach(lead => {
+        try {
+          const leadStatus = lead?.estado;
+          if (!leadStatus) return;
+          
+          // Si el estado coincide con alguna de nuestras columnas visibles, lo añadimos ahí
+          if (statusOrder.includes(leadStatus)) {
+            if (!result[leadStatus]) {
+              result[leadStatus] = [];
+            }
+            result[leadStatus].push(lead);
+          } else {
+            // Si el estado no existe en nuestras columnas visibles, crear una nueva columna para él
+            // Esto permite que los estados personalizados se muestren correctamente
+            if (!result[leadStatus]) {
+              result[leadStatus] = [];
+            }
+            result[leadStatus].push(lead);
+          }
+        } catch (e) {
+          console.error('Error processing lead:', e, lead);
+        }
       });
-    });
-    
-    return result;
+      
+      // Ordenar cada columna por ultima_interaccion (más reciente primero)
+      Object.keys(result).forEach(status => {
+        try {
+          result[status].sort((a: Lead, b: Lead) => {
+            try {
+              // Priorizar ultima_interaccion sobre fechaContacto
+              const dateA = new Date(a.ultima_interaccion || a.created_at || a.fechaContacto || 0).getTime();
+              const dateB = new Date(b.ultima_interaccion || b.created_at || b.fechaContacto || 0).getTime();
+              return dateB - dateA; // Orden descendente (más reciente primero)
+            } catch (e) {
+              console.error('Error sorting leads:', e);
+              return 0;
+            }
+          });
+        } catch (e) {
+          console.error('Error sorting column:', e, status);
+        }
+      });
+      
+      return result;
+    } catch (e) {
+      console.error('Error in groupedLeads useMemo:', e);
+      return {};
+    }
   }, [leads, statusOrder]);
   
   // Cargar propiedades coincidentes para todos los leads

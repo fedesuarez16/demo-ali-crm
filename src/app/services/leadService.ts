@@ -297,10 +297,15 @@ export const getAllLeads = async (): Promise<Lead[]> => {
 export const filterLeads = (options: FilterOptions): Lead[] => {
   const source = cachedLeads;
   return source.filter(lead => {
-    // Filtrar por zona de interés si se especifica
-    if (options.zona && lead.zonaInteres.toLowerCase() !== options.zona.toLowerCase()) {
-      return false;
-    }
+    try {
+      // Filtrar por zona de interés si se especifica
+      if (options.zona && lead.zonaInteres) {
+        const leadZona = (lead.zonaInteres || '').toLowerCase();
+        const filterZona = (options.zona || '').toLowerCase();
+        if (leadZona !== filterZona) {
+          return false;
+        }
+      }
     
     // Filtrar por presupuesto máximo si se especifica
     if (options.presupuestoMaximo && lead.presupuesto > options.presupuestoMaximo) {
@@ -335,22 +340,38 @@ export const filterLeads = (options: FilterOptions): Lead[] => {
         return false;
       }
       
-      // Obtener todas las variantes de la campaña seleccionada
-      const campaignVariants = getCampaignVariants(options.propiedadInteres);
+      // Comparación directa primero (más rápida y precisa)
+      if (leadPropiedadInteres.trim() === options.propiedadInteres.trim()) {
+        return true;
+      }
       
-      // Verificar si el lead pertenece a alguna de las variantes
-      const normalizedLeadCampaign = normalizeCampaignName(leadPropiedadInteres);
-      const matches = campaignVariants.some(variant => 
-        normalizeCampaignName(variant) === normalizedLeadCampaign
-      );
-      
-      if (!matches) {
-        return false;
+      // Si no coincide exactamente, intentar con variantes agrupadas (para manejar diferencias ortográficas)
+      try {
+        const campaignVariants = getCampaignVariants(options.propiedadInteres);
+        const normalizedLeadCampaign = normalizeCampaignName(leadPropiedadInteres);
+        const matches = campaignVariants.some(variant => 
+          normalizeCampaignName(variant) === normalizedLeadCampaign
+        );
+        
+        if (!matches) {
+          return false;
+        }
+      } catch (e) {
+        // Si hay error con el agrupamiento, usar comparación directa normalizada
+        const normalizedLead = normalizeCampaignName(leadPropiedadInteres);
+        const normalizedFilter = normalizeCampaignName(options.propiedadInteres);
+        if (normalizedLead !== normalizedFilter) {
+          return false;
+        }
       }
     }
     
-    // Si pasa todos los filtros, incluir el lead
-    return true;
+      // Si pasa todos los filtros, incluir el lead
+      return true;
+    } catch (e) {
+      console.error('Error filtering lead:', e, lead);
+      return false;
+    }
   });
 };
 

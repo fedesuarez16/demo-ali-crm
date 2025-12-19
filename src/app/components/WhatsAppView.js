@@ -53,7 +53,7 @@ const WhatsAppView = ({ targetPhoneNumber }) => {
       {/* En mobile: overlay/drawer que NO ocupa espacio cuando está cerrado - completamente desacoplado */}
       <div className={`
         flex-col
-        w-full lg:w-1/3 xl:w-1/4
+        w-full lg:w-[38.33%] xl:w-[28.75%]
         border-r border-gray-200 bg-white
         ${showConversation ? 'hidden lg:flex' : 'flex'}
         lg:relative lg:static
