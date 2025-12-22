@@ -565,7 +565,7 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
           <button
             onClick={handleSavePropiedad}
             disabled={isSaving}
-            className="p-0.5 text-green-600 hover:text-green-700 disabled:opacity-50"
+            className="p-0.5 text-green-900 hover:text-green-700 disabled:opacity-50"
             title="Guardar"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -713,7 +713,7 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="p-0.5 text-green-600 hover:text-green-700 disabled:opacity-50"
+            className="p-0.5 text-green-900 hover:text-green-700 disabled:opacity-50"
             title="Guardar"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

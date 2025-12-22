@@ -365,7 +365,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                 <h3 className="text-xs font-semibold text-slate-700">
                   {getStatusTitle(status)}
                 </h3>
-                <span className={` items-center px-1.5 py-0.5 rounded-full text-[10px] border ${getStatusBorderColor(status).split(' ')[0]} text-slate-500`}>
+                <span className={` items-center px-1.5 py-0.5 rounded-xl text-[10px] border ${getStatusBorderColor(status).split(' ')[0]} text-slate-500`}>
                   {groupedLeads[status].length}
                 </span>
               </div>
@@ -440,7 +440,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                               </div>
                               <div className="flex items-center gap-1">
                                 <span 
-                                  className="inline-flex items-center px-1 py-0.5 rounded-full text-[10px] font-medium border"
+                                  className="inline-flex items-center px-1 py-0.5 rounded-md text-[10px] font-medium border"
                                   style={getStatusBadgeColor(lead.estado)}
                                 >
                                   {lead.estado}

@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useChatMessages } from '../../hooks/useChatMessages';
 import { updateLead, getAllLeads } from '../services/leadService';
+import { programarSeguimiento } from '../services/mensajeService';
 
 const ChatConversation = ({ conversation, onBack }) => {
   const { messages, loading, error, refreshMessages, sendMessage } = useChatMessages(conversation?.id);
@@ -12,6 +13,8 @@ const ChatConversation = ({ conversation, onBack }) => {
   const [lead, setLead] = useState(null);
   const [isLoadingLead, setIsLoadingLead] = useState(false);
   const [isTogglingChat, setIsTogglingChat] = useState(false);
+  const [isProgramandoSeguimiento, setIsProgramandoSeguimiento] = useState(false);
+  const [seguimientosCount, setSeguimientosCount] = useState(0);
 
   // Cargar el lead cuando hay una conversación
   useEffect(() => {
@@ -45,6 +48,9 @@ const ChatConversation = ({ conversation, onBack }) => {
         }) || null;
 
         setLead(foundLead);
+        if (foundLead) {
+          setSeguimientosCount(foundLead.seguimientos_count || 0);
+        }
       } catch (error) {
         console.error('Error loading lead:', error);
         setLead(null);
@@ -76,6 +82,62 @@ const ChatConversation = ({ conversation, onBack }) => {
       alert('Error al actualizar el estado del chat');
     } finally {
       setIsTogglingChat(false);
+    }
+  };
+
+  // Función para programar un seguimiento
+  const handleProgramarSeguimiento = async () => {
+    if (!lead) return;
+    
+    // Obtener remote_jid del lead
+    const remoteJid = lead.whatsapp_id || lead.telefono || '';
+    
+    if (!remoteJid) {
+      alert('❌ No se encontró un número de teléfono válido para este lead');
+      return;
+    }
+    
+    setIsProgramandoSeguimiento(true);
+    try {
+      // Preparar datos del seguimiento
+      const seguimientoData = {
+        remote_jid: remoteJid,
+        tipo_lead: lead.estado || null,
+        seguimientos_count: (seguimientosCount || 0) + 1
+      };
+      
+      // Agregar fecha_ultima_interaccion si existe
+      if (lead.ultima_interaccion) {
+        seguimientoData.fecha_ultima_interaccion = lead.ultima_interaccion;
+      } else if (lead.fechaContacto) {
+        seguimientoData.fecha_ultima_interaccion = lead.fechaContacto;
+      }
+      
+      // Agregar chatwoot_conversation_id si existe
+      if (conversation?.id) {
+        seguimientoData.chatwoot_conversation_id = conversation.id;
+      }
+      
+      const success = await programarSeguimiento(seguimientoData);
+
+      if (success) {
+        alert('✅ Seguimiento programado exitosamente para dentro de 23 horas');
+        // Incrementar el contador de seguimientos
+        const newCount = (seguimientosCount || 0) + 1;
+        setSeguimientosCount(newCount);
+        // Actualizar en la base de datos
+        const updatedLead = await updateLead(lead.id, { seguimientos_count: newCount });
+        if (updatedLead) {
+          setLead(updatedLead);
+        }
+      } else {
+        alert('❌ Error al programar el seguimiento. Intenta nuevamente.');
+      }
+    } catch (error) {
+      console.error('Error programando seguimiento:', error);
+      alert('❌ Error al programar el seguimiento. Intenta nuevamente.');
+    } finally {
+      setIsProgramandoSeguimiento(false);
     }
   };
 
@@ -117,36 +179,93 @@ const ChatConversation = ({ conversation, onBack }) => {
     }
   };
 
-  const getContactInfo = (conversation) => {
+  // Función para obtener el nombre del contacto
+  const getContactName = (conversation) => {
     const sender = conversation.last_non_activity_message?.sender;
+    const contact = conversation.contact;
     
-    // Priorizar el número de teléfono sobre el nombre para evitar nombres incorrectos
+    // Buscar nombre en sender (filtrar nombres genéricos o incorrectos)
+    if (sender?.name && 
+        sender.name.trim() !== '' && 
+        !sender.name.toLowerCase().includes('federico') &&
+        !sender.name.toLowerCase().includes('suarez') &&
+        sender.name.trim().length > 2) {
+      return sender.name.trim();
+    }
+    
+    // Buscar nombre en contact
+    if (contact?.name && 
+        contact.name.trim() !== '' && 
+        !contact.name.toLowerCase().includes('federico') &&
+        !contact.name.toLowerCase().includes('suarez') &&
+        contact.name.trim().length > 2) {
+      return contact.name.trim();
+    }
+    
+    // Buscar en meta.sender
+    if (conversation.meta?.sender?.name && 
+        conversation.meta.sender.name.trim() !== '' &&
+        conversation.meta.sender.name.trim().length > 2) {
+      return conversation.meta.sender.name.trim();
+    }
+    
+    return null;
+  };
+
+  // Función para obtener el número de teléfono del contacto
+  const getContactPhone = (conversation) => {
+    const sender = conversation.last_non_activity_message?.sender;
+    const contact = conversation.contact;
+    
+    // Priorizar campos enriquecidos
+    if (conversation.enriched_phone_number) {
+      return conversation.enriched_phone_number;
+    }
+    
+    if (conversation.enriched_phone_raw) {
+      return conversation.enriched_phone_raw;
+    }
+    
+    // Buscar en sender
     if (sender?.phone_number) {
       return sender.phone_number;
     }
     
-    // Solo usar el nombre si parece ser real (no contiene "federico" o nombres genéricos)
-    if (sender?.name && 
-        sender.name.trim() !== '' && 
-        !sender.name.toLowerCase().includes('federico') &&
-        !sender.name.toLowerCase().includes('suarez')) {
-      return sender.name;
-    }
-    
     // Buscar en contact
-    if (conversation.contact?.phone_number) {
-      return conversation.contact.phone_number;
+    if (contact?.phone_number) {
+      return contact.phone_number;
     }
     
-    if (conversation.contact?.name && 
-        conversation.contact.name.trim() !== '' && 
-        !conversation.contact.name.toLowerCase().includes('federico') &&
-        !conversation.contact.name.toLowerCase().includes('suarez')) {
-      return conversation.contact.name;
+    // Buscar en meta.sender
+    if (conversation.meta?.sender?.phone_number || conversation.meta?.sender?.phone) {
+      return conversation.meta.sender.phone_number || conversation.meta.sender.phone;
+    }
+    
+    // Buscar en additional_attributes
+    if (conversation.additional_attributes?.phone_number || conversation.additional_attributes?.phone) {
+      return conversation.additional_attributes.phone_number || conversation.additional_attributes.phone;
+    }
+    
+    return null;
+  };
+
+  // Función para obtener el nombre o número del contacto (para compatibilidad)
+  const getContactInfo = (conversation) => {
+    const name = getContactName(conversation);
+    const phone = getContactPhone(conversation);
+    
+    // Si hay nombre, mostrar nombre
+    if (name) {
+      return name;
+    }
+    
+    // Si hay teléfono, mostrar teléfono
+    if (phone) {
+      return phone;
     }
     
     // Último recurso
-    return `+${conversation.id}`;
+    return `Chat ${conversation.id}`;
   };
 
   const isOutgoing = (message) => {
@@ -199,10 +318,38 @@ const ChatConversation = ({ conversation, onBack }) => {
         </div>
         
         <div className="flex-1">
-          <h3 className="font-medium text-gray-900">{getContactInfo(conversation)}</h3>
-          <p className="text-sm text-gray-500">
-            {conversation.last_non_activity_message?.sender?.phone_number || `Chat #${conversation.id}`}
-          </p>
+          {(() => {
+            const name = getContactName(conversation);
+            const phone = getContactPhone(conversation);
+            
+            if (name && phone) {
+              // Mostrar nombre y número
+              return (
+                <>
+                  <h3 className="font-medium text-gray-900">{name}</h3>
+                  <p className="text-sm text-gray-500">{phone}</p>
+                </>
+              );
+            } else if (name) {
+              // Solo nombre
+              return (
+                <h3 className="font-medium text-gray-900">{name}</h3>
+              );
+            } else if (phone) {
+              // Solo número
+              return (
+                <h3 className="font-medium text-gray-900">{phone}</h3>
+              );
+            } else {
+              // Fallback
+              return (
+                <>
+                  <h3 className="font-medium text-gray-900">{getContactInfo(conversation)}</h3>
+                  <p className="text-sm text-gray-500">Chat #{conversation.id}</p>
+                </>
+              );
+            }
+          })()}
         </div>
 
         <button
@@ -295,8 +442,8 @@ const ChatConversation = ({ conversation, onBack }) => {
         )}
       </div>
 
-      {/* Área de entrada de mensaje */}
-      <div className="bg-gray-50  p-4">
+      {/* Área de entrada de mensaje - Estilo similar a Chatwoot */}
+      <div className="bg-white border-t border-gray-200">
         <form 
           onSubmit={async (e) => {
             e.preventDefault();
@@ -317,65 +464,111 @@ const ChatConversation = ({ conversation, onBack }) => {
               setSending(false);
             }
           }}
-          className="flex items-center space-x-2"
+          className="flex flex-col"
         >
-          <input
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Escribe un mensaje..."
-            className="flex-1 border border-gray-300 rounded-full py-2 px-4 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-            disabled={sending || !conversation}
-          />
-          
-          {/* Botón de activar/desactivar chat del lead - Al lado del botón de enviar */}
-          {lead && (
-            <button
-              type="button"
-              onClick={handleToggleChat}
-              disabled={isTogglingChat || isLoadingLead}
-              className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-full text-xs font-medium transition-colors shadow-sm ${
-                lead.estado_chat === 1
-                  ? 'bg-green-100 text-green-800 hover:bg-green-200 border border-green-300'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300'
-              } ${isTogglingChat || isLoadingLead ? 'opacity-50 cursor-not-allowed' : ''}`}
-              title={lead.estado_chat === 1 ? 'Desactivar chat del lead' : 'Activar chat del lead'}
-            >
-              {isTogglingChat ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-              ) : (
-                <>
-                  {lead.estado_chat === 1 ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
+          {/* Área de texto grande */}
+          <div className="px-4 pt-3 pb-3">
+            <textarea
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (inputValue.trim() && !sending && conversation) {
+                    const messageContent = inputValue.trim();
+                    setInputValue('');
+                    setSending(true);
+                    sendMessage(messageContent).catch((err) => {
+                      console.error('Error al enviar mensaje:', err);
+                      setInputValue(messageContent);
+                      alert('Error al enviar el mensaje. Por favor, intenta de nuevo.');
+                    }).finally(() => {
+                      setSending(false);
+                    });
+                  }
+                }
+              }}
+              placeholder="Shift + enter for new line. Start with '/' to select a Canned Response."
+              className="w-full min-h-[120px] max-h-[300px] px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+              disabled={sending || !conversation}
+            />
+          </div>
+
+          {/* Barra de acciones inferior */}
+          <div className="px-4 pb-3 flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
+            {/* Botones de acciones del lead */}
+            {lead && (
+              <>
+                {/* Botón de activar/desactivar chat del lead */}
+                <button
+                  type="button"
+                  onClick={handleToggleChat}
+                  disabled={isTogglingChat || isLoadingLead}
+                  className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-colors shadow-sm ${
+                    lead.estado_chat === 1
+                      ? 'bg-green-100 text-green-800 hover:bg-green-200 border border-green-300'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300'
+                  } ${isTogglingChat || isLoadingLead ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title={lead.estado_chat === 1 ? 'Desactivar chat del lead' : 'Activar chat del lead'}
+                >
+                  {isTogglingChat ? (
+                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-current"></div>
                   ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    <>
+                      {lead.estado_chat === 1 ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      )}
+                    </>
+                  )}
+                </button>
+
+                {/* Botón para programar seguimiento */}
+                <button
+                  type="button"
+                  onClick={handleProgramarSeguimiento}
+                  disabled={isProgramandoSeguimiento || isLoadingLead || !lead}
+                  className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-colors shadow-sm bg-blue-100 text-blue-800 hover:bg-blue-200 border border-blue-300 ${
+                    isProgramandoSeguimiento || isLoadingLead ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                  title="Activar seguimiento (programa para dentro de 23 horas)"
+                >
+                  {isProgramandoSeguimiento ? (
+                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-current"></div>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                     </svg>
                   )}
+                </button>
+              </>
+            )}
+
+            {/* Send Button */}
+            <button
+              type="submit"
+              disabled={!inputValue.trim() || sending || !conversation}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
+                !inputValue.trim() || sending || !conversation
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+            >
+              {sending ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              ) : (
+                <>
+                  <span>Send</span>
+                  <span className="text-xs opacity-75">⌘ + ←</span>
                 </>
               )}
             </button>
-          )}
-          
-          <button
-            type="submit"
-            disabled={!inputValue.trim() || sending || !conversation}
-            className={`p-2 rounded-full transition-colors ${
-              !inputValue.trim() || sending || !conversation
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-green-500 text-white hover:bg-green-600'
-            }`}
-          >
-            {sending ? (
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-            ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-            )}
-          </button>
+          </div>
         </form>
       </div>
     </div>
