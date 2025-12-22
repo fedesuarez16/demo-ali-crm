@@ -5,9 +5,10 @@ import Link from 'next/link';
 import AppLayout from '../components/AppLayout';
 import PropiedadCards from '../components/PropiedadCards';
 import PropertyDocFilter from '../components/PropertyDocFilter';
+import PropiedadEditSidebar from '../components/PropiedadEditSidebar';
 import { SupabasePropiedad } from '../types';
 import { DocumentFilterOptions } from '../types';
-import { getAllPropiedades, deletePropiedad } from '../services/propiedadesService';
+import { getAllPropiedades, deletePropiedad, updatePropiedad, createPropiedad } from '../services/propiedadesService';
 
 export default function PropertiesKanbanPage() {
   const [propiedades, setPropiedades] = useState<SupabasePropiedad[]>([]);
@@ -16,6 +17,8 @@ export default function PropertiesKanbanPage() {
   const [isFilterVisible, setIsFilterVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [propiedadToEdit, setPropiedadToEdit] = useState<SupabasePropiedad | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     loadPropiedades();
@@ -102,6 +105,49 @@ export default function PropertiesKanbanPage() {
     }
   };
 
+  const handleEditPropiedad = (propiedad: SupabasePropiedad) => {
+    setPropiedadToEdit(propiedad);
+    setIsSidebarOpen(true);
+  };
+
+  const handleCloseSidebar = () => {
+    setIsSidebarOpen(false);
+    setPropiedadToEdit(null);
+  };
+
+  const handleSavePropiedad = async (propiedadData: Partial<SupabasePropiedad>) => {
+    try {
+      if (propiedadToEdit) {
+        // Actualizar propiedad existente
+        const updatedPropiedad = await updatePropiedad(propiedadToEdit.id, propiedadData);
+        if (updatedPropiedad) {
+          setPropiedades(prev => 
+            prev.map(p => p.id === updatedPropiedad.id ? updatedPropiedad : p)
+          );
+          setFilteredPropiedades(prev => 
+            prev.map(p => p.id === updatedPropiedad.id ? updatedPropiedad : p)
+          );
+        } else {
+          alert('Error al actualizar la propiedad');
+          throw new Error('Error al actualizar la propiedad');
+        }
+      } else {
+        // Crear nueva propiedad
+        const newPropiedad = await createPropiedad(propiedadData as Omit<SupabasePropiedad, 'id'>);
+        if (newPropiedad) {
+          setPropiedades(prev => [newPropiedad, ...prev]);
+          setFilteredPropiedades(prev => [newPropiedad, ...prev]);
+        } else {
+          alert('Error al crear la propiedad');
+          throw new Error('Error al crear la propiedad');
+        }
+      }
+    } catch (error) {
+      console.error('Error saving propiedad:', error);
+      throw error;
+    }
+  };
+
   const toggleFilterVisibility = () => {
     setIsFilterVisible(!isFilterVisible);
   };
@@ -167,15 +213,18 @@ export default function PropertiesKanbanPage() {
                 </svg>
                 {isFilterVisible ? 'Ocultar filtros' : 'Mostrar filtros'}
               </button>
-              <Link
-                href="/propiedades/nueva"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center justify-center"
+              <button
+                onClick={() => {
+                  setPropiedadToEdit(null);
+                  setIsSidebarOpen(true);
+                }}
+                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center justify-center"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
                 Nueva Propiedad
-              </Link>
+              </button>
             </div>
           </div>
 
@@ -190,16 +239,25 @@ export default function PropertiesKanbanPage() {
           </div>
         </div>
 
-        <div className="bg-transparent  overflow-hidden ">
+        <div className="bg-transparent m-2 overflow-hidden ">
           <div className="">
             <PropiedadCards 
               propiedades={filteredPropiedades} 
               onDelete={handleDelete}
               isDeleting={isDeleting}
+              onEdit={handleEditPropiedad}
             />
           </div>
         </div>
       </div>
+
+      {/* Sidebar de edición */}
+      <PropiedadEditSidebar
+        propiedad={propiedadToEdit}
+        onClose={handleCloseSidebar}
+        onSave={handleSavePropiedad}
+        isOpen={isSidebarOpen}
+      />
     </AppLayout>
   );
 }

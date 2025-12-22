@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import AppLayout from '../../components/AppLayout';
-import { createPropiedad } from '../../services/propiedadesService';
-import { SupabasePropiedad } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import AppLayout from '../../../components/AppLayout';
+import { getPropiedadById, updatePropiedad } from '../../../services/propiedadesService';
+import { SupabasePropiedad } from '../../../types';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,38 +13,42 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Home, MapPin, DollarSign, Bed, Bath, Car, Square, Layers, Link as LinkIcon, Building2 } from 'lucide-react';
 
-export default function NewPropertyPage() {
+export default function EditPropertyPage() {
   const router = useRouter();
-  const [isSaving, setIsSaving] = useState(false);
+  const params = useParams();
+  const id = params?.id as string;
   
-  const [propiedad, setPropiedad] = useState<Omit<SupabasePropiedad, 'id'>>({
-    tipo_de_propiedad: '',
-    direccion: '',
-    zona: '',
-    valor: '',
-    dormitorios: '',
-    banos: '',
-    patio_parque: '',
-    garage: '',
-    mts_const: '',
-    lote: '',
-    piso: '',
-    link: '',
-    columna_1: '',
-    apto_banco: '',
-    alternativa_menor_1: '',
-    alternativa_menor_2: '',
-    alternativa_menor_3: '',
-    alterniva_menor_4: '',
-    alternativa_menor_5: '',
-    alternativa_mayor: '',
-    alternativa_mayor_2: '',
-    alternativa_mayor_3: '',
-    alternativa_mayor_4: '',
-    alternativa_mayor_5: '',
-  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [propiedad, setPropiedad] = useState<SupabasePropiedad | null>(null);
+  
+  useEffect(() => {
+    if (id) {
+      loadPropiedad();
+    }
+  }, [id]);
+  
+  const loadPropiedad = async () => {
+    setIsLoading(true);
+    try {
+      const data = await getPropiedadById(id);
+      if (data) {
+        setPropiedad(data);
+      } else {
+        alert('Propiedad no encontrada');
+        router.push('/propiedades');
+      }
+    } catch (error) {
+      console.error('Error loading propiedad:', error);
+      alert('Error al cargar la propiedad');
+      router.push('/propiedades');
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    if (!propiedad) return;
     const { name, value } = e.target;
     setPropiedad({
       ...propiedad,
@@ -54,11 +58,13 @@ export default function NewPropertyPage() {
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!propiedad) return;
+    
     setIsSaving(true);
     
     try {
-      const newPropiedad = await createPropiedad(propiedad);
-      if (newPropiedad) {
+      const updatedPropiedad = await updatePropiedad(id, propiedad);
+      if (updatedPropiedad) {
         router.push('/propiedades');
       } else {
         alert('Error al guardar la propiedad');
@@ -71,10 +77,27 @@ export default function NewPropertyPage() {
     }
   };
   
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-600 mx-auto mb-4"></div>
+            <h2 className="text-xl font-semibold text-slate-800">Cargando propiedad...</h2>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+  
+  if (!propiedad) {
+    return null;
+  }
+  
   return (
     <AppLayout>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">Nueva Propiedad</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Editar Propiedad</h1>
         <Link 
           href="/propiedades" 
           className="text-indigo-600 hover:text-indigo-800 font-medium"
@@ -359,7 +382,7 @@ export default function NewPropertyPage() {
                   </Button>
                 </Link>
                 <Button type="submit" disabled={isSaving}>
-                  {isSaving ? 'Guardando...' : 'Guardar Propiedad'}
+                  {isSaving ? 'Guardando...' : 'Guardar Cambios'}
                 </Button>
               </div>
             </div>
