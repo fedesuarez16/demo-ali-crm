@@ -19,6 +19,7 @@ export default function PropertiesKanbanPage() {
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [propiedadToEdit, setPropiedadToEdit] = useState<SupabasePropiedad | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     loadPropiedades();
@@ -72,8 +73,24 @@ export default function PropertiesKanbanPage() {
       });
     }
 
+    // Aplicar búsqueda por texto
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(p => {
+        const direccion = (p.direccion || '').toLowerCase();
+        const zona = (p.zona || '').toLowerCase();
+        const tipo = (p.tipo_de_propiedad || '').toLowerCase();
+        const valor = (p.valor || '').toLowerCase();
+        
+        return direccion.includes(searchLower) || 
+               zona.includes(searchLower) || 
+               tipo.includes(searchLower) ||
+               valor.includes(searchLower);
+      });
+    }
+
     setFilteredPropiedades(filtered);
-  }, [filterOptions, propiedades]);
+  }, [filterOptions, propiedades, searchTerm]);
 
   const handleFilterChange = (newFilterOptions: DocumentFilterOptions) => {
     setFilterOptions(newFilterOptions);
@@ -81,6 +98,7 @@ export default function PropertiesKanbanPage() {
 
   const handleResetFilters = () => {
     setFilterOptions({});
+    setSearchTerm('');
   };
 
   const handleDelete = async (id: string) => {
@@ -202,7 +220,40 @@ export default function PropertiesKanbanPage() {
           </div>
 
           <div className="px-6 py-4 flex justify-between items-center border-t border-slate-100">
-            <h1 className="text-lg font-semibold text-slate-800 tracking-tight">Tablero Kanban de Propiedades</h1>
+            <div className="flex items-center gap-4">
+              <h1 className="text-lg font-semibold text-slate-800 tracking-tight">Tablero Kanban de Propiedades</h1>
+              {searchTerm && (
+                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                  {filteredPropiedades.length} {filteredPropiedades.length === 1 ? 'resultado' : 'resultados'}
+                </span>
+              )}
+              {/* Barra de búsqueda */}
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Buscar por dirección, zona, tipo..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="block w-64 pl-10 pr-3 py-1.5 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    title="Limpiar búsqueda"
+                  >
+                    <svg className="h-4 w-4 text-gray-400 hover:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="flex space-x-3">
               <button
                 onClick={toggleFilterVisibility}

@@ -71,6 +71,20 @@ const PropiedadCards: React.FC<PropiedadCardsProps> = ({ propiedades, onDelete, 
                       >
                         {/* Botones de acción en esquina superior derecha */}
                         <div className="absolute top-1 right-1 flex gap-1 z-10">
+                          {propiedad.link && (
+                            <a
+                              href={propiedad.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-gray-600 hover:text-gray-900 p-0.5 rounded"
+                              title="Ver publicación"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </a>
+                          )}
                           {onEdit && (
                             <button
                               onClick={(e) => {
@@ -152,20 +166,6 @@ const PropiedadCards: React.FC<PropiedadCardsProps> = ({ propiedades, onDelete, 
                               </div>
                             )}
                           </div>
-                          
-                          {propiedad.link && (
-                            <div className="pt-1">
-                              <a 
-                                href={propiedad.link} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-[10px] text-gray-600 hover:text-gray-900 font-medium underline"
-                              >
-                                Ver publicación
-                              </a>
-                            </div>
-                          )}
                         </div>
                       </div>
                     ))}
