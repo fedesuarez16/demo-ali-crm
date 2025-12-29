@@ -304,13 +304,15 @@ export default function NewPropertyPage() {
                     {[1, 2, 3, 4, 5].map((num) => (
                       <div key={num} className="space-y-2">
                         <Label htmlFor={`alternativa_menor_${num}`}>
-                          Alternativa Menor {num}
+                          Lote {num}
                         </Label>
-                        <Input
+                        <textarea
                           id={num === 4 ? 'alterniva_menor_4' : `alternativa_menor_${num}`}
                           name={num === 4 ? 'alterniva_menor_4' : `alternativa_menor_${num}`}
                           value={num === 4 ? propiedad.alterniva_menor_4 : propiedad[`alternativa_menor_${num}` as keyof typeof propiedad] as string}
                           onChange={handleChange}
+                          className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                          rows={4}
                         />
                       </div>
                     ))}
@@ -326,24 +328,28 @@ export default function NewPropertyPage() {
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="alternativa_mayor">Alternativa Mayor (Lote 1)</Label>
-                      <Input
+                      <Label htmlFor="alternativa_mayor">Lote 1</Label>
+                      <textarea
                         id="alternativa_mayor"
                         name="alternativa_mayor"
                         value={propiedad.alternativa_mayor}
                         onChange={handleChange}
+                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        rows={4}
                       />
                     </div>
                     {[2, 3, 4, 5].map((num) => (
                       <div key={num} className="space-y-2">
                         <Label htmlFor={`alternativa_mayor_${num}`}>
-                          Alternativa Mayor {num} (Lote {num})
+                          Lote {num}
                         </Label>
-                        <Input
+                        <textarea
                           id={`alternativa_mayor_${num}`}
                           name={`alternativa_mayor_${num}`}
                           value={propiedad[`alternativa_mayor_${num}` as keyof typeof propiedad] as string}
                           onChange={handleChange}
+                          className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                          rows={4}
                         />
                       </div>
                     ))}
