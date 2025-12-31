@@ -2,15 +2,26 @@
 
 import React, { useState, useEffect } from 'react';
 import AppLayout from '../components/AppLayout';
-import { getMensajesProgramados, eliminarMensajeProgramado, ColaSeguimiento } from '../services/mensajeService';
+import { getMensajesProgramados, eliminarMensajeProgramado, actualizarPlantillaMensaje, ColaSeguimiento } from '../services/mensajeService';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from 'next/link';
+
+// Plantillas disponibles
+const PLANTILLAS = [
+  { value: 'toque_1_frio', label: 'Toque 1 Frio' },
+  { value: 'toque_2_frio', label: 'Toque 2 Frio' },
+  { value: 'toque_1_tibio', label: 'Toque 1 Tibio' },
+  { value: 'toque_2_tibio', label: 'Toque 2 Tibio' },
+  { value: 'toque_3_tibio', label: 'Toque 3 Tibio' },
+];
 
 export default function MensajesProgramadosPage() {
   const [mensajes, setMensajes] = useState<ColaSeguimiento[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
+  const [updatingPlantilla, setUpdatingPlantilla] = useState<number | null>(null);
 
   useEffect(() => {
     loadMensajes();
@@ -28,14 +39,14 @@ export default function MensajesProgramadosPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: number, tablaOrigen?: string) => {
     if (!confirm('¿Estás seguro de que quieres eliminar este mensaje programado?')) {
       return;
     }
 
     setIsDeleting(id);
     try {
-      const success = await eliminarMensajeProgramado(id);
+      const success = await eliminarMensajeProgramado(id, tablaOrigen);
       if (success) {
         setMensajes(mensajes.filter(m => m.id !== id));
       } else {
@@ -46,6 +57,29 @@ export default function MensajesProgramadosPage() {
       alert('Error al eliminar el mensaje');
     } finally {
       setIsDeleting(null);
+    }
+  };
+
+  const handleUpdatePlantilla = async (mensajeId: number, plantilla: string | null, tablaOrigen?: string) => {
+    setUpdatingPlantilla(mensajeId);
+    try {
+      const plantillaValue = plantilla === 'none' || plantilla === null ? null : plantilla;
+      const success = await actualizarPlantillaMensaje(mensajeId, plantillaValue, tablaOrigen);
+      if (success) {
+        // Actualizar el mensaje en el estado local
+        setMensajes(mensajes.map(m => 
+          m.id === mensajeId 
+            ? { ...m, plantilla: plantillaValue }
+            : m
+        ));
+      } else {
+        alert('Error al actualizar la plantilla');
+      }
+    } catch (error) {
+      console.error('Error updating plantilla:', error);
+      alert('Error al actualizar la plantilla');
+    } finally {
+      setUpdatingPlantilla(null);
     }
   };
 
@@ -128,8 +162,12 @@ export default function MensajesProgramadosPage() {
     }).format(date);
   };
 
-  // Agrupar mensajes por día
-  const mensajesPorDia = mensajes.reduce((acc, mensaje) => {
+  // Separar mensajes por estado
+  const mensajesPendientes = mensajes.filter(m => m.estado === 'pendiente');
+  const mensajesEnviados = mensajes.filter(m => m.estado === 'enviado');
+
+  // Agrupar mensajes pendientes por día
+  const mensajesPendientesPorDia = mensajesPendientes.reduce((acc, mensaje) => {
     const fechaProgramada = mensaje.fecha_programada || mensaje.scheduled_at;
     const dayKey = getDayKey(fechaProgramada);
     
@@ -140,15 +178,29 @@ export default function MensajesProgramadosPage() {
     return acc;
   }, {} as Record<string, ColaSeguimiento[]>);
 
-  // Ordenar los días (más antiguos primero, o puedes invertir para más recientes primero)
-  const diasOrdenados = Object.keys(mensajesPorDia).sort((a, b) => {
-    if (a === 'sin-fecha') return 1;
-    if (b === 'sin-fecha') return -1;
-    return a.localeCompare(b);
-  });
+  // Agrupar mensajes enviados por día
+  const mensajesEnviadosPorDia = mensajesEnviados.reduce((acc, mensaje) => {
+    const fechaProgramada = mensaje.fecha_programada || mensaje.scheduled_at || mensaje.enviado_at;
+    const dayKey = getDayKey(fechaProgramada);
+    
+    if (!acc[dayKey]) {
+      acc[dayKey] = [];
+    }
+    acc[dayKey].push(mensaje);
+    return acc;
+  }, {} as Record<string, ColaSeguimiento[]>);
 
-  // Todos los mensajes ya son pendientes (filtrados por el servicio)
-  const mensajesPendientes = mensajes;
+  // Ordenar los días (más antiguos primero)
+  const ordenarDias = (dias: string[]) => {
+    return dias.sort((a, b) => {
+      if (a === 'sin-fecha') return 1;
+      if (b === 'sin-fecha') return -1;
+      return a.localeCompare(b);
+    });
+  };
+
+  const diasPendientesOrdenados = ordenarDias(Object.keys(mensajesPendientesPorDia));
+  const diasEnviadosOrdenados = ordenarDias(Object.keys(mensajesEnviadosPorDia));
 
   if (isLoading) {
     return (
@@ -194,7 +246,7 @@ export default function MensajesProgramadosPage() {
             <div>
               <h1 className="text-lg font-semibold text-slate-800 tracking-tight">Mensajes Programados</h1>
               <p className="text-sm text-gray-500 mt-1">
-                {mensajesPendientes.length} mensaje(s) pendiente(s)
+                {mensajesPendientes.length} pendiente(s) · {mensajesEnviados.length} enviado(s)
               </p>
             </div>
             <Button onClick={loadMensajes} variant="outline" size="sm">
@@ -206,7 +258,7 @@ export default function MensajesProgramadosPage() {
           </div>
         </div>
 
-        <div className="space-y-1 p">
+        <div className="space-y-6 p-6">
           {/* Mensajes Pendientes */}
           <Card>
             <CardHeader>
@@ -229,8 +281,8 @@ export default function MensajesProgramadosPage() {
               ) : (
                 <div className="overflow-x-auto pb-4">
                   <div className="flex gap-4 min-w-max">
-                    {diasOrdenados.map((dayKey) => {
-                      const mensajesDelDia = mensajesPorDia[dayKey];
+                    {diasPendientesOrdenados.map((dayKey) => {
+                      const mensajesDelDia = mensajesPendientesPorDia[dayKey];
                       
                       return (
                         <div
@@ -278,6 +330,39 @@ export default function MensajesProgramadosPage() {
                                           </span>
                                         </div>
                                         
+                                        {/* Estado y Tabla origen */}
+                                        <div className="flex items-center gap-1.5 mb-1.5">
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                                            {mensaje.estado || 'pendiente'}
+                                          </span>
+                                          {mensaje.tabla_origen && (
+                                            <span className="text-[10px] text-gray-500">
+                                              ({mensaje.tabla_origen === 'cola_seguimientos_dos' ? 'Cola 2' : 'Cola 1'})
+                                            </span>
+                                          )}
+                                        </div>
+                                        
+                                        {/* Selector de Plantilla */}
+                                        <div className="mb-1.5">
+                                          <Select
+                                            value={mensaje.plantilla || 'none'}
+                                            onValueChange={(value) => mensaje.id && handleUpdatePlantilla(mensaje.id, value, mensaje.tabla_origen)}
+                                            disabled={updatingPlantilla === mensaje.id}
+                                          >
+                                            <SelectTrigger className="h-7 text-xs">
+                                              <SelectValue placeholder="Sin plantilla" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="none">Sin plantilla</SelectItem>
+                                              {PLANTILLAS.map((plantilla) => (
+                                                <SelectItem key={plantilla.value} value={plantilla.value}>
+                                                  {plantilla.label}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        
                                         {/* Hora programada */}
                                         {fechaProgramada && (
                                           <div className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-blue-900">
@@ -294,10 +379,170 @@ export default function MensajesProgramadosPage() {
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => mensaje.id && handleDelete(mensaje.id)}
+                                        onClick={() => mensaje.id && handleDelete(mensaje.id, mensaje.tabla_origen)}
                                         disabled={isDeleting === mensaje.id}
                                         className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 w-6 p-0 flex-shrink-0"
                                         title="Eliminar mensaje programado"
+                                      >
+                                        {isDeleting === mensaje.id ? (
+                                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-600"></div>
+                                        ) : (
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                          </svg>
+                                        )}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Mensajes Enviados */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="h-2 w-2 bg-green-500 rounded-full"></span>
+                Enviados ({mensajesEnviados.length})
+              </CardTitle>
+              <CardDescription>
+                Mensajes que ya fueron enviados
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {mensajesEnviados.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <svg className="mx-auto h-12 w-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p>No hay mensajes enviados</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto pb-4">
+                  <div className="flex gap-4 min-w-max">
+                    {diasEnviadosOrdenados.map((dayKey) => {
+                      const mensajesDelDia = mensajesEnviadosPorDia[dayKey];
+                      
+                      return (
+                        <div
+                          key={dayKey}
+                          className="flex-shrink-0 w-80 border border-gray-200 rounded-lg bg-gray-50"
+                        >
+                          {/* Encabezado de la columna */}
+                          <div className="p-3 border-b border-gray-200 bg-white rounded-t-lg">
+                            <h3 className="text-sm font-semibold text-gray-900">
+                              {formatDayLabel(dayKey === 'sin-fecha' ? new Date().toISOString() : dayKey)}
+                            </h3>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {mensajesDelDia.length} mensaje{mensajesDelDia.length !== 1 ? 's' : ''}
+                            </p>
+                          </div>
+                          
+                          {/* Lista de mensajes del día */}
+                          <div className="p-2 space-y-2 max-h-[600px] overflow-y-auto">
+                            {mensajesDelDia
+                              .sort((a, b) => {
+                                const fechaA = a.enviado_at || a.fecha_programada || a.scheduled_at;
+                                const fechaB = b.enviado_at || b.fecha_programada || b.scheduled_at;
+                                if (!fechaA) return 1;
+                                if (!fechaB) return -1;
+                                return new Date(fechaB).getTime() - new Date(fechaA).getTime(); // Más recientes primero
+                              })
+                              .map((mensaje) => {
+                                const fechaProgramada = mensaje.fecha_programada || mensaje.scheduled_at;
+                                const fechaEnviado = mensaje.enviado_at;
+                                const telefono = normalizePhoneNumber(mensaje.remote_jid || String(mensaje.lead_id || ''));
+                                
+                                return (
+                                  <div
+                                    key={mensaje.id}
+                                    className="border border-gray-200 rounded-md p-2 hover:shadow-sm transition-shadow bg-white"
+                                  >
+                                    <div className="flex justify-between items-start gap-2">
+                                      <div className="flex-1 min-w-0">
+                                        {/* Teléfono */}
+                                        <div className="flex items-center gap-1.5 mb-1.5">
+                                          <svg className="h-3 w-3 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                          </svg>
+                                          <span className="text-xs font-medium text-gray-900 truncate">
+                                            {telefono}
+                                          </span>
+                                        </div>
+                                        
+                                        {/* Estado y Tabla origen */}
+                                        <div className="flex items-center gap-1.5 mb-1.5">
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800 border border-green-200">
+                                            {mensaje.estado || 'enviado'}
+                                          </span>
+                                          {mensaje.tabla_origen && (
+                                            <span className="text-[10px] text-gray-500">
+                                              ({mensaje.tabla_origen === 'cola_seguimientos_dos' ? 'Cola 2' : 'Cola 1'})
+                                            </span>
+                                          )}
+                                        </div>
+                                        
+                                        {/* Selector de Plantilla */}
+                                        <div className="mb-1.5">
+                                          <Select
+                                            value={mensaje.plantilla || 'none'}
+                                            onValueChange={(value) => mensaje.id && handleUpdatePlantilla(mensaje.id, value, mensaje.tabla_origen)}
+                                            disabled={updatingPlantilla === mensaje.id}
+                                          >
+                                            <SelectTrigger className="h-7 text-xs">
+                                              <SelectValue placeholder="Sin plantilla" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="none">Sin plantilla</SelectItem>
+                                              {PLANTILLAS.map((plantilla) => (
+                                                <SelectItem key={plantilla.value} value={plantilla.value}>
+                                                  {plantilla.label}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        
+                                        {/* Hora programada */}
+                                        {fechaProgramada && (
+                                          <div className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-blue-900 mb-1">
+                                            <svg className="h-3 w-3 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <span className="text-xs font-semibold">
+                                              Programado: {formatTimeOnly(fechaProgramada)}
+                                            </span>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Hora enviado */}
+                                        {fechaEnviado && (
+                                          <div className="flex items-center gap-1 px-2 py-0.5 bg-green-50 border border-green-200 rounded text-green-900">
+                                            <svg className="h-3 w-3 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <span className="text-xs font-semibold">
+                                              Enviado: {formatTimeOnly(fechaEnviado)}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                      
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => mensaje.id && handleDelete(mensaje.id, mensaje.tabla_origen)}
+                                        disabled={isDeleting === mensaje.id}
+                                        className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 w-6 p-0 flex-shrink-0"
+                                        title="Eliminar mensaje"
                                       >
                                         {isDeleting === mensaje.id ? (
                                           <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-600"></div>

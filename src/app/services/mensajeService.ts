@@ -36,6 +36,8 @@ export interface ColaSeguimiento {
   estado?: string;
   created_at?: string;
   updated_at?: string;
+  tabla_origen?: string; // Para identificar de qué tabla viene: 'cola_seguimientos' o 'cola_seguimientos_dos'
+  plantilla?: string | null; // Nombre de la plantilla seleccionada: 'toque_1_frio', 'toque_2_frio', 'toque_1_tibio', 'toque_2_tibio', 'toque_3_tibio'
   [key: string]: any; // Para campos adicionales que pueda tener la tabla
 }
 
@@ -70,23 +72,51 @@ export const programarMensaje = async (mensajeData: Omit<MensajeProgramado, 'id'
 };
 
 /**
- * Obtiene todos los mensajes programados de la tabla cola_seguimientos con estado pendiente
+ * Obtiene todos los mensajes programados de las tablas cola_seguimientos y cola_seguimientos_dos
+ * Incluye mensajes con estado pendiente y enviado
  */
 export const getMensajesProgramados = async (): Promise<ColaSeguimiento[]> => {
   try {
-    const { data, error } = await (getSupabase() as any)
+    const allMensajes: ColaSeguimiento[] = [];
+    
+    // Obtener mensajes de cola_seguimientos (pendientes y enviados)
+    const { data: dataCola1, error: errorCola1 } = await (getSupabase() as any)
       .from('cola_seguimientos')
       .select('*')
-      .eq('estado', 'pendiente')
+      .in('estado', ['pendiente', 'enviado'])
       .order('fecha_programada', { ascending: true });
     
-    if (error) {
-      console.error('Error obteniendo mensajes programados de cola_seguimientos:', error.message);
-      return [];
+    if (errorCola1) {
+      console.error('Error obteniendo mensajes programados de cola_seguimientos:', errorCola1.message);
+    } else if (dataCola1) {
+      // Agregar identificador de tabla origen
+      const mensajesCola1 = dataCola1.map((m: ColaSeguimiento) => ({
+        ...m,
+        tabla_origen: 'cola_seguimientos'
+      }));
+      allMensajes.push(...mensajesCola1);
     }
     
-    // Si no hay fecha_programada, intentar ordenar por scheduled_at
-    const sorted = (data || []).sort((a: ColaSeguimiento, b: ColaSeguimiento) => {
+    // Obtener mensajes de cola_seguimientos_dos (pendientes y enviados)
+    const { data: dataCola2, error: errorCola2 } = await (getSupabase() as any)
+      .from('cola_seguimientos_dos')
+      .select('*')
+      .in('estado', ['pendiente', 'enviado'])
+      .order('fecha_programada', { ascending: true });
+    
+    if (errorCola2) {
+      console.error('Error obteniendo mensajes programados de cola_seguimientos_dos:', errorCola2.message);
+    } else if (dataCola2) {
+      // Agregar identificador de tabla origen
+      const mensajesCola2 = dataCola2.map((m: ColaSeguimiento) => ({
+        ...m,
+        tabla_origen: 'cola_seguimientos_dos'
+      }));
+      allMensajes.push(...mensajesCola2);
+    }
+    
+    // Ordenar todos los mensajes por fecha programada
+    const sorted = allMensajes.sort((a: ColaSeguimiento, b: ColaSeguimiento) => {
       const dateA = new Date(a.fecha_programada || a.scheduled_at || a.created_at || 0).getTime();
       const dateB = new Date(b.fecha_programada || b.scheduled_at || b.created_at || 0).getTime();
       return dateA - dateB;
@@ -101,22 +131,55 @@ export const getMensajesProgramados = async (): Promise<ColaSeguimiento[]> => {
 
 /**
  * Elimina un mensaje programado de la cola
+ * @param id - ID del mensaje
+ * @param tablaOrigen - Tabla de origen: 'cola_seguimientos' o 'cola_seguimientos_dos'
  */
-export const eliminarMensajeProgramado = async (id: number): Promise<boolean> => {
+export const eliminarMensajeProgramado = async (id: number, tablaOrigen?: string): Promise<boolean> => {
   try {
+    const tabla = tablaOrigen || 'cola_seguimientos';
     const { error } = await (getSupabase() as any)
-      .from('cola_seguimientos')
+      .from(tabla)
       .delete()
       .eq('id', id);
     
     if (error) {
-      console.error('Error eliminando mensaje programado:', error.message);
+      console.error(`Error eliminando mensaje programado de ${tabla}:`, error.message);
       return false;
     }
     
     return true;
   } catch (e) {
     console.error('Exception eliminando mensaje programado:', e);
+    return false;
+  }
+};
+
+/**
+ * Actualiza la plantilla de un mensaje programado
+ * @param id - ID del mensaje
+ * @param plantilla - Nombre de la plantilla a asignar (puede ser null para quitar la plantilla)
+ * @param tablaOrigen - Tabla de origen: 'cola_seguimientos' o 'cola_seguimientos_dos'
+ */
+export const actualizarPlantillaMensaje = async (
+  id: number, 
+  plantilla: string | null, 
+  tablaOrigen?: string
+): Promise<boolean> => {
+  try {
+    const tabla = tablaOrigen || 'cola_seguimientos';
+    const { error } = await (getSupabase() as any)
+      .from(tabla)
+      .update({ plantilla: plantilla })
+      .eq('id', id);
+    
+    if (error) {
+      console.error(`Error actualizando plantilla del mensaje en ${tabla}:`, error.message);
+      return false;
+    }
+    
+    return true;
+  } catch (e) {
+    console.error('Exception actualizando plantilla del mensaje:', e);
     return false;
   }
 };
