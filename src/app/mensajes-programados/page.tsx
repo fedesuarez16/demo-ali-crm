@@ -180,8 +180,8 @@ export default function MensajesProgramadosPage() {
 
   // Agrupar mensajes enviados por día
   const mensajesEnviadosPorDia = mensajesEnviados.reduce((acc, mensaje) => {
-    const fechaProgramada = mensaje.fecha_programada || mensaje.scheduled_at || mensaje.enviado_at;
-    const dayKey = getDayKey(fechaProgramada);
+    const fechaProgramada = mensaje.fecha_programada || mensaje.scheduled_at || mensaje.enviado_at || undefined;
+    const dayKey = getDayKey(fechaProgramada ?? undefined);
     
     if (!acc[dayKey]) {
       acc[dayKey] = [];
@@ -337,7 +337,7 @@ export default function MensajesProgramadosPage() {
                                           </span>
                                           {mensaje.tabla_origen && (
                                             <span className="text-[10px] text-gray-500">
-                                              ({mensaje.tabla_origen === 'cola_seguimientos_dos' ? 'Cola 2' : 'Cola 1'})
+                                              ({mensaje.tabla_origen === 'cola_seguimientos_dos' ? 'Toque 2' : 'Toque 1'})
                                             </span>
                                           )}
                                         </div>
@@ -485,7 +485,7 @@ export default function MensajesProgramadosPage() {
                                           </span>
                                           {mensaje.tabla_origen && (
                                             <span className="text-[10px] text-gray-500">
-                                              ({mensaje.tabla_origen === 'cola_seguimientos_dos' ? 'Cola 2' : 'Cola 1'})
+                                              ({mensaje.tabla_origen === 'cola_seguimientos_dos' ? 'Toque 2' : 'Toque 1'})
                                             </span>
                                           )}
                                         </div>
