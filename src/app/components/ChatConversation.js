@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useChatMessages } from '../../hooks/useChatMessages';
 import { updateLead, getAllLeads } from '../services/leadService';
-import { programarSeguimiento } from '../services/mensajeService';
+import { programarSeguimiento, getSeguimientosPendientes, eliminarMensajeProgramado } from '../services/mensajeService';
 
 const ChatConversation = ({ conversation, onBack }) => {
   const { messages, loading, error, refreshMessages, sendMessage } = useChatMessages(conversation?.id);
@@ -15,6 +15,7 @@ const ChatConversation = ({ conversation, onBack }) => {
   const [isTogglingChat, setIsTogglingChat] = useState(false);
   const [isProgramandoSeguimiento, setIsProgramandoSeguimiento] = useState(false);
   const [seguimientosCount, setSeguimientosCount] = useState(0);
+  const [seguimientoActivo, setSeguimientoActivo] = useState(null); // { id, tabla_origen }
 
   // Cargar el lead cuando hay una conversación
   useEffect(() => {
@@ -50,6 +51,22 @@ const ChatConversation = ({ conversation, onBack }) => {
         setLead(foundLead);
         if (foundLead) {
           setSeguimientosCount(foundLead.seguimientos_count || 0);
+          // Cargar seguimientos pendientes para este lead
+          const remoteJid = foundLead.whatsapp_id || foundLead.telefono || '';
+          if (remoteJid) {
+            const seguimientos = await getSeguimientosPendientes(remoteJid);
+            if (seguimientos.length > 0) {
+              // Tomar el primer seguimiento pendiente (más próximo)
+              setSeguimientoActivo({
+                id: seguimientos[0].id,
+                tabla_origen: seguimientos[0].tabla_origen || 'cola_seguimientos'
+              });
+            } else {
+              setSeguimientoActivo(null);
+            }
+          }
+        } else {
+          setSeguimientoActivo(null);
         }
       } catch (error) {
         console.error('Error loading lead:', error);
@@ -85,11 +102,32 @@ const ChatConversation = ({ conversation, onBack }) => {
     }
   };
 
-  // Función para programar un seguimiento
+  // Función para programar o desactivar un seguimiento
   const handleProgramarSeguimiento = async () => {
     if (!lead) return;
     
-    // Obtener remote_jid del lead
+    // Si hay un seguimiento activo, desactivarlo
+    if (seguimientoActivo) {
+      setIsProgramandoSeguimiento(true);
+      try {
+        const success = await eliminarMensajeProgramado(seguimientoActivo.id, seguimientoActivo.tabla_origen);
+        
+        if (success) {
+          alert('✅ Seguimiento desactivado exitosamente');
+          setSeguimientoActivo(null);
+        } else {
+          alert('❌ Error al desactivar el seguimiento. Intenta nuevamente.');
+        }
+      } catch (error) {
+        console.error('Error desactivando seguimiento:', error);
+        alert('❌ Error al desactivar el seguimiento. Intenta nuevamente.');
+      } finally {
+        setIsProgramandoSeguimiento(false);
+      }
+      return;
+    }
+    
+    // Si no hay seguimiento activo, programar uno nuevo
     const remoteJid = lead.whatsapp_id || lead.telefono || '';
     
     if (!remoteJid) {
@@ -129,6 +167,14 @@ const ChatConversation = ({ conversation, onBack }) => {
         const updatedLead = await updateLead(lead.id, { seguimientos_count: newCount });
         if (updatedLead) {
           setLead(updatedLead);
+        }
+        // Recargar seguimientos pendientes para actualizar el estado
+        const seguimientos = await getSeguimientosPendientes(remoteJid);
+        if (seguimientos.length > 0) {
+          setSeguimientoActivo({
+            id: seguimientos[0].id,
+            tabla_origen: seguimientos[0].tabla_origen || 'cola_seguimientos'
+          });
         }
       } else {
         alert('❌ Error al programar el seguimiento. Intenta nuevamente.');
@@ -528,22 +574,34 @@ const ChatConversation = ({ conversation, onBack }) => {
                   )}
                 </button>
 
-                {/* Botón para programar seguimiento */}
+                {/* Botón para activar/desactivar seguimiento */}
                 <button
                   type="button"
                   onClick={handleProgramarSeguimiento}
                   disabled={isProgramandoSeguimiento || isLoadingLead || !lead}
-                  className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-colors shadow-sm bg-blue-100 text-blue-800 hover:bg-blue-200 border border-blue-300 ${
-                    isProgramandoSeguimiento || isLoadingLead ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                  title="Activar seguimiento (programa para dentro de 23 horas)"
+                  className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-colors shadow-sm ${
+                    seguimientoActivo
+                      ? 'bg-red-100 text-red-800 hover:bg-red-200 border border-red-300'
+                      : 'bg-blue-100 text-blue-800 hover:bg-blue-200 border border-blue-300'
+                  } ${isProgramandoSeguimiento || isLoadingLead ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title={seguimientoActivo ? 'Desactivar seguimiento programado' : 'Activar seguimiento (programa para dentro de 23 horas)'}
                 >
                   {isProgramandoSeguimiento ? (
                     <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-current"></div>
+                  ) : seguimientoActivo ? (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                      </svg>
+                      <span className="hidden sm:inline">Desactivar</span>
+                    </>
                   ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                    </svg>
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                      </svg>
+                      <span className="hidden sm:inline">Activar</span>
+                    </>
                   )}
                 </button>
               </>

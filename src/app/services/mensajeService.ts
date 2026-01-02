@@ -210,6 +210,57 @@ export const marcarMensajeEnviado = async (mensajeId: number): Promise<boolean> 
 };
 
 /**
+ * Obtiene los seguimientos pendientes de un lead por remote_jid
+ * @param remoteJid - Número de teléfono del lead
+ */
+export const getSeguimientosPendientes = async (remoteJid: string): Promise<ColaSeguimiento[]> => {
+  try {
+    const allSeguimientos: ColaSeguimiento[] = [];
+    
+    // Buscar en cola_seguimientos
+    const { data: dataCola1, error: errorCola1 } = await (getSupabase() as any)
+      .from('cola_seguimientos')
+      .select('*')
+      .eq('remote_jid', remoteJid)
+      .eq('estado', 'pendiente')
+      .order('fecha_programada', { ascending: true });
+    
+    if (errorCola1) {
+      console.error('Error obteniendo seguimientos pendientes de cola_seguimientos:', errorCola1.message);
+    } else if (dataCola1) {
+      const seguimientosCola1 = dataCola1.map((m: ColaSeguimiento) => ({
+        ...m,
+        tabla_origen: 'cola_seguimientos'
+      }));
+      allSeguimientos.push(...seguimientosCola1);
+    }
+    
+    // Buscar en cola_seguimientos_dos
+    const { data: dataCola2, error: errorCola2 } = await (getSupabase() as any)
+      .from('cola_seguimientos_dos')
+      .select('*')
+      .eq('remote_jid', remoteJid)
+      .eq('estado', 'pendiente')
+      .order('fecha_programada', { ascending: true });
+    
+    if (errorCola2) {
+      console.error('Error obteniendo seguimientos pendientes de cola_seguimientos_dos:', errorCola2.message);
+    } else if (dataCola2) {
+      const seguimientosCola2 = dataCola2.map((m: ColaSeguimiento) => ({
+        ...m,
+        tabla_origen: 'cola_seguimientos_dos'
+      }));
+      allSeguimientos.push(...seguimientosCola2);
+    }
+    
+    return allSeguimientos;
+  } catch (e) {
+    console.error('Exception obteniendo seguimientos pendientes:', e);
+    return [];
+  }
+};
+
+/**
  * Programa un seguimiento para un lead en cola_seguimientos
  * Programa para dentro de 23 horas desde ahora
  */
