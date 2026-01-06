@@ -455,32 +455,144 @@ const ChatConversation = ({ conversation, onBack }) => {
                 </div>
                 
                 {/* Mensajes de ese día */}
-                {dateMessages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${isOutgoing(message) ? 'justify-end' : 'justify-start'} mb-2`}
-                  >
+                {dateMessages.map((message) => {
+                  // Verificar si el mensaje tiene un attachment de audio
+                  // Chatwoot puede marcar audio de diferentes formas:
+                  // - message_type: 3 (audio)
+                  // - content_type: 'audio', 'audio/ogg', 'audio/mpeg', etc.
+                  // - attachments con file_type: 'audio', 'voice'
+                  // - attachments con content_type que empiece con 'audio/'
+                  const hasAudio = 
+                    message.message_type === 3 || // Tipo 3 = audio en Chatwoot
+                    message.content_type === 'audio' ||
+                    (message.content_type && message.content_type.startsWith('audio/')) ||
+                    (message.attachments && message.attachments.some(att => 
+                      att.file_type === 'audio' || 
+                      att.file_type === 'voice' ||
+                      (att.content_type && att.content_type.startsWith('audio/'))
+                    ));
+                  
+                  const audioAttachment = hasAudio && message.attachments 
+                    ? message.attachments.find(att => 
+                        att.file_type === 'audio' || 
+                        att.file_type === 'voice' ||
+                        (att.content_type && att.content_type.startsWith('audio/'))
+                      ) || message.attachments[0]
+                    : null;
+                  
+                  // Obtener URL del audio (puede estar en diferentes lugares según Chatwoot)
+                  // Chatwoot puede usar: data_url, url, file_url, download_url
+                  let audioUrl = null;
+                  if (audioAttachment) {
+                    audioUrl = audioAttachment.data_url || 
+                              audioAttachment.url || 
+                              audioAttachment.file_url ||
+                              audioAttachment.download_url ||
+                              audioAttachment.public_url;
+                  }
+                  
+                  // Si no hay URL en el attachment, verificar si hay una URL directa en el mensaje
+                  if (!audioUrl && message.data_url) {
+                    audioUrl = message.data_url;
+                  }
+                  
+                  // Si no hay URL en el attachment, intentar construirla desde el ID
+                  // Formato típico: /api/v1/accounts/{account_id}/conversations/{conversation_id}/messages/{message_id}/attachments/{attachment_id}
+                  if (!audioUrl && audioAttachment?.id && conversation?.id && message.id) {
+                    // Intentar construir URL relativa (se resolverá con el proxy de Next.js)
+                    audioUrl = `/api/chats/${conversation.id}/messages/${message.id}/attachments/${audioAttachment.id}`;
+                  }
+                  
+                  // Si aún no hay URL pero hay attachments, usar el primero
+                  if (!audioUrl && message.attachments && message.attachments.length > 0) {
+                    const firstAtt = message.attachments[0];
+                    audioUrl = firstAtt.data_url || 
+                              firstAtt.url || 
+                              firstAtt.file_url ||
+                              firstAtt.download_url ||
+                              firstAtt.public_url;
+                  }
+                  
+                  // Obtener el tipo de contenido del audio
+                  const audioContentType = audioAttachment?.content_type || 
+                                         message.content_type || 
+                                         'audio/ogg; codecs=opus'; // WhatsApp usa OGG Opus por defecto
+                  
+                  return (
                     <div
-                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                        isOutgoing(message)
-                          ? 'bg-green-500 text-white'
-                          : 'bg-white border border-gray-200 text-gray-800'
-                      }`}
+                      key={message.id}
+                      className={`flex ${isOutgoing(message) ? 'justify-end' : 'justify-start'} mb-2`}
                     >
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                      <p className={`text-xs mt-1 ${
-                        isOutgoing(message) ? 'text-green-100' : 'text-gray-500'
-                      }`}>
-                        {formatMessageTime(message.created_at)}
-                        {isOutgoing(message) && (
-                          <svg className="inline ml-1 w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                          </svg>
+                      <div
+                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                          isOutgoing(message)
+                            ? 'bg-green-500 text-white'
+                            : 'bg-white border border-gray-200 text-gray-800'
+                        }`}
+                      >
+                        {/* Mostrar reproductor de audio si hay audio */}
+                        {hasAudio && audioUrl ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <audio 
+                                controls 
+                                className="flex-1 min-w-[200px] h-8"
+                                style={{
+                                  maxWidth: '100%',
+                                  outline: 'none'
+                                }}
+                                preload="metadata"
+                              >
+                                <source src={audioUrl} type={audioContentType} />
+                                <source src={audioUrl} type="audio/mpeg" />
+                                <source src={audioUrl} type="audio/ogg" />
+                                <source src={audioUrl} type="audio/wav" />
+                                <source src={audioUrl} type="audio/mp4" />
+                                Tu navegador no soporta el elemento de audio.
+                              </audio>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              {audioAttachment?.file_size && (
+                                <span className={`text-xs ${
+                                  isOutgoing(message) ? 'text-green-100' : 'text-gray-500'
+                                }`}>
+                                  {(audioAttachment.file_size / 1024).toFixed(1)} KB
+                                </span>
+                              )}
+                              {audioAttachment?.duration && (
+                                <span className={`text-xs ${
+                                  isOutgoing(message) ? 'text-green-100' : 'text-gray-500'
+                                }`}>
+                                  {Math.floor(audioAttachment.duration / 1000)}s
+                                </span>
+                              )}
+                            </div>
+                            {/* Mostrar contenido de texto si existe (puede ser una descripción) */}
+                            {message.content && message.content.trim() && (
+                              <p className="text-xs italic mt-1 opacity-75">{message.content}</p>
+                            )}
+                          </div>
+                        ) : (
+                          /* Mostrar contenido de texto normal */
+                          message.content && message.content.trim() && (
+                            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                          )
                         )}
-                      </p>
+                        
+                        <p className={`text-xs mt-1 ${
+                          isOutgoing(message) ? 'text-green-100' : 'text-gray-500'
+                        }`}>
+                          {formatMessageTime(message.created_at)}
+                          {isOutgoing(message) && (
+                            <svg className="inline ml-1 w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                            </svg>
+                          )}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ))}
             <div ref={messagesEndRef} />

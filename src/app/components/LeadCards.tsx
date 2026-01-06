@@ -17,8 +17,25 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
   const [matchingProperties, setMatchingProperties] = useState<Map<string, Property[]>>(new Map());
   const [isDraggingOver, setIsDraggingOver] = useState<Record<string, boolean>>({});
   
+  // Función para normalizar estados (convertir "Fríos" a "frío", etc.)
+  const normalizeEstado = (estado: string | undefined): string => {
+    if (!estado) return '';
+    const estadoLower = estado.toLowerCase().trim();
+    // Normalizar variaciones comunes
+    if (estadoLower === 'fríos' || estadoLower === 'frios') return 'frío';
+    if (estadoLower === 'tibios') return 'tibio';
+    if (estadoLower === 'calientes') return 'caliente';
+    if (estadoLower === 'llamadas') return 'llamada';
+    if (estadoLower === 'visitas') return 'visita';
+    return estadoLower;
+  };
+
   const defaultStatusOrder = ['frío', 'tibio', 'caliente', 'llamada', 'visita'];
-  const statusOrder = visibleColumns && visibleColumns.length > 0 ? visibleColumns : defaultStatusOrder;
+  // Normalizar las columnas visibles para eliminar "Fríos" si existe
+  const normalizedVisibleColumns = visibleColumns && visibleColumns.length > 0 
+    ? visibleColumns.map(normalizeEstado).filter((col, index, self) => self.indexOf(col) === index)
+    : defaultStatusOrder;
+  const statusOrder = normalizedVisibleColumns;
   
   // Memo para agrupar los leads por estado y ordenarlos por ultima_interaccion
   const groupedLeads = useMemo(() => {
@@ -43,19 +60,25 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
           const leadStatus = lead?.estado;
           if (!leadStatus) return;
           
-          // Si el estado coincide con alguna de nuestras columnas visibles, lo añadimos ahí
-          if (statusOrder.includes(leadStatus)) {
-            if (!result[leadStatus]) {
-              result[leadStatus] = [];
+          // Normalizar el estado del lead antes de agrupar
+          const normalizedStatus = normalizeEstado(leadStatus);
+          
+          // Si el estado normalizado coincide con alguna de nuestras columnas visibles, lo añadimos ahí
+          if (statusOrder.includes(normalizedStatus)) {
+            if (!result[normalizedStatus]) {
+              result[normalizedStatus] = [];
             }
-            result[leadStatus].push(lead);
+            result[normalizedStatus].push(lead);
           } else {
             // Si el estado no existe en nuestras columnas visibles, crear una nueva columna para él
             // Esto permite que los estados personalizados se muestren correctamente
-            if (!result[leadStatus]) {
-              result[leadStatus] = [];
+            // Pero NO crear columnas para estados normalizados que ya existen
+            if (normalizedStatus !== 'frío' && normalizedStatus !== 'tibio' && normalizedStatus !== 'caliente' && normalizedStatus !== 'llamada' && normalizedStatus !== 'visita') {
+              if (!result[normalizedStatus]) {
+                result[normalizedStatus] = [];
+              }
+              result[normalizedStatus].push(lead);
             }
-            result[leadStatus].push(lead);
           }
         } catch (e) {
           console.error('Error processing lead:', e, lead);
@@ -341,8 +364,17 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
   // Combinar columnas visibles con columnas que tienen leads (para mostrar estados personalizados)
   const allColumnsToShow = useMemo(() => {
     const visibleSet = new Set(statusOrder);
-    const columnsWithLeads = Object.keys(groupedLeads).filter(status => groupedLeads[status].length > 0);
-    const customColumns = columnsWithLeads.filter(status => !visibleSet.has(status));
+    const columnsWithLeads = Object.keys(groupedLeads)
+      .filter(status => groupedLeads[status].length > 0)
+      .map(normalizeEstado) // Normalizar todas las columnas
+      .filter((status, index, self) => self.indexOf(status) === index); // Eliminar duplicados
+    
+    // Filtrar explícitamente "Fríos" y "fríos"
+    const filteredColumns = columnsWithLeads.filter(status => 
+      status !== 'fríos' && status !== 'frios' && status !== 'tibios' && status !== 'calientes' && status !== 'llamadas' && status !== 'visitas'
+    );
+    
+    const customColumns = filteredColumns.filter(status => !visibleSet.has(status));
     
     // Primero las columnas visibles en orden, luego las personalizadas
     return [...statusOrder, ...customColumns];
@@ -435,7 +467,41 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                             <div className="p-2 max-w-[150px] space-y-1.5">
                               <div className="pr-6">
                                 <h4 className="text-xs font-semibold text-slate-900 leading-tight truncate">
-                                  {lead.nombreCompleto || (lead as any).nombre || (lead as any).whatsapp_id}
+                                  {(() => {
+                                    // PRIORIDAD: nombre (campo directo de la BD) > nombreCompleto > whatsapp_id
+                                    // El campo 'nombre' viene directamente de la tabla leads en la BD
+                                    const nombreBD = (lead as any).nombre;
+                                    const nombreCompleto = lead.nombreCompleto;
+                                    
+                                    // Verificar nombre de la BD primero (puede ser string, null, undefined)
+                                    let nombreFinal = '';
+                                    if (nombreBD != null && nombreBD !== '') {
+                                      const nombreStr = String(nombreBD).trim();
+                                      if (nombreStr.length > 0) {
+                                        nombreFinal = nombreStr;
+                                      }
+                                    }
+                                    
+                                    // Si no hay nombre de BD, verificar nombreCompleto
+                                    if (!nombreFinal && nombreCompleto) {
+                                      const nombreCompletoStr = String(nombreCompleto).trim();
+                                      if (nombreCompletoStr.length > 0) {
+                                        nombreFinal = nombreCompletoStr;
+                                      }
+                                    }
+                                    
+                                    // Si no hay nombre, mostrar teléfono
+                                    if (!nombreFinal) {
+                                      const telefono = (lead as any).whatsapp_id || lead.telefono;
+                                      if (telefono) {
+                                        nombreFinal = String(telefono).trim();
+                                      } else {
+                                        nombreFinal = 'Sin nombre';
+                                      }
+                                    }
+                                    
+                                    return nombreFinal;
+                                  })()}
                                 </h4>
                               </div>
                               <div className="flex items-center gap-1">

@@ -51,8 +51,20 @@ export default function LeadsKanbanPage() {
   const [newColumnName, setNewColumnName] = useState('');
   const [newColumnColor, setNewColumnColor] = useState('#3b82f6'); // Color por defecto (azul)
   const [isColumnSelectorVisible, setIsColumnSelectorVisible] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(['frío', 'tibio', 'caliente', 'llamada', 'visita']);
+  // Siempre excluir "frío" de las columnas visibles
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(['tibio', 'caliente', 'llamada', 'visita']);
   const [columnColors, setColumnColors] = useState<Record<string, string>>({});
+
+  // Función para normalizar nombres de columnas
+  const normalizeColumnName = (col: string): string => {
+    const colLower = col.toLowerCase().trim();
+    if (colLower === 'fríos' || colLower === 'frios') return 'frío';
+    if (colLower === 'tibios') return 'tibio';
+    if (colLower === 'calientes') return 'caliente';
+    if (colLower === 'llamadas') return 'llamada';
+    if (colLower === 'visitas') return 'visita';
+    return colLower;
+  };
 
   // Cargar columnas personalizadas desde Supabase al inicializar
   useEffect(() => {
@@ -63,14 +75,22 @@ export default function LeadsKanbanPage() {
         
         // Cargar columnas desde Supabase
         const { customColumns: loadedCustom, visibleColumns: loadedVisible, columnColors: loadedColors } = await getKanbanColumns();
+        
+        // Normalizar las columnas visibles para eliminar "Fríos" y "frío"
+        const normalizedVisible = loadedVisible
+          .map(normalizeColumnName)
+          .filter((col, index, self) => self.indexOf(col) === index) // Eliminar duplicados
+          .filter(col => col !== 'fríos' && col !== 'frios' && col !== 'frío'); // Filtrar explícitamente "Fríos" y "frío"
+        
         setCustomColumns(loadedCustom);
-        setVisibleColumns(loadedVisible);
+        // Siempre excluir "frío" de las columnas visibles
+        setVisibleColumns(normalizedVisible.length > 0 ? normalizedVisible : ['tibio', 'caliente', 'llamada', 'visita']);
         setColumnColors(loadedColors);
       } catch (error) {
         console.error('Error loading columns from Supabase:', error);
-        // Fallback a valores por defecto
+        // Fallback a valores por defecto (sin "frío")
         setCustomColumns([]);
-        setVisibleColumns(['frío', 'tibio', 'caliente', 'llamada', 'visita']);
+        setVisibleColumns(['tibio', 'caliente', 'llamada', 'visita']);
       }
     };
     
@@ -186,23 +206,32 @@ export default function LeadsKanbanPage() {
     try {
       console.log(`Updating lead ${leadId} from status to ${newStatus}`);
       
+      // Normalizar el estado antes de actualizar
+      const normalizedStatus = normalizeColumnName(newStatus);
+      
+      // Si el estado normalizado es "frío", no permitir el cambio
+      if (normalizedStatus === 'frío') {
+        alert('No se puede cambiar el estado a "frío". Esta columna está deshabilitada.');
+        return;
+      }
+      
       // Actualizar el estado del lead en el servicio
-      const success = await updateLeadStatus(leadId, newStatus);
+      const success = await updateLeadStatus(leadId, normalizedStatus);
       
       if (success) {
-        console.log(`Successfully updated lead ${leadId} to ${newStatus}`);
+        console.log(`Successfully updated lead ${leadId} to ${normalizedStatus}`);
         
-        // Actualizar el estado local
+        // Actualizar el estado local con el estado normalizado
         setLeads(prevLeads => 
           prevLeads.map(lead => 
-            lead.id === leadId ? { ...lead, estado: newStatus as LeadStatus } : lead
+            lead.id === leadId ? { ...lead, estado: normalizedStatus as LeadStatus } : lead
           )
         );
         
         // Actualizar los leads filtrados
         setFilteredLeads(prevLeads => 
           prevLeads.map(lead => 
-            lead.id === leadId ? { ...lead, estado: newStatus as LeadStatus } : lead
+            lead.id === leadId ? { ...lead, estado: normalizedStatus as LeadStatus } : lead
           )
         );
         
@@ -235,11 +264,18 @@ export default function LeadsKanbanPage() {
 
   // Funciones para manejar columnas personalizadas
   const handleAddColumn = async () => {
-    if (newColumnName.trim() && !visibleColumns.includes(newColumnName.trim().toLowerCase())) {
-      const newColumn = newColumnName.trim().toLowerCase();
-      const updatedCustomColumns = [...customColumns, newColumn];
-      const updatedVisibleColumns = [...visibleColumns, newColumn];
-      const updatedColumnColors = { ...columnColors, [newColumn]: newColumnColor };
+    const normalizedColumn = normalizeColumnName(newColumnName.trim().toLowerCase());
+    
+    // Nunca permitir agregar "frío" o sus variaciones
+    if (normalizedColumn === 'frío' || normalizedColumn === 'fríos' || normalizedColumn === 'frios') {
+      alert('No se puede agregar la columna "frío"');
+      return;
+    }
+    
+    if (newColumnName.trim() && !visibleColumns.includes(normalizedColumn)) {
+      const updatedCustomColumns = [...customColumns, normalizedColumn];
+      const updatedVisibleColumns = [...visibleColumns, normalizedColumn];
+      const updatedColumnColors = { ...columnColors, [normalizedColumn]: newColumnColor };
       
       setCustomColumns(updatedCustomColumns);
       setVisibleColumns(updatedVisibleColumns);
@@ -286,21 +322,32 @@ export default function LeadsKanbanPage() {
   };
 
   const handleColumnToggle = async (column: string) => {
+    // Nunca permitir agregar "frío"
+    if (column === 'frío' || column === 'fríos' || column === 'frios') {
+      return;
+    }
+    
     const updatedVisibleColumns = visibleColumns.includes(column) 
       ? visibleColumns.filter(col => col !== column)
       : [...visibleColumns, column];
     
-    setVisibleColumns(updatedVisibleColumns);
+    // Asegurarse de que "frío" nunca esté en las columnas visibles
+    const filteredColumns = updatedVisibleColumns.filter(col => 
+      col !== 'frío' && col !== 'fríos' && col !== 'frios'
+    );
+    
+    setVisibleColumns(filteredColumns);
     
     // Guardar en Supabase
-    await saveKanbanColumns(customColumns, updatedVisibleColumns, columnColors);
+    await saveKanbanColumns(customColumns, filteredColumns, columnColors);
   };
 
   const toggleColumnSelector = () => {
     setIsColumnSelectorVisible(!isColumnSelectorVisible);
   };
 
-  const allColumns = ['frío', 'tibio', 'caliente', 'llamada', 'visita', ...customColumns];
+  // Siempre excluir "frío" de las columnas disponibles
+  const allColumns = ['tibio', 'caliente', 'llamada', 'visita', ...customColumns];
 
   const handleSaveLead = async (leadData: Partial<Lead>) => {
     try {
@@ -587,8 +634,10 @@ export default function LeadsKanbanPage() {
                 <div className="flex space-x-2">
                   <button
                     onClick={async () => {
-                      setVisibleColumns(allColumns);
-                      await saveKanbanColumns(customColumns, allColumns);
+                      // Excluir "frío" al seleccionar todas
+                      const columnsWithoutFrio = allColumns.filter(col => col !== 'frío' && col !== 'fríos' && col !== 'frios');
+                      setVisibleColumns(columnsWithoutFrio);
+                      await saveKanbanColumns(customColumns, columnsWithoutFrio);
                     }}
                     className="text-xs text-gray-600 hover:text-gray-800 font-medium"
                   >
@@ -607,7 +656,8 @@ export default function LeadsKanbanPage() {
                 </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-                {allColumns.map((column) => (
+                {/* Filtrar "frío" de las columnas mostradas en el selector */}
+                {allColumns.filter(col => col !== 'frío' && col !== 'fríos' && col !== 'frios').map((column) => (
                   <div key={column} className="flex items-center justify-between">
                     <label className="flex items-center space-x-2 cursor-pointer flex-1">
                       <input
@@ -640,7 +690,7 @@ export default function LeadsKanbanPage() {
               leads={filteredLeads} 
               onLeadStatusChange={handleLeadStatusChange}
               onEditLead={handleOpenEditLead}
-              visibleColumns={visibleColumns}
+              visibleColumns={visibleColumns.filter(col => col !== 'frío' && col !== 'fríos' && col !== 'frios')}
               columnColors={columnColors}
             />
           </div>

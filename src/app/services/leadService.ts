@@ -200,12 +200,28 @@ const groupSimilarCampaigns = (campaigns: string[]): { groups: Map<string, strin
   return { groups, map };
 };
 
+// Función para normalizar estados de la base de datos
+const normalizeEstadoFromDB = (estado: string | null | undefined): string => {
+  if (!estado) return '';
+  const estadoLower = estado.toLowerCase().trim();
+  // Normalizar variaciones comunes
+  if (estadoLower === 'fríos' || estadoLower === 'frios') return 'frío';
+  if (estadoLower === 'tibios') return 'tibio';
+  if (estadoLower === 'calientes') return 'caliente';
+  if (estadoLower === 'llamadas') return 'llamada';
+  if (estadoLower === 'visitas') return 'visita';
+  return estadoLower;
+};
+
 // Map a DB row (snake_case or camelCase) into our Lead type
 const mapLeadRow = (row: any): Lead => {
   // Si el estado es null, 'inicial' o 'activo', calificar automáticamente
   let estado = row.estado;
   if (!estado || estado === 'inicial' || estado === 'activo') {
     estado = calificarLead(row);
+  } else {
+    // Normalizar el estado si viene de la BD (ej: "Fríos" -> "frío")
+    estado = normalizeEstadoFromDB(estado);
   }
   
   return {
@@ -392,11 +408,16 @@ export const getUniqueStatuses = (): string[] => {
   const allStatuses: LeadStatus[] = ['frío', 'tibio', 'caliente', 'llamada', 'visita'];
   
   // Añadir cualquier estado adicional que pueda existir en los datos, pero excluir 'activo' e 'inicial'
+  // Normalizar estados para evitar duplicados (ej: "Fríos" -> "frío")
   const dataStatuses = new Set<string>();
   cachedLeads.forEach(lead => {
     // Filtrar estados temporales que no deberían aparecer como columnas
     if (lead.estado && lead.estado !== 'activo' && lead.estado !== 'inicial') {
-      dataStatuses.add(lead.estado);
+      // Normalizar el estado antes de agregarlo
+      const normalizedEstado = normalizeEstadoFromDB(lead.estado);
+      if (normalizedEstado) {
+        dataStatuses.add(normalizedEstado);
+      }
     }
   });
   
@@ -484,10 +505,13 @@ export const updateLeadStatus = async (leadId: string, newStatus: string): Promi
       return false;
     }
     
+    // Normalizar el estado antes de guardarlo (ej: "Fríos" -> "frío")
+    const normalizedStatus = normalizeEstadoFromDB(newStatus.trim());
+    
     // Cast table typing loosely to avoid TS inference issues without generated types
     const { data, error } = await (getSupabase() as any)
       .from('leads')
-      .update({ estado: newStatus.trim() })
+      .update({ estado: normalizedStatus })
       .eq('id', leadId)
       .select();
     

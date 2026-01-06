@@ -34,14 +34,43 @@ export default function LeadsTablePage() {
   const [propiedadesInteres, setPropiedadesInteres] = useState<string[]>([]);
   const [showAllCampaigns, setShowAllCampaigns] = useState(false);
   
-  // Estado para columnas visibles
+  // Función para normalizar nombres de columnas
+  const normalizeColumnName = (col: string): string => {
+    const colLower = col.toLowerCase().trim();
+    if (colLower === 'fríos' || colLower === 'frios') return 'frío';
+    if (colLower === 'tibios') return 'tibio';
+    if (colLower === 'calientes') return 'caliente';
+    if (colLower === 'llamadas') return 'llamada';
+    if (colLower === 'visitas') return 'visita';
+    return colLower;
+  };
+
+  // Estado para columnas visibles (normalizadas)
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['frío', 'tibio', 'caliente', 'llamada', 'visita']);
   const [isColumnSelectorVisible, setIsColumnSelectorVisible] = useState(false);
   const [customColumns, setCustomColumns] = useState<string[]>([]);
   const [isAddColumnModalVisible, setIsAddColumnModalVisible] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
   
-  const allColumns = ['frío', 'tibio', 'caliente', 'llamada', 'visita', ...customColumns];
+  // Normalizar todas las columnas para evitar "Fríos"
+  const allColumns = ['frío', 'tibio', 'caliente', 'llamada', 'visita', ...customColumns]
+    .map(normalizeColumnName)
+    .filter((col, index, self) => self.indexOf(col) === index)
+    .filter(col => col !== 'fríos' && col !== 'frios');
+  
+  // Normalizar visibleColumns al cargar para eliminar "Fríos" si existe
+  useEffect(() => {
+    const normalized = visibleColumns
+      .map(normalizeColumnName)
+      .filter((col, index, self) => self.indexOf(col) === index)
+      .filter(col => col !== 'fríos' && col !== 'frios');
+    
+    // Si hay diferencias, actualizar el estado (solo una vez al montar)
+    if (JSON.stringify(normalized.sort()) !== JSON.stringify(visibleColumns.sort())) {
+      setVisibleColumns(normalized);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   useEffect(() => {
     const loadData = async () => {
@@ -51,8 +80,33 @@ export default function LeadsTablePage() {
       await new Promise(resolve => setTimeout(resolve, 500));
       
       const allLeads = await getAllLeads();
-      setLeads(allLeads);
-      setFilteredLeads(allLeads);
+      
+      // NORMALIZAR ESTADOS DE LEADS ANTES DE GUARDARLOS - convertir "Fríos" a "frío"
+      const normalizedLeads = allLeads.map(lead => {
+        const estado = lead.estado as string;
+        if (estado) {
+          const estadoLower = estado.toLowerCase().trim();
+          if (estadoLower === 'fríos' || estadoLower === 'frios') {
+            return { ...lead, estado: 'frío' as any };
+          }
+          if (estadoLower === 'tibios') {
+            return { ...lead, estado: 'tibio' as any };
+          }
+          if (estadoLower === 'calientes') {
+            return { ...lead, estado: 'caliente' as any };
+          }
+          if (estadoLower === 'llamadas') {
+            return { ...lead, estado: 'llamada' as any };
+          }
+          if (estadoLower === 'visitas') {
+            return { ...lead, estado: 'visita' as any };
+          }
+        }
+        return lead;
+      });
+      
+      setLeads(normalizedLeads);
+      setFilteredLeads(normalizedLeads);
       
       // Cargar opciones para los filtros (usar los leads recién cargados)
       setZonas(getUniqueZones());
@@ -115,7 +169,31 @@ export default function LeadsTablePage() {
         });
       }
       
-      setFilteredLeads(filtered);
+      // NORMALIZAR ESTADOS DESPUÉS DE FILTRAR
+      const normalizedFiltered = filtered.map(lead => {
+        const estado = lead.estado as string;
+        if (estado) {
+          const estadoLower = estado.toLowerCase().trim();
+          if (estadoLower === 'fríos' || estadoLower === 'frios') {
+            return { ...lead, estado: 'frío' as any };
+          }
+          if (estadoLower === 'tibios') {
+            return { ...lead, estado: 'tibio' as any };
+          }
+          if (estadoLower === 'calientes') {
+            return { ...lead, estado: 'caliente' as any };
+          }
+          if (estadoLower === 'llamadas') {
+            return { ...lead, estado: 'llamada' as any };
+          }
+          if (estadoLower === 'visitas') {
+            return { ...lead, estado: 'visita' as any };
+          }
+        }
+        return lead;
+      });
+      
+      setFilteredLeads(normalizedFiltered);
     } catch (error) {
       console.error('Error in filter effect:', error);
       // En caso de error, mantener el estado anterior (no hacer nada)
@@ -144,15 +222,21 @@ export default function LeadsTablePage() {
   };
 
   const handleColumnToggle = (column: string) => {
-    setVisibleColumns(prev => 
-      prev.includes(column) 
-        ? prev.filter(col => col !== column)
-        : [...prev, column]
-    );
+    const normalizedColumn = normalizeColumnName(column);
+    setVisibleColumns(prev => {
+      const normalized = prev.map(normalizeColumnName);
+      return normalized.includes(normalizedColumn)
+        ? normalized.filter(col => col !== normalizedColumn)
+        : [...normalized, normalizedColumn];
+    });
   };
 
   const handleSelectAllColumns = () => {
-    setVisibleColumns(allColumns);
+    const normalized = allColumns
+      .map(normalizeColumnName)
+      .filter((col, index, self) => self.indexOf(col) === index)
+      .filter(col => col !== 'fríos' && col !== 'frios');
+    setVisibleColumns(normalized);
   };
 
   const handleDeselectAllColumns = () => {
@@ -161,7 +245,12 @@ export default function LeadsTablePage() {
 
   const handleAddColumn = () => {
     if (newColumnName.trim() && !allColumns.includes(newColumnName.trim().toLowerCase())) {
-      const newColumn = newColumnName.trim().toLowerCase();
+      const newColumn = normalizeColumnName(newColumnName.trim());
+      // No permitir agregar columnas que sean variaciones de las existentes
+      if (newColumn === 'frío' || newColumn === 'tibio' || newColumn === 'caliente' || newColumn === 'llamada' || newColumn === 'visita') {
+        alert('Esta columna ya existe con otro nombre');
+        return;
+      }
       setCustomColumns(prev => [...prev, newColumn]);
       setVisibleColumns(prev => [...prev, newColumn]);
       setNewColumnName('');
@@ -473,7 +562,39 @@ export default function LeadsTablePage() {
         
         {/* Panel principal */}
         <div className="bg-white rounded-lg shadow-md mb-6 overflow-hidden border border-gray-100">
-          <LeadTable leads={filteredLeads} visibleColumns={visibleColumns} />
+          <LeadTable 
+            leads={filteredLeads.map(lead => {
+              // NORMALIZAR ESTADOS DE LEADS ANTES DE PASARLOS A LeadTable
+              const estado = lead.estado as string;
+              if (estado) {
+                const estadoLower = estado.toLowerCase().trim();
+                if (estadoLower === 'fríos' || estadoLower === 'frios') {
+                  return { ...lead, estado: 'frío' as any };
+                }
+                if (estadoLower === 'tibios') {
+                  return { ...lead, estado: 'tibio' as any };
+                }
+                if (estadoLower === 'calientes') {
+                  return { ...lead, estado: 'caliente' as any };
+                }
+                if (estadoLower === 'llamadas') {
+                  return { ...lead, estado: 'llamada' as any };
+                }
+                if (estadoLower === 'visitas') {
+                  return { ...lead, estado: 'visita' as any };
+                }
+              }
+              return lead;
+            })} 
+            visibleColumns={visibleColumns
+              .map(normalizeColumnName)
+              .filter((col, index, self) => self.indexOf(col) === index)
+              .filter(col => {
+                const normalized = normalizeColumnName(col);
+                return normalized !== 'fríos' && normalized !== 'frios' && col !== 'fríos' && col !== 'frios';
+              })
+            } 
+          />
         </div>
 
         {/* Modal para agregar columnas */}

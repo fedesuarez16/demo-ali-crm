@@ -32,6 +32,17 @@ const DEFAULT_COLORS: Record<string, string> = {
   'visita': '#10b981'     // Verde
 };
 
+// Función para normalizar nombres de columnas (eliminar "Fríos", "Tibios", etc.)
+const normalizeColumnName = (col: string): string => {
+  const colLower = col.toLowerCase().trim();
+  if (colLower === 'fríos' || colLower === 'frios') return 'frío';
+  if (colLower === 'tibios') return 'tibio';
+  if (colLower === 'calientes') return 'caliente';
+  if (colLower === 'llamadas') return 'llamada';
+  if (colLower === 'visitas') return 'visita';
+  return colLower;
+};
+
 /**
  * Obtiene las columnas personalizadas desde Supabase
  * Si no existen, devuelve valores por defecto
@@ -72,12 +83,19 @@ export const getKanbanColumns = async (): Promise<{
     const latestRecord = data[0] as KanbanColumns;
     const columnColors = (latestRecord.column_colors as Record<string, string>) || {};
     
+    // Normalizar las columnas visibles para eliminar "Fríos" y otras variaciones
+    const rawVisibleColumns = (latestRecord.visible_columns as string[]) || ['frío', 'tibio', 'caliente', 'llamada', 'visita'];
+    const normalizedVisibleColumns = rawVisibleColumns
+      .map(normalizeColumnName)
+      .filter((col, index, self) => self.indexOf(col) === index) // Eliminar duplicados
+      .filter(col => col !== 'fríos' && col !== 'frios'); // Filtrar explícitamente "Fríos"
+    
     // Combinar con colores por defecto para asegurar que todas las columnas tengan color
     const mergedColors = { ...DEFAULT_COLORS, ...columnColors };
     
     return {
       customColumns: (latestRecord.custom_columns as string[]) || [],
-      visibleColumns: (latestRecord.visible_columns as string[]) || ['frío', 'tibio', 'caliente', 'llamada', 'visita'],
+      visibleColumns: normalizedVisibleColumns.length > 0 ? normalizedVisibleColumns : ['frío', 'tibio', 'caliente', 'llamada', 'visita'],
       columnColors: mergedColors
     };
   } catch (e) {
@@ -101,6 +119,12 @@ export const saveKanbanColumns = async (
   columnColors?: Record<string, string>
 ): Promise<boolean> => {
   try {
+    // Normalizar las columnas visibles antes de guardar
+    const normalizedVisibleColumns = visibleColumns
+      .map(normalizeColumnName)
+      .filter((col, index, self) => self.indexOf(col) === index) // Eliminar duplicados
+      .filter(col => col !== 'fríos' && col !== 'frios'); // Filtrar explícitamente "Fríos"
+    
     // Primero intentar obtener el registro existente para preservar los colores existentes
     const { data: existingData } = await (getSupabase() as any)
       .from('kanban_columns')
@@ -126,7 +150,7 @@ export const saveKanbanColumns = async (
 
     const columnsData = {
       custom_columns: customColumns,
-      visible_columns: visibleColumns,
+      visible_columns: normalizedVisibleColumns,
       column_colors: finalColumnColors,
       updated_at: new Date().toISOString()
     };

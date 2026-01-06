@@ -20,25 +20,96 @@ const LeadTable: React.FC<LeadTableProps> = ({ leads, visibleColumns }) => {
   }
 
   const defaultStatuses = ['frío', 'tibio', 'caliente', 'llamada', 'visita'] as const;
-  const statusOrder = visibleColumns && visibleColumns.length > 0 
-    ? visibleColumns.filter(col => col !== 'activo' && col !== 'inicial') // Filtrar estados temporales
-    : defaultStatuses;
+  
+  // Función para normalizar nombres de columnas (eliminar "Fríos", "Tibios", etc.)
+  const normalizeColumnName = (col: string): string => {
+    const colLower = col.toLowerCase().trim();
+    if (colLower === 'fríos' || colLower === 'frios') return 'frío';
+    if (colLower === 'tibios') return 'tibio';
+    if (colLower === 'calientes') return 'caliente';
+    if (colLower === 'llamadas') return 'llamada';
+    if (colLower === 'visitas') return 'visita';
+    return colLower;
+  };
+  
+  // FORZAR normalización agresiva - NUNCA permitir "Fríos"
+  const statusOrder = (visibleColumns && visibleColumns.length > 0 
+    ? visibleColumns
+        .map(col => normalizeColumnName(col)) // Normalizar nombres de columnas
+        .filter(col => col !== 'activo' && col !== 'inicial' && col !== 'fríos' && col !== 'frios') // Filtrar estados temporales y variaciones
+        .filter((col, index, self) => self.indexOf(col) === index) // Eliminar duplicados
+    : defaultStatuses)
+    .filter(col => {
+      const normalized = normalizeColumnName(col);
+      return normalized !== 'fríos' && normalized !== 'frios' && col !== 'fríos' && col !== 'frios';
+    }); // FILTRO FINAL AGRESIVO - eliminar cualquier rastro de "Fríos"
+
+  // Función para normalizar estados (convertir "Fríos" a "frío", etc.)
+  const normalizeEstado = (estado: string | undefined): string => {
+    if (!estado) return '';
+    const estadoLower = estado.toLowerCase().trim();
+    // Normalizar variaciones comunes
+    if (estadoLower === 'fríos' || estadoLower === 'frios') return 'frío';
+    if (estadoLower === 'tibios') return 'tibio';
+    if (estadoLower === 'calientes') return 'caliente';
+    if (estadoLower === 'llamadas') return 'llamada';
+    if (estadoLower === 'visitas') return 'visita';
+    return estadoLower;
+  };
 
   // Agrupar por estado según el orden solicitado
   // También filtrar leads con estados 'activo' o 'inicial' que no deberían mostrarse
+  // Y normalizar estados para evitar duplicados (ej: "Fríos" -> "frío")
   const filteredLeads = leads.filter(l => {
-    const estado = (l.estado as unknown as string);
-    return estado !== 'activo' && estado !== 'inicial';
+    const estado = normalizeEstado(l.estado as unknown as string);
+    return estado !== 'activo' && estado !== 'inicial' && estado !== '';
   });
-  const grouped = statusOrder.map(status => filteredLeads.filter(l => (l.estado as unknown as string) === status));
+  
+  // Normalizar estados de los leads antes de agrupar
+  const normalizedLeads = filteredLeads.map(lead => ({
+    ...lead,
+    estado: normalizeEstado(lead.estado as unknown as string) as any
+  }));
+  
+  const grouped = statusOrder.map(status => normalizedLeads.filter(l => (l.estado as unknown as string) === status));
 
-  const renderLead = (lead: Lead) => (
-    <div className="rounded border border-slate-200 bg-white p-1 shadow-sm">
-      <div className="text-xs font-medium text-gray-900 truncate leading-tight">{lead.nombreCompleto || (lead as any).nombre || lead.email}</div>
-      <div className="text-gray-600 text-xs truncate leading-tight">{lead.telefono}</div>
-      <div className="text-gray-500 text-xs truncate leading-tight">{(lead as any).zona || lead.zonaInteres}</div>
-    </div>
-  );
+  const renderLead = (lead: Lead) => {
+    // Obtener nombre (prioridad: nombreCompleto > nombre)
+    // Verificar tanto el campo nombreCompleto como nombre (que viene de la BD)
+    // Manejar casos donde puede ser string vacío, null, undefined
+    const nombreCompletoRaw = lead.nombreCompleto;
+    const nombreRaw = (lead as any).nombre;
+    
+    // Convertir a string y trim, pero solo si tiene valor
+    const nombreCompleto = (nombreCompletoRaw && typeof nombreCompletoRaw === 'string' && nombreCompletoRaw.trim().length > 0) 
+      ? nombreCompletoRaw.trim() 
+      : '';
+    const nombre = (nombreRaw && (typeof nombreRaw === 'string' || typeof nombreRaw === 'number') && String(nombreRaw).trim().length > 0) 
+      ? String(nombreRaw).trim() 
+      : '';
+    
+    // Prioridad: nombreCompleto > nombre
+    const nombreFinal = nombreCompleto || nombre;
+    
+    // Obtener teléfono (prioridad: telefono > whatsapp_id)
+    const telefonoRaw = lead.telefono || (lead as any).whatsapp_id;
+    const telefono = (telefonoRaw && String(telefonoRaw).trim().length > 0) 
+      ? String(telefonoRaw).trim() 
+      : '';
+    
+    // Mostrar nombre si existe y no está vacío, sino mostrar teléfono
+    const displayName = (nombreFinal && nombreFinal.length > 0) ? nombreFinal : (telefono || 'Sin nombre');
+    
+    return (
+      <div className="rounded border border-slate-200 bg-white p-1 shadow-sm">
+        <div className="text-xs font-medium text-gray-900 truncate leading-tight">{displayName}</div>
+        {nombreFinal && nombreFinal.length > 0 && telefono && telefono !== displayName && (
+          <div className="text-gray-600 text-xs truncate leading-tight">{telefono}</div>
+        )}
+        <div className="text-gray-500 text-xs truncate leading-tight">{(lead as any).zona || lead.zonaInteres || ''}</div>
+      </div>
+    );
+  };
 
   return (
     <div className="overflow-x-auto">
