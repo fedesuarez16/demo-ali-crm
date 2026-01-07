@@ -31,8 +31,28 @@ export const useChatMessages = (conversationId) => {
       }
 
       if (data.success) {
-        setMessages(data.data || []);
-        console.log(`Successfully loaded ${data.total} messages`);
+        // Filtrar mensajes borrados - no mostrar mensajes que contengan "deleted" o estén marcados como borrados
+        const allMessages = data.data || [];
+        const filteredMessages = allMessages.filter(msg => {
+          // Filtrar mensajes que:
+          // 1. Tengan contenido que indique que fue borrado
+          // 2. Tengan content_attributes que indiquen que fue borrado
+          // 3. Tengan un flag deleted
+          const content = (msg.content || '').toLowerCase();
+          const isDeleted = 
+            content.includes('this message was deleted') ||
+            content.includes('mensaje eliminado') ||
+            content.includes('message was deleted') ||
+            msg.content_attributes?.deleted === true ||
+            msg.private === true ||
+            msg.deleted === true ||
+            msg.status === 'deleted';
+          
+          return !isDeleted;
+        });
+        
+        setMessages(filteredMessages);
+        console.log(`Successfully loaded ${filteredMessages.length} messages (${allMessages.length - filteredMessages.length} deleted messages filtered)`);
       } else {
         throw new Error(data.error || 'Failed to fetch messages');
       }

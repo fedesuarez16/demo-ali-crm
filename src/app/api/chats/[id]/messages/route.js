@@ -90,14 +90,29 @@ export async function GET(request, { params }) {
       messages = [];
     }
 
-    // Filtrar mensajes de actividad (solo mostrar mensajes reales)
-    const realMessages = messages.filter(msg => 
-      msg.message_type !== 2 && // No mostrar mensajes de actividad
-      msg.content && 
-      msg.content.trim() !== ''
-    );
+    // Filtrar mensajes de actividad y mensajes borrados (solo mostrar mensajes reales)
+    const realMessages = messages.filter(msg => {
+      // No mostrar mensajes de actividad
+      if (msg.message_type === 2) return false;
+      
+      // No mostrar mensajes sin contenido
+      if (!msg.content || msg.content.trim() === '') return false;
+      
+      // Filtrar mensajes borrados - no mostrar mensajes que contengan "deleted" o estén marcados como borrados
+      const content = (msg.content || '').toLowerCase();
+      const isDeleted = 
+        content.includes('this message was deleted') ||
+        content.includes('mensaje eliminado') ||
+        content.includes('message was deleted') ||
+        msg.content_attributes?.deleted === true ||
+        msg.private === true ||
+        msg.deleted === true ||
+        msg.status === 'deleted';
+      
+      return !isDeleted;
+    });
 
-    console.log(`Found ${messages.length} total messages, ${realMessages.length} real messages`);
+    console.log(`Found ${messages.length} total messages, ${realMessages.length} real messages (${messages.length - realMessages.length} filtered)`);
 
     return NextResponse.json({
       success: true,

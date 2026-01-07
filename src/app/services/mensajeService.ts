@@ -185,6 +185,40 @@ export const actualizarPlantillaMensaje = async (
 };
 
 /**
+ * Actualiza la fecha programada de un mensaje
+ * @param id - ID del mensaje
+ * @param fechaProgramada - Nueva fecha y hora programada en formato ISO string
+ * @param tablaOrigen - Tabla de origen: 'cola_seguimientos' o 'cola_seguimientos_dos'
+ */
+export const actualizarFechaProgramada = async (
+  id: number,
+  fechaProgramada: string,
+  tablaOrigen?: string
+): Promise<boolean> => {
+  try {
+    const tabla = tablaOrigen || 'cola_seguimientos';
+    
+    // Convertir la fecha a formato timestamp sin timezone (formato que usa Supabase)
+    const fechaFormateada = fechaProgramada.replace('T', ' ').slice(0, 19);
+    
+    const { error } = await (getSupabase() as any)
+      .from(tabla)
+      .update({ fecha_programada: fechaFormateada })
+      .eq('id', id);
+    
+    if (error) {
+      console.error(`Error actualizando fecha programada del mensaje en ${tabla}:`, error.message);
+      return false;
+    }
+    
+    return true;
+  } catch (e) {
+    console.error('Exception actualizando fecha programada del mensaje:', e);
+    return false;
+  }
+};
+
+/**
  * Marca un mensaje como enviado
  */
 export const marcarMensajeEnviado = async (mensajeId: number): Promise<boolean> => {

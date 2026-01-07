@@ -16,6 +16,7 @@ const ChatConversation = ({ conversation, onBack }) => {
   const [isProgramandoSeguimiento, setIsProgramandoSeguimiento] = useState(false);
   const [seguimientosCount, setSeguimientosCount] = useState(0);
   const [seguimientoActivo, setSeguimientoActivo] = useState(null); // { id, tabla_origen }
+  const [deletingMessageId, setDeletingMessageId] = useState(null); // ID del mensaje que se está borrando
 
   // Cargar el lead cuando hay una conversación
   useEffect(() => {
@@ -318,6 +319,49 @@ const ChatConversation = ({ conversation, onBack }) => {
     return message.sender_type === 'User' || message.message_type === 1;
   };
 
+  // Función para borrar un mensaje
+  const deleteMessage = async (messageId) => {
+    if (!conversation?.id || !messageId) {
+      console.error('No se puede borrar: falta conversationId o messageId');
+      return;
+    }
+
+    // Confirmar antes de borrar
+    if (!confirm('¿Estás seguro de que quieres borrar este mensaje? Esta acción no se puede deshacer.')) {
+      return;
+    }
+
+    setDeletingMessageId(messageId);
+    
+    try {
+      const response = await fetch(`/api/chats/${conversation.id}/messages/${messageId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+      }
+
+      if (data.success) {
+        // Refrescar mensajes después de borrar para que desaparezca de la lista
+        await refreshMessages();
+        console.log('✅ Mensaje borrado exitosamente');
+      } else {
+        throw new Error(data.error || 'Failed to delete message');
+      }
+    } catch (err) {
+      console.error('Error deleting message:', err);
+      alert('Error al borrar el mensaje. Por favor, intenta de nuevo.');
+    } finally {
+      setDeletingMessageId(null);
+    }
+  };
+
   const groupMessagesByDate = (messages) => {
     const grouped = {};
     messages.forEach(message => {
@@ -445,7 +489,21 @@ const ChatConversation = ({ conversation, onBack }) => {
           </div>
         ) : (
           <div className="max-w-4xl mx-auto space-y-4">
-            {Object.entries(groupMessagesByDate(messages)).map(([date, dateMessages]) => (
+            {Object.entries(groupMessagesByDate(
+              // Filtrar mensajes borrados también en el componente por si acaso
+              messages.filter(msg => {
+                const content = (msg.content || '').toLowerCase();
+                return !(
+                  content.includes('this message was deleted') ||
+                  content.includes('mensaje eliminado') ||
+                  content.includes('message was deleted') ||
+                  msg.content_attributes?.deleted === true ||
+                  msg.private === true ||
+                  msg.deleted === true ||
+                  msg.status === 'deleted'
+                );
+              })
+            )).map(([date, dateMessages]) => (
               <div key={date}>
                 {/* Separador de fecha */}
                 <div className="flex justify-center my-4">
@@ -518,13 +576,25 @@ const ChatConversation = ({ conversation, onBack }) => {
                                          message.content_type || 
                                          'audio/ogg; codecs=opus'; // WhatsApp usa OGG Opus por defecto
                   
+                  const isDeleting = deletingMessageId === message.id;
+                  
                   return (
                     <div
                       key={message.id}
                       className={`flex ${isOutgoing(message) ? 'justify-end' : 'justify-start'} mb-2`}
+                      onDoubleClick={() => {
+                        // Solo permitir borrar con doble click
+                        if (!isDeleting) {
+                          deleteMessage(message.id);
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
+                      title="Doble click para borrar este mensaje"
                     >
                       <div
-                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg transition-opacity ${
+                          isDeleting ? 'opacity-50' : ''
+                        } ${
                           isOutgoing(message)
                             ? 'bg-green-500 text-white'
                             : 'bg-white border border-gray-200 text-gray-800'
@@ -662,25 +732,34 @@ const ChatConversation = ({ conversation, onBack }) => {
                   type="button"
                   onClick={handleToggleChat}
                   disabled={isTogglingChat || isLoadingLead}
-                  className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-colors shadow-sm ${
+                  className={`inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors shadow-sm ${
                     lead.estado_chat === 1
-                      ? 'bg-green-100 text-green-800 hover:bg-green-200 border border-green-300'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300'
+                      ? 'bg-green-500 text-white hover:bg-green-600 border border-green-600'
+                      : 'bg-red-500 text-white hover:bg-red-600 border border-red-600'
                   } ${isTogglingChat || isLoadingLead ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  title={lead.estado_chat === 1 ? 'Desactivar chat del lead' : 'Activar chat del lead'}
+                  title={lead.estado_chat === 1 ? 'Click para desactivar el chat' : 'Click para activar el chat'}
                 >
                   {isTogglingChat ? (
-                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-current"></div>
+                    <>
+                      <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>
+                      <span>Procesando...</span>
+                    </>
                   ) : (
                     <>
                       {lead.estado_chat === 1 ? (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
+                        <>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span>Chat Activo</span>
+                        </>
                       ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        <>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span>Chat Inactivo</span>
+                        </>
                       )}
                     </>
                   )}

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import AppLayout from '../components/AppLayout';
-import { getMensajesProgramados, eliminarMensajeProgramado, actualizarPlantillaMensaje, ColaSeguimiento } from '../services/mensajeService';
+import { getMensajesProgramados, eliminarMensajeProgramado, actualizarPlantillaMensaje, actualizarFechaProgramada, ColaSeguimiento } from '../services/mensajeService';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,6 +22,8 @@ export default function MensajesProgramadosPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
   const [updatingPlantilla, setUpdatingPlantilla] = useState<number | null>(null);
+  const [editingFecha, setEditingFecha] = useState<number | null>(null);
+  const [tempFecha, setTempFecha] = useState<string>('');
 
   useEffect(() => {
     loadMensajes();
@@ -81,6 +83,66 @@ export default function MensajesProgramadosPage() {
     } finally {
       setUpdatingPlantilla(null);
     }
+  };
+
+  const handleStartEditFecha = (mensaje: ColaSeguimiento) => {
+    if (!mensaje.id) return;
+    
+    const fechaProgramada = mensaje.fecha_programada || mensaje.scheduled_at;
+    if (fechaProgramada) {
+      // Convertir a formato datetime-local (YYYY-MM-DDTHH:mm)
+      const date = new Date(fechaProgramada);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      setTempFecha(`${year}-${month}-${day}T${hours}:${minutes}`);
+    } else {
+      // Si no hay fecha, usar la fecha actual
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      setTempFecha(`${year}-${month}-${day}T${hours}:${minutes}`);
+    }
+    setEditingFecha(mensaje.id);
+  };
+
+  const handleSaveFecha = async (mensajeId: number, tablaOrigen?: string) => {
+    if (!tempFecha) {
+      alert('Por favor ingresa una fecha y hora válida');
+      return;
+    }
+
+    try {
+      // Convertir el valor del input datetime-local a ISO string
+      const fechaISO = new Date(tempFecha).toISOString();
+      const success = await actualizarFechaProgramada(mensajeId, fechaISO, tablaOrigen);
+      
+      if (success) {
+        // Actualizar el mensaje en el estado local
+        setMensajes(mensajes.map(m => 
+          m.id === mensajeId 
+            ? { ...m, fecha_programada: fechaISO }
+            : m
+        ));
+        setEditingFecha(null);
+        setTempFecha('');
+      } else {
+        alert('Error al actualizar la fecha programada');
+      }
+    } catch (error) {
+      console.error('Error updating fecha:', error);
+      alert('Error al actualizar la fecha programada');
+    }
+  };
+
+  const handleCancelEditFecha = () => {
+    setEditingFecha(null);
+    setTempFecha('');
   };
 
   const formatDate = (dateString: string | undefined) => {
@@ -363,15 +425,46 @@ export default function MensajesProgramadosPage() {
                                           </Select>
                                         </div>
                                         
-                                        {/* Hora programada */}
-                                        {fechaProgramada && (
-                                          <div className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-blue-900">
+                                        {/* Hora programada - Editable */}
+                                        {editingFecha === mensaje.id ? (
+                                          <div className="space-y-1">
+                                            <input
+                                              type="datetime-local"
+                                              value={tempFecha}
+                                              onChange={(e) => setTempFecha(e.target.value)}
+                                              className="w-full px-2 py-1 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                              autoFocus
+                                            />
+                                            <div className="flex gap-1">
+                                              <button
+                                                onClick={() => mensaje.id && handleSaveFecha(mensaje.id, mensaje.tabla_origen)}
+                                                className="flex-1 px-2 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                                              >
+                                                Guardar
+                                              </button>
+                                              <button
+                                                onClick={handleCancelEditFecha}
+                                                className="flex-1 px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                                              >
+                                                Cancelar
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div 
+                                            className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-blue-900 cursor-pointer hover:bg-blue-100 transition-colors"
+                                            onClick={() => handleStartEditFecha(mensaje)}
+                                            title="Click para editar fecha y hora"
+                                          >
                                             <svg className="h-3 w-3 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                             </svg>
                                             <span className="text-xs font-semibold">
-                                              {formatTimeOnly(fechaProgramada)}
+                                              {fechaProgramada ? formatTimeOnly(fechaProgramada) : 'Sin fecha'}
                                             </span>
+                                            <svg className="h-3 w-3 text-blue-600 flex-shrink-0 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
                                           </div>
                                         )}
                                       </div>
@@ -511,16 +604,49 @@ export default function MensajesProgramadosPage() {
                                           </Select>
                                         </div>
                                         
-                                        {/* Hora programada */}
-                                        {fechaProgramada && (
-                                          <div className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-blue-900 mb-1">
-                                            <svg className="h-3 w-3 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                            <span className="text-xs font-semibold">
-                                              Programado: {formatTimeOnly(fechaProgramada)}
-                                            </span>
+                                        {/* Hora programada - Editable */}
+                                        {editingFecha === mensaje.id ? (
+                                          <div className="space-y-1 mb-1">
+                                            <input
+                                              type="datetime-local"
+                                              value={tempFecha}
+                                              onChange={(e) => setTempFecha(e.target.value)}
+                                              className="w-full px-2 py-1 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                              autoFocus
+                                            />
+                                            <div className="flex gap-1">
+                                              <button
+                                                onClick={() => mensaje.id && handleSaveFecha(mensaje.id, mensaje.tabla_origen)}
+                                                className="flex-1 px-2 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                                              >
+                                                Guardar
+                                              </button>
+                                              <button
+                                                onClick={handleCancelEditFecha}
+                                                className="flex-1 px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                                              >
+                                                Cancelar
+                                              </button>
+                                            </div>
                                           </div>
+                                        ) : (
+                                          fechaProgramada && (
+                                            <div 
+                                              className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-blue-900 mb-1 cursor-pointer hover:bg-blue-100 transition-colors"
+                                              onClick={() => handleStartEditFecha(mensaje)}
+                                              title="Click para editar fecha y hora"
+                                            >
+                                              <svg className="h-3 w-3 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                              </svg>
+                                              <span className="text-xs font-semibold">
+                                                Programado: {formatTimeOnly(fechaProgramada)}
+                                              </span>
+                                              <svg className="h-3 w-3 text-blue-600 flex-shrink-0 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                              </svg>
+                                            </div>
+                                          )
                                         )}
                                         
                                         {/* Hora enviado */}
