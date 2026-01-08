@@ -697,18 +697,31 @@ export const createLead = async (leadData: Partial<Lead>): Promise<Lead | null> 
  */
 export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promise<Lead | null> => {
   try {
-    console.log(`Updating lead ${leadId} in Supabase:`, leadData);
+    // Convertir leadId a número si es posible (la columna id en Supabase es serial/integer)
+    const leadIdNum = parseInt(leadId, 10);
+    const idToUse = isNaN(leadIdNum) ? leadId : leadIdNum;
+    
+    console.log(`Updating lead ${idToUse} (original: ${leadId}) in Supabase:`, leadData);
     
     // Primero obtener el lead actual para evaluar la calificación completa
     const { data: currentLead, error: fetchError } = await (getSupabase() as any)
       .from('leads')
       .select('*')
-      .eq('id', leadId)
+      .eq('id', idToUse)
       .single();
     
     if (fetchError) {
-      console.error('Error fetching current lead:', fetchError);
+      console.error('❌ Error fetching current lead:', fetchError);
+      console.error('❌ Lead ID usado:', idToUse);
+      return null;
     }
+    
+    if (!currentLead) {
+      console.error('❌ No se encontró el lead con ID:', idToUse);
+      return null;
+    }
+    
+    console.log('✅ Lead encontrado antes de actualizar:', currentLead);
     
     // Preparar datos para actualizar según la estructura real de la tabla
     const dataToUpdate: any = {};
@@ -760,7 +773,11 @@ export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promi
       dataToUpdate.notas = leadData.notas;
     }
     if (leadData.estado_chat !== undefined) {
-      dataToUpdate.estado_chat = leadData.estado_chat;
+      // Asegurar que estado_chat sea un número entero (0 o 1)
+      const estadoChatValue = leadData.estado_chat;
+      const estadoChatStr = String(estadoChatValue);
+      dataToUpdate.estado_chat = (estadoChatValue === 1 || estadoChatStr === '1') ? 1 : 0;
+      console.log(`📝 Actualizando estado_chat a: ${dataToUpdate.estado_chat} (tipo: ${typeof dataToUpdate.estado_chat})`);
     }
     
     // Solo recalificar automáticamente si el estado actual es inválido ('inicial' o 'activo')
@@ -786,23 +803,36 @@ export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promi
     // Actualizar ultima_interaccion
     dataToUpdate.ultima_interaccion = new Date().toISOString();
     
+    console.log('📝 Datos a actualizar:', dataToUpdate);
+    
     const { data, error } = await (getSupabase() as any)
       .from('leads')
       .update(dataToUpdate)
-      .eq('id', leadId)
+      .eq('id', idToUse)
       .select()
       .single();
     
     if (error) {
-      console.error('Error updating lead in Supabase:', error.message, error);
+      console.error('❌ Error updating lead in Supabase:', error.message, error);
+      console.error('❌ Lead ID usado:', idToUse);
+      console.error('❌ Datos que se intentaron actualizar:', dataToUpdate);
       return null;
     }
     
-    console.log('Successfully updated lead:', data);
+    if (!data) {
+      console.error('❌ No se retornó data después de actualizar');
+      return null;
+    }
+    
+    console.log('✅ Successfully updated lead:', data);
+    console.log('✅ estado_chat después de actualizar:', data.estado_chat);
     
     // Mapear y actualizar en el cache
     const updatedLead = mapLeadRow(data);
-    cachedLeads = cachedLeads.map(l => l.id === leadId ? updatedLead : l);
+    cachedLeads = cachedLeads.map(l => String(l.id) === String(leadId) ? updatedLead : l);
+    
+    console.log('✅ Lead mapeado y retornado:', updatedLead);
+    console.log('✅ estado_chat en lead mapeado:', updatedLead.estado_chat);
     
     return updatedLead;
   } catch (e) {

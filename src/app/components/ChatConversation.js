@@ -82,22 +82,70 @@ const ChatConversation = ({ conversation, onBack }) => {
 
   // Función para activar/desactivar el chat
   const handleToggleChat = async () => {
-    if (!lead) return;
+    if (!lead || !lead.id) {
+      console.error('❌ No hay lead o lead.id para actualizar');
+      return;
+    }
     
     setIsTogglingChat(true);
     try {
-      const newEstadoChat = lead.estado_chat === 1 ? 0 : 1;
-      const updatedLead = await updateLead(lead.id, { estado_chat: newEstadoChat });
+      // Manejar null, undefined, o cualquier valor que no sea 1 como inactivo (0)
+      const currentEstadoChat = (lead.estado_chat === 1 || lead.estado_chat === '1') ? 1 : 0;
+      const newEstadoChat = currentEstadoChat === 1 ? 0 : 1;
+      
+      console.log(`🔄 Cambiando estado_chat de ${currentEstadoChat} (actual: ${lead.estado_chat}) a ${newEstadoChat} para lead ID: ${lead.id}`);
+      console.log(`📋 Lead completo antes de actualizar:`, lead);
+      
+      // Asegurar que el ID sea string
+      const leadId = String(lead.id);
+      const updatedLead = await updateLead(leadId, { estado_chat: newEstadoChat });
       
       if (updatedLead) {
+        console.log(`✅ Lead actualizado exitosamente:`, updatedLead);
+        console.log(`✅ estado_chat en lead actualizado:`, updatedLead.estado_chat);
+        // Actualizar el estado local con el lead actualizado
         setLead(updatedLead);
         console.log(`✅ Chat ${newEstadoChat === 1 ? 'activado' : 'desactivado'} exitosamente`);
       } else {
-        alert('Error al actualizar el estado del chat');
+        console.error('❌ updateLead retornó null o undefined');
+        console.error('❌ Intentando recargar lead desde DB...');
+        
+        // Recargar todos los leads y buscar el correcto por whatsapp_id
+        const allLeads = await getAllLeads();
+        const phoneNumber = conversation?.enriched_phone_number || 
+                           conversation?.last_non_activity_message?.sender?.phone_number ||
+                           conversation?.contact?.phone_number ||
+                           conversation?.enriched_identifier?.replace('@s.whatsapp.net', '') ||
+                           null;
+        
+        console.log('📞 Número de teléfono encontrado:', phoneNumber);
+        
+        if (phoneNumber) {
+          // Normalizar: remover todo excepto dígitos, y remover el + si existe
+          const normalizedPhone = phoneNumber.replace(/[^\d]/g, '').replace(/^\+/, '');
+          console.log('📞 Número normalizado:', normalizedPhone);
+          
+          const foundLead = allLeads.find(l => {
+            // El whatsapp_id en la DB es como "5491133370937" sin el +
+            const leadPhone = String(l.whatsapp_id || l.telefono || '').replace(/[^\d]/g, '').replace(/^\+/, '');
+            console.log(`🔍 Comparando: "${leadPhone}" con "${normalizedPhone}"`);
+            return leadPhone === normalizedPhone;
+          });
+          
+          if (foundLead) {
+            console.log('✅ Lead encontrado y recargado desde DB:', foundLead);
+            console.log('✅ estado_chat del lead recargado:', foundLead.estado_chat);
+            setLead(foundLead);
+          } else {
+            console.error('❌ No se encontró el lead con el número:', normalizedPhone);
+            console.error('❌ Leads disponibles:', allLeads.map(l => ({ id: l.id, whatsapp_id: l.whatsapp_id })));
+          }
+        }
+        alert('Error al actualizar el estado del chat. Por favor, intenta de nuevo.');
       }
     } catch (error) {
-      console.error('Error toggling chat:', error);
-      alert('Error al actualizar el estado del chat');
+      console.error('❌ Error toggling chat:', error);
+      alert('Error al actualizar el estado del chat. Por favor, intenta de nuevo.');
     } finally {
       setIsTogglingChat(false);
     }
@@ -733,11 +781,11 @@ const ChatConversation = ({ conversation, onBack }) => {
                   onClick={handleToggleChat}
                   disabled={isTogglingChat || isLoadingLead}
                   className={`inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors shadow-sm ${
-                    lead.estado_chat === 1
+                    (lead.estado_chat === 1 || lead.estado_chat === '1')
                       ? 'bg-green-500 text-white hover:bg-green-600 border border-green-600'
                       : 'bg-red-500 text-white hover:bg-red-600 border border-red-600'
                   } ${isTogglingChat || isLoadingLead ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  title={lead.estado_chat === 1 ? 'Click para desactivar el chat' : 'Click para activar el chat'}
+                  title={(lead.estado_chat === 1 || lead.estado_chat === '1') ? 'Click para desactivar el chat' : 'Click para activar el chat'}
                 >
                   {isTogglingChat ? (
                     <>
@@ -746,7 +794,7 @@ const ChatConversation = ({ conversation, onBack }) => {
                     </>
                   ) : (
                     <>
-                      {lead.estado_chat === 1 ? (
+                      {(lead.estado_chat === 1 || lead.estado_chat === '1') ? (
                         <>
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
