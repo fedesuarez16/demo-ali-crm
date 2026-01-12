@@ -254,7 +254,10 @@ const mapLeadRow = (row: any): Lead => {
     updated_at: row.updated_at ?? undefined,
     seguimientos_count: row.seguimientos_count ?? 0,
     notas: row.notas ?? undefined,
-    estado_chat: row.estado_chat ?? undefined,
+    // Normalizar estado_chat: debe ser 0 o 1 (número entero)
+    // Si es null, undefined, 1 o '1', se considera 1 (activo por defecto)
+    // Solo si es explícitamente 0 o '0', se considera inactivo
+    estado_chat: (row.estado_chat === null || row.estado_chat === undefined || row.estado_chat === 1 || row.estado_chat === '1') ? 1 : 0,
   };
 };
 

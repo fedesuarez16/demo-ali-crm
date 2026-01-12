@@ -41,13 +41,28 @@ const ChatConversation = ({ conversation, onBack }) => {
         }
 
         const allLeads = await getAllLeads();
-        // Normalizar el número de teléfono para comparación
-        const normalizedPhone = phoneNumber.replace(/[^\d+]/g, '').replace(/^\+/, '');
+        // Normalizar el número de teléfono para comparación (solo dígitos, sin +)
+        const normalizedPhone = phoneNumber.replace(/[^\d]/g, '').replace(/^\+/, '');
+        console.log('📞 Buscando lead con número normalizado:', normalizedPhone);
         
         const foundLead = allLeads.find(l => {
-          const leadPhone = (l.telefono || l.whatsapp_id || '').replace(/[^\d+]/g, '').replace(/^\+/, '');
-          return leadPhone === normalizedPhone || leadPhone.includes(normalizedPhone) || normalizedPhone.includes(leadPhone);
+          // El whatsapp_id en la DB es como "5491133370937" sin el +
+          const leadPhone = String(l.whatsapp_id || l.telefono || '').replace(/[^\d]/g, '').replace(/^\+/, '');
+          const matches = leadPhone === normalizedPhone;
+          if (matches) {
+            console.log('✅ Lead encontrado:', { id: l.id, whatsapp_id: l.whatsapp_id, estado_chat: l.estado_chat });
+          }
+          return matches;
         }) || null;
+
+        if (foundLead) {
+          // Asegurar que estado_chat esté normalizado (0 o 1)
+          // Si es null, undefined, 1 o '1', se considera 1 (activo por defecto)
+          // Solo si es explícitamente 0 o '0', se considera inactivo
+          const normalizedEstadoChat = (foundLead.estado_chat === null || foundLead.estado_chat === undefined || foundLead.estado_chat === 1 || foundLead.estado_chat === '1') ? 1 : 0;
+          console.log(`📊 estado_chat del lead: ${foundLead.estado_chat} -> normalizado a: ${normalizedEstadoChat}`);
+          foundLead.estado_chat = normalizedEstadoChat;
+        }
 
         setLead(foundLead);
         if (foundLead) {
@@ -89,8 +104,9 @@ const ChatConversation = ({ conversation, onBack }) => {
     
     setIsTogglingChat(true);
     try {
-      // Manejar null, undefined, o cualquier valor que no sea 1 como inactivo (0)
-      const currentEstadoChat = (lead.estado_chat === 1 || lead.estado_chat === '1') ? 1 : 0;
+      // Manejar null, undefined, 1 o '1' como activo (1) por defecto
+      // Solo si es explícitamente 0 o '0', se considera inactivo
+      const currentEstadoChat = (lead.estado_chat === null || lead.estado_chat === undefined || lead.estado_chat === 1 || lead.estado_chat === '1') ? 1 : 0;
       const newEstadoChat = currentEstadoChat === 1 ? 0 : 1;
       
       console.log(`🔄 Cambiando estado_chat de ${currentEstadoChat} (actual: ${lead.estado_chat}) a ${newEstadoChat} para lead ID: ${lead.id}`);
@@ -103,6 +119,11 @@ const ChatConversation = ({ conversation, onBack }) => {
       if (updatedLead) {
         console.log(`✅ Lead actualizado exitosamente:`, updatedLead);
         console.log(`✅ estado_chat en lead actualizado:`, updatedLead.estado_chat);
+        // Normalizar estado_chat para asegurar que sea 0 o 1
+        // Si es null, undefined, 1 o '1', se considera 1 (activo por defecto)
+        const normalizedEstadoChat = (updatedLead.estado_chat === null || updatedLead.estado_chat === undefined || updatedLead.estado_chat === 1 || updatedLead.estado_chat === '1') ? 1 : 0;
+        updatedLead.estado_chat = normalizedEstadoChat;
+        console.log(`✅ estado_chat normalizado a: ${normalizedEstadoChat}`);
         // Actualizar el estado local con el lead actualizado
         setLead(updatedLead);
         console.log(`✅ Chat ${newEstadoChat === 1 ? 'activado' : 'desactivado'} exitosamente`);
@@ -135,6 +156,11 @@ const ChatConversation = ({ conversation, onBack }) => {
           if (foundLead) {
             console.log('✅ Lead encontrado y recargado desde DB:', foundLead);
             console.log('✅ estado_chat del lead recargado:', foundLead.estado_chat);
+            // Normalizar estado_chat para asegurar que sea 0 o 1
+            // Si es null, undefined, 1 o '1', se considera 1 (activo por defecto)
+            const normalizedEstadoChat = (foundLead.estado_chat === null || foundLead.estado_chat === undefined || foundLead.estado_chat === 1 || foundLead.estado_chat === '1') ? 1 : 0;
+            foundLead.estado_chat = normalizedEstadoChat;
+            console.log(`✅ estado_chat normalizado a: ${normalizedEstadoChat}`);
             setLead(foundLead);
           } else {
             console.error('❌ No se encontró el lead con el número:', normalizedPhone);
@@ -781,11 +807,11 @@ const ChatConversation = ({ conversation, onBack }) => {
                   onClick={handleToggleChat}
                   disabled={isTogglingChat || isLoadingLead}
                   className={`inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors shadow-sm ${
-                    (lead.estado_chat === 1 || lead.estado_chat === '1')
+                    lead.estado_chat === 1
                       ? 'bg-green-500 text-white hover:bg-green-600 border border-green-600'
                       : 'bg-red-500 text-white hover:bg-red-600 border border-red-600'
                   } ${isTogglingChat || isLoadingLead ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  title={(lead.estado_chat === 1 || lead.estado_chat === '1') ? 'Click para desactivar el chat' : 'Click para activar el chat'}
+                  title={lead.estado_chat === 1 ? 'Click para desactivar el chat' : 'Click para activar el chat'}
                 >
                   {isTogglingChat ? (
                     <>
@@ -794,7 +820,7 @@ const ChatConversation = ({ conversation, onBack }) => {
                     </>
                   ) : (
                     <>
-                      {(lead.estado_chat === 1 || lead.estado_chat === '1') ? (
+                      {lead.estado_chat === 1 ? (
                         <>
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
