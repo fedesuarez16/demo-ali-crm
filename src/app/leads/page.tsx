@@ -50,6 +50,8 @@ export default function LeadsKanbanPage() {
   const [selectedLeads, setSelectedLeads] = useState<Lead[]>([]);
   const [isAddingToSeguimientos, setIsAddingToSeguimientos] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedToque, setSelectedToque] = useState<number>(1);
+  const [showToqueSelector, setShowToqueSelector] = useState(false);
   
   // Estados para columnas personalizadas
   const [customColumns, setCustomColumns] = useState<string[]>([]);
@@ -278,7 +280,13 @@ export default function LeadsKanbanPage() {
       return;
     }
 
-    if (!confirm(`¿Agregar ${selectedLeads.length} lead(s) a la cola de seguimientos?`)) {
+    // Mostrar selector de toque si no se ha mostrado
+    if (!showToqueSelector) {
+      setShowToqueSelector(true);
+      return;
+    }
+
+    if (!confirm(`¿Agregar ${selectedLeads.length} lead(s) a la cola de seguimientos con toque ${selectedToque}?`)) {
       return;
     }
 
@@ -298,11 +306,11 @@ export default function LeadsKanbanPage() {
             continue;
           }
 
-          // Preparar datos del seguimiento
+          // Preparar datos del seguimiento con el toque seleccionado
           const seguimientoData: any = {
             remote_jid: remoteJid,
             tipo_lead: lead.estado || null,
-            seguimientos_count: (lead as any).seguimientos_count || 0
+            seguimientos_count: selectedToque // Usar el toque seleccionado
           };
 
           // Agregar fecha_ultima_interaccion si existe
@@ -321,9 +329,8 @@ export default function LeadsKanbanPage() {
 
           if (success) {
             successCount++;
-            // Incrementar el contador de seguimientos en el lead
-            const newCount = ((lead as any).seguimientos_count || 0) + 1;
-            await updateLead(lead.id, { seguimientos_count: newCount });
+            // Actualizar el contador de seguimientos en el lead con el toque seleccionado
+            await updateLead(lead.id, { seguimientos_count: selectedToque });
           } else {
             errorCount++;
           }
@@ -335,13 +342,15 @@ export default function LeadsKanbanPage() {
 
       // Mostrar resultado
       if (errorCount === 0) {
-        alert(`✅ ${successCount} lead(s) agregado(s) exitosamente a la cola de seguimientos`);
+        alert(`✅ ${successCount} lead(s) agregado(s) exitosamente a la cola de seguimientos con toque ${selectedToque}`);
       } else {
         alert(`⚠️ ${successCount} lead(s) agregado(s), ${errorCount} con error(es)`);
       }
 
-      // Limpiar selección
+      // Limpiar selección y resetear
       setSelectedLeads([]);
+      setShowToqueSelector(false);
+      setSelectedToque(1);
       
       // Recargar leads para actualizar los contadores
       const allLeads = await getAllLeads();
@@ -624,25 +633,53 @@ export default function LeadsKanbanPage() {
               ) : (
                 <>
                   {selectedLeads.length > 0 && (
-                    <button
-                      onClick={handleAddToSeguimientos}
-                      disabled={isAddingToSeguimientos}
-                      className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-semibold flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                    >
-                      {isAddingToSeguimientos ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Agregando...
-                        </>
-                      ) : (
-                        <>
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                          </svg>
-                          Agregar {selectedLeads.length} a seguimientos
-                        </>
+                    <div className="flex items-center gap-2">
+                      {showToqueSelector && (
+                        <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-md px-3 py-2">
+                          <label className="text-sm font-medium text-gray-700">Toque:</label>
+                          <select
+                            value={selectedToque}
+                            onChange={(e) => setSelectedToque(Number(e.target.value))}
+                            className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                          >
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                              <option key={num} value={num}>
+                                {num}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => {
+                              setShowToqueSelector(false);
+                              setSelectedToque(1);
+                            }}
+                            className="text-gray-500 hover:text-gray-700"
+                            title="Cancelar"
+                          >
+                            ✕
+                          </button>
+                        </div>
                       )}
-                    </button>
+                      <button
+                        onClick={handleAddToSeguimientos}
+                        disabled={isAddingToSeguimientos}
+                        className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-semibold flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                      >
+                        {isAddingToSeguimientos ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Agregando...
+                          </>
+                        ) : (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            {showToqueSelector ? `Agregar ${selectedLeads.length} con toque ${selectedToque}` : `Agregar ${selectedLeads.length} a seguimientos`}
+                          </>
+                        )}
+                      </button>
+                    </div>
                   )}
                 </>
               )}
