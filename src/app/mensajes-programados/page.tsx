@@ -66,14 +66,21 @@ export default function MensajesProgramadosPage() {
     setUpdatingPlantilla(mensajeId);
     try {
       const plantillaValue = plantilla === 'none' || plantilla === null ? null : plantilla;
-      const success = await actualizarPlantillaMensaje(mensajeId, plantillaValue, tablaOrigen);
-      if (success) {
-        // Actualizar el mensaje en el estado local
-        setMensajes(mensajes.map(m => 
-          m.id === mensajeId 
-            ? { ...m, plantilla: plantillaValue }
-            : m
-        ));
+      const result = await actualizarPlantillaMensaje(mensajeId, plantillaValue, tablaOrigen);
+      if (result.success) {
+        // Si se movió entre tablas, necesitamos recargar los mensajes
+        if (result.nuevaTabla && result.nuevaTabla !== tablaOrigen && result.nuevoId) {
+          console.log(`✅ Mensaje movido de ${tablaOrigen} a ${result.nuevaTabla}. Recargando mensajes...`);
+          // Recargar todos los mensajes para reflejar el cambio
+          await loadMensajes();
+        } else {
+          // Si solo se actualizó la plantilla sin mover, actualizar el estado local
+          setMensajes(mensajes.map(m => 
+            m.id === mensajeId 
+              ? { ...m, plantilla: plantillaValue }
+              : m
+          ));
+        }
       } else {
         alert('Error al actualizar la plantilla');
       }

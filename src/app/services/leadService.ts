@@ -262,6 +262,44 @@ const mapLeadRow = (row: any): Lead => {
 };
 
 /**
+ * Busca leads por término de búsqueda (nombre, teléfono, propiedad_interes)
+ * @param query - Término de búsqueda
+ * @returns Array de leads que coinciden con la búsqueda
+ */
+export const searchLeads = async (query: string): Promise<Lead[]> => {
+  try {
+    if (!query || query.trim().length === 0) {
+      return [];
+    }
+    
+    const searchTerm = query.trim();
+    
+    // Buscar en nombre, whatsapp_id, telefono, y propiedad_interes usando ilike
+    // Usar or() con formato: 'campo1.ilike.term,campo2.ilike.term'
+    const { data, error } = await getSupabase()
+      .from('leads')
+      .select('*')
+      .or(`nombre.ilike.%${searchTerm}%,whatsapp_id.ilike.%${searchTerm}%,propiedad_interes.ilike.%${searchTerm}%`)
+      .limit(100); // Limitar resultados para mejor rendimiento
+    
+    if (error) {
+      console.error('Error searching leads from Supabase:', error.message);
+      return [];
+    }
+    
+    const normalized: Lead[] = ((data as any[]) || []).map(mapLeadRow);
+    
+    // Sort desc by fechaContacto
+    normalized.sort((a, b) => new Date(b.fechaContacto).getTime() - new Date(a.fechaContacto).getTime());
+    
+    return normalized;
+  } catch (e) {
+    console.error('Exception searching leads:', e);
+    return [];
+  }
+};
+
+/**
  * Obtiene todos los leads disponibles
  */
 export const getAllLeads = async (): Promise<Lead[]> => {

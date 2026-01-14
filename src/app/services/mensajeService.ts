@@ -155,18 +155,115 @@ export const eliminarMensajeProgramado = async (id: number, tablaOrigen?: string
 };
 
 /**
+ * Mueve un mensaje de una tabla a otra
+ * @param id - ID del mensaje
+ * @param tablaOrigen - Tabla de origen: 'cola_seguimientos' o 'cola_seguimientos_dos'
+ * @param tablaDestino - Tabla de destino: 'cola_seguimientos' o 'cola_seguimientos_dos'
+ * @returns El nuevo ID del mensaje en la tabla destino, o null si falla
+ */
+export const moverMensajeEntreTablas = async (
+  id: number,
+  tablaOrigen: string,
+  tablaDestino: string
+): Promise<number | null> => {
+  try {
+    // Leer el mensaje de la tabla origen
+    const { data: mensajeData, error: errorRead } = await (getSupabase() as any)
+      .from(tablaOrigen)
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (errorRead || !mensajeData) {
+      console.error(`Error leyendo mensaje de ${tablaOrigen}:`, errorRead?.message);
+      return null;
+    }
+    
+    // Preparar datos para insertar (sin el ID para que genere uno nuevo)
+    const { id: _, created_at: __, updated_at: ___, ...dataToInsert } = mensajeData;
+    
+    // Insertar en la tabla destino
+    const { data: newMensaje, error: errorInsert } = await (getSupabase() as any)
+      .from(tablaDestino)
+      .insert([dataToInsert])
+      .select()
+      .single();
+    
+    if (errorInsert || !newMensaje) {
+      console.error(`Error insertando mensaje en ${tablaDestino}:`, errorInsert?.message);
+      return null;
+    }
+    
+    // Eliminar de la tabla origen
+    const { error: errorDelete } = await (getSupabase() as any)
+      .from(tablaOrigen)
+      .delete()
+      .eq('id', id);
+    
+    if (errorDelete) {
+      console.error(`Error eliminando mensaje de ${tablaOrigen}:`, errorDelete?.message);
+      // Intentar revertir: eliminar el mensaje insertado en la tabla destino
+      await (getSupabase() as any)
+        .from(tablaDestino)
+        .delete()
+        .eq('id', newMensaje.id);
+      return null;
+    }
+    
+    console.log(`✅ Mensaje movido de ${tablaOrigen} a ${tablaDestino}. ID anterior: ${id}, ID nuevo: ${newMensaje.id}`);
+    return newMensaje.id;
+  } catch (e) {
+    console.error('Exception moviendo mensaje entre tablas:', e);
+    return null;
+  }
+};
+
+/**
  * Actualiza la plantilla de un mensaje programado
+ * Si la plantilla requiere estar en otra tabla, mueve el mensaje automáticamente
  * @param id - ID del mensaje
  * @param plantilla - Nombre de la plantilla a asignar (puede ser null para quitar la plantilla)
  * @param tablaOrigen - Tabla de origen: 'cola_seguimientos' o 'cola_seguimientos_dos'
+ * @returns Objeto con { success: boolean, nuevaTabla?: string, nuevoId?: number }
  */
 export const actualizarPlantillaMensaje = async (
   id: number, 
   plantilla: string | null, 
   tablaOrigen?: string
-): Promise<boolean> => {
+): Promise<{ success: boolean; nuevaTabla?: string; nuevoId?: number }> => {
   try {
     const tabla = tablaOrigen || 'cola_seguimientos';
+    
+    // Determinar en qué tabla debe estar según la plantilla
+    // toque_2_frio → debe estar en cola_seguimientos_dos
+    // Cualquier otra plantilla o sin plantilla → debe estar en cola_seguimientos
+    const tablaDestino = plantilla === 'toque_2_frio' ? 'cola_seguimientos_dos' : 'cola_seguimientos';
+    
+    // Si necesita moverse a otra tabla
+    if (tabla !== tablaDestino) {
+      console.log(`🔄 Moviendo mensaje de ${tabla} a ${tablaDestino} para plantilla ${plantilla}`);
+      const nuevoId = await moverMensajeEntreTablas(id, tabla, tablaDestino);
+      
+      if (!nuevoId) {
+        console.error('❌ Error moviendo mensaje entre tablas');
+        return { success: false };
+      }
+      
+      // Actualizar la plantilla en la nueva tabla
+      const { error } = await (getSupabase() as any)
+        .from(tablaDestino)
+        .update({ plantilla: plantilla })
+        .eq('id', nuevoId);
+      
+      if (error) {
+        console.error(`Error actualizando plantilla del mensaje en ${tablaDestino}:`, error.message);
+        return { success: false };
+      }
+      
+      return { success: true, nuevaTabla: tablaDestino, nuevoId };
+    }
+    
+    // Si ya está en la tabla correcta, solo actualizar la plantilla
     const { error } = await (getSupabase() as any)
       .from(tabla)
       .update({ plantilla: plantilla })
@@ -174,13 +271,13 @@ export const actualizarPlantillaMensaje = async (
     
     if (error) {
       console.error(`Error actualizando plantilla del mensaje en ${tabla}:`, error.message);
-      return false;
+      return { success: false };
     }
     
-    return true;
+    return { success: true, nuevaTabla: tabla };
   } catch (e) {
     console.error('Exception actualizando plantilla del mensaje:', e);
-    return false;
+    return { success: false };
   }
 };
 

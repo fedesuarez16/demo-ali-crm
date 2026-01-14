@@ -12,8 +12,10 @@ import {
   getUniqueStatuses,
   getUniquePropertyTypes,
   getUniqueInterestReasons,
-  getUniquePropertyInterests
+  getUniquePropertyInterests,
+  updateLead
 } from '../../services/leadService';
+import { programarSeguimiento } from '../../services/mensajeService';
 import { exportLeadsToCSV } from '../../utils/exportUtils';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
@@ -51,6 +53,10 @@ export default function LeadsTablePage() {
   const [customColumns, setCustomColumns] = useState<string[]>([]);
   const [isAddColumnModalVisible, setIsAddColumnModalVisible] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
+  
+  // Estado para selección múltiple
+  const [selectedLeads, setSelectedLeads] = useState<Lead[]>([]);
+  const [isAddingToSeguimientos, setIsAddingToSeguimientos] = useState(false);
   
   // Normalizar todas las columnas para evitar "Fríos"
   const allColumns = ['frío', 'tibio', 'caliente', 'llamada', 'visita', ...customColumns]
@@ -270,6 +276,114 @@ export default function LeadsTablePage() {
     }
   };
 
+  const handleSelectionChange = (leads: Lead[]) => {
+    setSelectedLeads(leads);
+  };
+
+  const handleAddToSeguimientos = async () => {
+    if (selectedLeads.length === 0) {
+      alert('❌ Por favor selecciona al menos un lead');
+      return;
+    }
+
+    if (!confirm(`¿Agregar ${selectedLeads.length} lead(s) a la cola de seguimientos?`)) {
+      return;
+    }
+
+    setIsAddingToSeguimientos(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      for (const lead of selectedLeads) {
+        try {
+          // Obtener número de teléfono del lead
+          const remoteJid = (lead as any).whatsapp_id || lead.telefono || '';
+          
+          if (!remoteJid) {
+            console.warn(`Lead ${lead.id} no tiene número de teléfono`);
+            errorCount++;
+            continue;
+          }
+
+          // Preparar datos del seguimiento
+          const seguimientoData: any = {
+            remote_jid: remoteJid,
+            tipo_lead: lead.estado || null,
+            seguimientos_count: (lead as any).seguimientos_count || 0
+          };
+
+          // Agregar fecha_ultima_interaccion si existe
+          if ((lead as any).ultima_interaccion) {
+            seguimientoData.fecha_ultima_interaccion = (lead as any).ultima_interaccion;
+          } else if (lead.fechaContacto) {
+            seguimientoData.fecha_ultima_interaccion = lead.fechaContacto;
+          }
+
+          // Agregar chatwoot_conversation_id si existe
+          if ((lead as any).chatwoot_conversation_id) {
+            seguimientoData.chatwoot_conversation_id = (lead as any).chatwoot_conversation_id;
+          }
+
+          const success = await programarSeguimiento(seguimientoData);
+
+          if (success) {
+            successCount++;
+            // Incrementar el contador de seguimientos en el lead
+            const newCount = ((lead as any).seguimientos_count || 0) + 1;
+            await updateLead(lead.id, { seguimientos_count: newCount });
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          console.error(`Error agregando lead ${lead.id} a seguimientos:`, error);
+          errorCount++;
+        }
+      }
+
+      // Mostrar resultado
+      if (errorCount === 0) {
+        alert(`✅ ${successCount} lead(s) agregado(s) exitosamente a la cola de seguimientos`);
+      } else {
+        alert(`⚠️ ${successCount} lead(s) agregado(s), ${errorCount} con error(es)`);
+      }
+
+      // Limpiar selección
+      setSelectedLeads([]);
+      
+      // Recargar leads para actualizar los contadores
+      const allLeads = await getAllLeads();
+      const normalizedLeads = allLeads.map(lead => {
+        const estado = lead.estado as string;
+        if (estado) {
+          const estadoLower = estado.toLowerCase().trim();
+          if (estadoLower === 'fríos' || estadoLower === 'frios') {
+            return { ...lead, estado: 'frío' as any };
+          }
+          if (estadoLower === 'tibios') {
+            return { ...lead, estado: 'tibio' as any };
+          }
+          if (estadoLower === 'calientes') {
+            return { ...lead, estado: 'caliente' as any };
+          }
+          if (estadoLower === 'llamadas') {
+            return { ...lead, estado: 'llamada' as any };
+          }
+          if (estadoLower === 'visitas') {
+            return { ...lead, estado: 'visita' as any };
+          }
+        }
+        return lead;
+      });
+      setLeads(normalizedLeads);
+    } catch (error) {
+      console.error('Error agregando leads a seguimientos:', error);
+      alert('❌ Error al agregar leads a la cola de seguimientos');
+    } finally {
+      setIsAddingToSeguimientos(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <AppLayout>
@@ -407,6 +521,39 @@ export default function LeadsTablePage() {
               </div>
             </div>
             <div className="flex space-x-3">
+              {selectedLeads.length > 0 && (
+                <button
+                  onClick={handleAddToSeguimientos}
+                  disabled={isAddingToSeguimientos}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-semibold flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                >
+                  {isAddingToSeguimientos ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Agregando...
+                    </>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Agregar {selectedLeads.length} a seguimientos
+                    </>
+                  )}
+                </button>
+              )}
+              {selectedLeads.length > 0 && (
+                <button
+                  onClick={() => setSelectedLeads([])}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-md text-sm font-medium flex items-center justify-center"
+                  title="Deseleccionar todos"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Limpiar
+                </button>
+              )}
               <button
                 onClick={() => setIsAddColumnModalVisible(true)}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-sm font-medium flex items-center justify-center"
@@ -593,7 +740,9 @@ export default function LeadsTablePage() {
                 const normalized = normalizeColumnName(col);
                 return normalized !== 'fríos' && normalized !== 'frios' && col !== 'fríos' && col !== 'frios';
               })
-            } 
+            }
+            onSelectionChange={handleSelectionChange}
+            selectedLeadIds={new Set(selectedLeads.map(l => l.id))}
           />
         </div>
 

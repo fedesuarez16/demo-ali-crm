@@ -21,6 +21,7 @@ import {
 } from '../services/leadService';
 import { exportLeadsToCSV } from '../utils/exportUtils';
 import { getKanbanColumns, saveKanbanColumns, migrateColumnsFromLocalStorage } from '../services/columnService';
+import { programarSeguimiento } from '../services/mensajeService';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 
@@ -44,6 +45,11 @@ export default function LeadsKanbanPage() {
   // Estados para el sidebar de edición
   const [isEditSidebarOpen, setIsEditSidebarOpen] = useState(false);
   const [leadToEdit, setLeadToEdit] = useState<Lead | null>(null);
+  
+  // Estado para selección múltiple
+  const [selectedLeads, setSelectedLeads] = useState<Lead[]>([]);
+  const [isAddingToSeguimientos, setIsAddingToSeguimientos] = useState(false);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
   
   // Estados para columnas personalizadas
   const [customColumns, setCustomColumns] = useState<string[]>([]);
@@ -260,6 +266,92 @@ export default function LeadsKanbanPage() {
   const handleCloseEditSidebar = () => {
     setIsEditSidebarOpen(false);
     setLeadToEdit(null);
+  };
+
+  const handleSelectionChange = (leads: Lead[]) => {
+    setSelectedLeads(leads);
+  };
+
+  const handleAddToSeguimientos = async () => {
+    if (selectedLeads.length === 0) {
+      alert('❌ Por favor selecciona al menos un lead');
+      return;
+    }
+
+    if (!confirm(`¿Agregar ${selectedLeads.length} lead(s) a la cola de seguimientos?`)) {
+      return;
+    }
+
+    setIsAddingToSeguimientos(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      for (const lead of selectedLeads) {
+        try {
+          // Obtener número de teléfono del lead
+          const remoteJid = (lead as any).whatsapp_id || lead.telefono || '';
+          
+          if (!remoteJid) {
+            console.warn(`Lead ${lead.id} no tiene número de teléfono`);
+            errorCount++;
+            continue;
+          }
+
+          // Preparar datos del seguimiento
+          const seguimientoData: any = {
+            remote_jid: remoteJid,
+            tipo_lead: lead.estado || null,
+            seguimientos_count: (lead as any).seguimientos_count || 0
+          };
+
+          // Agregar fecha_ultima_interaccion si existe
+          if ((lead as any).ultima_interaccion) {
+            seguimientoData.fecha_ultima_interaccion = (lead as any).ultima_interaccion;
+          } else if (lead.fechaContacto) {
+            seguimientoData.fecha_ultima_interaccion = lead.fechaContacto;
+          }
+
+          // Agregar chatwoot_conversation_id si existe
+          if ((lead as any).chatwoot_conversation_id) {
+            seguimientoData.chatwoot_conversation_id = (lead as any).chatwoot_conversation_id;
+          }
+
+          const success = await programarSeguimiento(seguimientoData);
+
+          if (success) {
+            successCount++;
+            // Incrementar el contador de seguimientos en el lead
+            const newCount = ((lead as any).seguimientos_count || 0) + 1;
+            await updateLead(lead.id, { seguimientos_count: newCount });
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          console.error(`Error agregando lead ${lead.id} a seguimientos:`, error);
+          errorCount++;
+        }
+      }
+
+      // Mostrar resultado
+      if (errorCount === 0) {
+        alert(`✅ ${successCount} lead(s) agregado(s) exitosamente a la cola de seguimientos`);
+      } else {
+        alert(`⚠️ ${successCount} lead(s) agregado(s), ${errorCount} con error(es)`);
+      }
+
+      // Limpiar selección
+      setSelectedLeads([]);
+      
+      // Recargar leads para actualizar los contadores
+      const allLeads = await getAllLeads();
+      setLeads(allLeads);
+    } catch (error) {
+      console.error('Error agregando leads a seguimientos:', error);
+      alert('❌ Error al agregar leads a la cola de seguimientos');
+    } finally {
+      setIsAddingToSeguimientos(false);
+    }
   };
 
   // Funciones para manejar columnas personalizadas
@@ -519,6 +611,41 @@ export default function LeadsKanbanPage() {
               </div>
             </div>
             <div className="flex space-x-2">
+              {!isSelectionMode ? (
+                <button
+                  onClick={() => setIsSelectionMode(true)}
+                  className="bg-black hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-semibold flex items-center justify-center shadow-sm"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  Seleccionar
+                </button>
+              ) : (
+                <>
+                  {selectedLeads.length > 0 && (
+                    <button
+                      onClick={handleAddToSeguimientos}
+                      disabled={isAddingToSeguimientos}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-semibold flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                    >
+                      {isAddingToSeguimientos ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Agregando...
+                        </>
+                      ) : (
+                        <>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          Agregar {selectedLeads.length} a seguimientos
+                        </>
+                      )}
+                    </button>
+                  )}
+                </>
+              )}
               <AgentStatusToggle className="py-1 px-2 text-sm" />
               
               <button
@@ -692,6 +819,15 @@ export default function LeadsKanbanPage() {
               onEditLead={handleOpenEditLead}
               visibleColumns={visibleColumns.filter(col => col !== 'frío' && col !== 'fríos' && col !== 'frios')}
               columnColors={columnColors}
+              onSelectionChange={handleSelectionChange}
+              selectedLeadIds={new Set(selectedLeads.map(l => l.id))}
+              isSelectionMode={isSelectionMode}
+              onSelectionModeChange={(enabled) => {
+                setIsSelectionMode(enabled);
+                if (!enabled) {
+                  setSelectedLeads([]);
+                }
+              }}
             />
           </div>
         </div>

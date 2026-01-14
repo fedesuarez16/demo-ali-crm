@@ -9,13 +9,26 @@ interface LeadCardsProps {
   onEditLead?: (lead: Lead) => void;
   visibleColumns?: string[];
   columnColors?: Record<string, string>;
+  onSelectionChange?: (selectedLeads: Lead[]) => void;
+  selectedLeadIds?: Set<string>;
+  isSelectionMode?: boolean;
+  onSelectionModeChange?: (enabled: boolean) => void;
 }
 
-const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEditLead, visibleColumns, columnColors = {} }) => {
+const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEditLead, visibleColumns, columnColors = {}, onSelectionChange, selectedLeadIds: externalSelectedIds, isSelectionMode: externalIsSelectionMode, onSelectionModeChange }) => {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [matchingProperties, setMatchingProperties] = useState<Map<string, Property[]>>(new Map());
   const [isDraggingOver, setIsDraggingOver] = useState<Record<string, boolean>>({});
+  const [internalSelectedIds, setInternalSelectedIds] = useState<Set<string>>(new Set());
+  const [internalIsSelectionMode, setInternalIsSelectionMode] = useState(false);
+  
+  // Usar selectedLeadIds si viene como prop, sino usar el estado interno
+  const isControlled = !!externalSelectedIds;
+  const selectedIds = externalSelectedIds || internalSelectedIds;
+  
+  // Usar isSelectionMode si viene como prop, sino usar el estado interno
+  const isSelectionMode = externalIsSelectionMode !== undefined ? externalIsSelectionMode : internalIsSelectionMode;
   
   // Función para normalizar estados (convertir "Fríos" a "frío", etc.)
   const normalizeEstado = (estado: string | undefined): string => {
@@ -243,6 +256,58 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
     setShowSidebar(true);
   };
 
+  const handleToggleSelection = (lead: Lead) => {
+    const newSelectedIds = new Set(selectedIds);
+    
+    if (newSelectedIds.has(lead.id)) {
+      newSelectedIds.delete(lead.id);
+    } else {
+      newSelectedIds.add(lead.id);
+    }
+    
+    // Si es controlado externamente, solo notificar. Si no, actualizar estado interno
+    if (!isControlled) {
+      setInternalSelectedIds(newSelectedIds);
+    }
+    
+    // Notificar al padre sobre la selección
+    if (onSelectionChange) {
+      const selectedLeads = leads.filter(l => newSelectedIds.has(l.id));
+      onSelectionChange(selectedLeads);
+    }
+  };
+
+  const handleSelectAll = () => {
+    const newSelectedIds = new Set(selectedIds);
+    leads.forEach(lead => {
+      newSelectedIds.add(lead.id);
+    });
+    
+    if (!isControlled) {
+      setInternalSelectedIds(newSelectedIds);
+    }
+    
+    if (onSelectionChange) {
+      onSelectionChange(leads);
+    }
+  };
+
+  const handleDeselectAll = () => {
+    const newSelectedIds = new Set<string>();
+    
+    if (!isControlled) {
+      setInternalSelectedIds(newSelectedIds);
+    }
+    
+    if (onSelectionChange) {
+      onSelectionChange([]);
+    }
+  };
+  
+  // Calcular si todos los leads visibles están seleccionados
+  const allVisibleLeadsSelected = leads.length > 0 && leads.every(lead => selectedIds.has(lead.id));
+  const someLeadsSelected = leads.some(lead => selectedIds.has(lead.id));
+
   const closeSidebar = () => {
     setShowSidebar(false);
     setSelectedLead(null);
@@ -380,8 +445,69 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
     return [...statusOrder, ...customColumns];
   }, [statusOrder, groupedLeads]);
 
+  const handleToggleSelectionMode = () => {
+    const newMode = !isSelectionMode;
+    if (externalIsSelectionMode === undefined) {
+      setInternalIsSelectionMode(newMode);
+    }
+    if (onSelectionModeChange) {
+      onSelectionModeChange(newMode);
+    }
+    // Si se desactiva el modo de selección, limpiar selección
+    if (!newMode) {
+      handleDeselectAll();
+    }
+  };
+
   return (
     <>
+      {/* Barra de selección múltiple - SOLO VISIBLE EN MODO SELECCIÓN */}
+      {isSelectionMode && (
+        <div className="mb-3 px-4 py-2.5 bg-gradient-to-r from-indigo-50 to-blue-50 border-2 border-indigo-400 rounded-lg flex items-center justify-between shadow-md">
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={allVisibleLeadsSelected}
+              onChange={() => {
+                if (allVisibleLeadsSelected) {
+                  handleDeselectAll();
+                } else {
+                  handleSelectAll();
+                }
+              }}
+              className="h-5 w-5 rounded border-2 border-gray-500 text-indigo-600 focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+              style={{ 
+                width: '20px', 
+                height: '20px',
+                minWidth: '20px', 
+                minHeight: '20px',
+                accentColor: '#4f46e5',
+                cursor: 'pointer'
+              }}
+            />
+            <span className="text-sm font-bold text-gray-900">
+              {selectedIds.size > 0 ? `✓ ${selectedIds.size} lead(s) seleccionado(s)` : '☐ Seleccionar todos los leads'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {selectedIds.size > 0 && (
+              <button
+                onClick={handleDeselectAll}
+                className="text-xs text-indigo-700 hover:text-indigo-900 font-bold px-3 py-1.5 rounded-md hover:bg-indigo-200 transition-colors border border-indigo-300"
+              >
+                ✕ Deseleccionar todos
+              </button>
+            )}
+            <button
+              onClick={handleToggleSelectionMode}
+              className="text-xs text-gray-700 hover:text-gray-900 font-bold px-3 py-1.5 rounded-md hover:bg-gray-200 transition-colors border border-gray-300"
+            >
+              ✕ Cancelar selección
+            </button>
+          </div>
+        </div>
+      )}
+      
       <div className="w-full  overflow-x-auto pb-1">
         <div className="flex gap-2 min-w-max pr-2">
           {allColumnsToShow.map((status) => (
@@ -420,6 +546,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                     <>
                       {groupedLeads[status].map((lead: Lead) => {
                         const matchCount = matchingProperties.get(lead.id)?.length || 0;
+                        const isSelected = selectedIds.has(lead.id);
                         
                         return (
                           <div
@@ -427,8 +554,19 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                             draggable
                             onDragStart={(e) => handleDragStart(e, lead)}
                             onDragEnd={handleDragEnd}
-                            className={`relative rounded-xl border-l-4 border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer bg-white/90 backdrop-blur ${getStatusColor(lead.estado)}`}
-                            onClick={(e) => handleLeadClick(lead, e)}
+                            className={`relative rounded-xl border-l-4 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer bg-white/90 backdrop-blur ${
+                              isSelected 
+                                ? 'border-indigo-600 ring-2 ring-indigo-400' 
+                                : 'border-slate-200'
+                            } ${getStatusColor(lead.estado)}`}
+                            onClick={(e) => {
+                              // Si se clickea en el checkbox, no abrir el sidebar
+                              const target = e.target as HTMLElement;
+                              if (target.tagName === 'INPUT' && target.getAttribute('type') === 'checkbox') {
+                                return;
+                              }
+                              handleLeadClick(lead, e);
+                            }}
                           >
                             {/* Contadores absolutos - esquina superior derecha */}
                             {matchCount > 0 && (
@@ -464,7 +602,34 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                               </div>
                             )}
                             
-                            <div className="p-2 max-w-[150px] space-y-1.5">
+                            {/* CHECKBOX - SOLO VISIBLE EN MODO SELECCIÓN */}
+                            {isSelectionMode && (
+                              <div 
+                                className="absolute top-2 left-2 z-50"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleSelection(lead);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="h-5 w-5 rounded border-2 border-gray-500 cursor-pointer"
+                                  style={{ 
+                                    width: '20px', 
+                                    height: '20px',
+                                    minWidth: '20px', 
+                                    minHeight: '20px',
+                                    cursor: 'pointer',
+                                    accentColor: '#4f46e5'
+                                  } as React.CSSProperties}
+                                />
+                              </div>
+                            )}
+                            
+                            <div className={`p-2 max-w-[150px] space-y-1.5 ${isSelectionMode ? 'pl-8' : ''}`}>
                               <div className="pr-6">
                                 <h4 className="text-xs font-semibold text-slate-900 leading-tight truncate">
                                   {(() => {

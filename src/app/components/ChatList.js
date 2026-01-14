@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useChats } from '../../hooks/useChats';
-import { getAllLeads, updateLead } from '../services/leadService';
+import { getAllLeads, updateLead, searchLeads } from '../services/leadService';
 
 const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
   // Obtener chats sin filtrar por agente (mostrar todas las conversaciones)
@@ -14,6 +14,8 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
   
   // Estado para la búsqueda
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchedLeads, setSearchedLeads] = useState([]);
+  const [isSearchingLeads, setIsSearchingLeads] = useState(false);
   
   // Estado para rastrear qué chats han sido leídos (usando localStorage para persistencia)
   // Guardamos el timestamp del último mensaje visto para detectar nuevos mensajes
@@ -451,6 +453,217 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
     return leadsMap[normalizedChatPhone] || null;
   };
   
+  // Función para detectar si el query es un número de teléfono
+  const isPhoneNumber = (query) => {
+    const cleaned = query.replace(/[\s\-\(\)\+]/g, '');
+    return /^\d+$/.test(cleaned) && cleaned.length >= 6;
+  };
+
+  // Estado para almacenar chats encontrados por búsqueda
+  const [searchedChats, setSearchedChats] = useState([]);
+  const [isSearchingChats, setIsSearchingChats] = useState(false);
+
+  // Función para cargar más chats y luego buscar
+  const searchChatsByPhoneNumbers = async (phoneNumbers) => {
+    if (!phoneNumbers || phoneNumbers.length === 0) {
+      return [];
+    }
+
+    console.log('🔍 Buscando chats para números:', phoneNumbers);
+    const normalizedPhones = phoneNumbers.map(p => normalizePhoneNumber(p)).filter(Boolean);
+    console.log('  Números normalizados:', normalizedPhones);
+
+    const phonesToFind = new Set(normalizedPhones);
+    const foundChats = [];
+    const maxPagesToLoad = 20; // Cargar hasta 20 páginas (1000 chats)
+
+    try {
+      // Primero cargar más chats
+      console.log('📥 Cargando chats para búsqueda...');
+      const allLoadedChats = [];
+      
+      for (let page = 1; page <= maxPagesToLoad && phonesToFind.size > 0; page++) {
+        const response = await fetch(`/api/chats?page=${page}&per_page=50&assignee_id=all&status=all`);
+        
+        if (!response.ok) {
+          console.warn(`⚠️ Error en página ${page}:`, response.status);
+          break;
+        }
+
+        const data = await response.json();
+        
+        if (!data.success || !data.data || data.data.length === 0) {
+          console.log(`📄 No hay más datos en página ${page}`);
+          break;
+        }
+
+        console.log(`📥 Página ${page}: Cargados ${data.data.length} chats`);
+        allLoadedChats.push(...data.data);
+
+        // IGNORAR lo que dice la API sobre paginación y continuar cargando
+        // Solo detener si recibimos 0 resultados
+        const receivedCount = data.data.length;
+        const requestedPerPage = 50;
+        
+        // Si recibimos 0 resultados, definitivamente no hay más
+        if (receivedCount === 0) {
+          console.log(`📄 No hay más datos (recibidos 0)`);
+          break;
+        }
+        
+        // Si recibimos menos de 50, puede que haya más, intentar al menos 2 páginas más
+        if (receivedCount < requestedPerPage) {
+          // Si es la primera página y recibimos menos de 50, continuar al menos 2 páginas más
+          if (page === 1 && receivedCount < requestedPerPage) {
+            console.log(`📄 Página 1: Recibidos ${receivedCount} < ${requestedPerPage}, pero continuando al menos 2 páginas más...`);
+            continue;
+          }
+          // Si ya intentamos varias páginas y seguimos recibiendo menos, puede que realmente no haya más
+          // Pero intentar al menos hasta la página 5
+          if (page < 5) {
+            console.log(`📄 Página ${page}: Recibidos ${receivedCount} < ${requestedPerPage}, pero continuando hasta página 5...`);
+            continue;
+          }
+          // Después de la página 5, si recibimos menos de 50, detener
+          if (page >= 5 && receivedCount < requestedPerPage) {
+            console.log(`📄 Después de página 5, recibidos ${receivedCount} < ${requestedPerPage}, deteniendo`);
+            break;
+          }
+        }
+        
+        // Si recibimos exactamente 50, definitivamente hay más
+        if (receivedCount === requestedPerPage) {
+          console.log(`➡️ Recibidos ${receivedCount} chats, continuando a página ${page + 1}...`);
+        }
+      }
+
+      console.log(`📊 Total de chats cargados: ${allLoadedChats.length}`);
+
+      // Ahora buscar entre todos los chats cargados
+      allLoadedChats.forEach(chat => {
+        const chatPhone = getChatPhoneNumber(chat);
+        if (chatPhone) {
+          const normalizedChatPhone = normalizePhoneNumber(chatPhone);
+          
+          // Verificar coincidencia exacta
+          if (phonesToFind.has(normalizedChatPhone)) {
+            if (!foundChats.find(c => c.id === chat.id)) {
+              console.log(`✅ Chat encontrado (exacto): ${chat.id} para número ${normalizedChatPhone}`);
+              foundChats.push(chat);
+              phonesToFind.delete(normalizedChatPhone);
+            }
+          } else {
+            // Verificar coincidencia parcial
+            const phonesArray = Array.from(phonesToFind);
+            for (const searchPhone of phonesArray) {
+              // Comparación por últimos dígitos
+              const minLength = Math.min(normalizedChatPhone.length, searchPhone.length);
+              if (minLength >= 8) {
+                const lastDigits1 = normalizedChatPhone.slice(-Math.min(10, normalizedChatPhone.length));
+                const lastDigits2 = searchPhone.slice(-Math.min(10, searchPhone.length));
+                if (lastDigits1 === lastDigits2) {
+                  if (!foundChats.find(c => c.id === chat.id)) {
+                    console.log(`✅ Chat encontrado (últimos dígitos): ${chat.id} - Chat: ${normalizedChatPhone} vs Buscado: ${searchPhone}`);
+                    foundChats.push(chat);
+                    phonesToFind.delete(searchPhone);
+                    break;
+                  }
+                }
+              }
+              
+              // Comparación por inclusión
+              if (normalizedChatPhone.includes(searchPhone) || searchPhone.includes(normalizedChatPhone)) {
+                if (!foundChats.find(c => c.id === chat.id)) {
+                  console.log(`✅ Chat encontrado (inclusión): ${chat.id} - Chat: ${normalizedChatPhone} vs Buscado: ${searchPhone}`);
+                  foundChats.push(chat);
+                  phonesToFind.delete(searchPhone);
+                  break;
+                }
+              }
+            }
+          }
+        }
+      });
+
+      console.log(`🎯 Total de chats encontrados: ${foundChats.length}`);
+      if (phonesToFind.size > 0) {
+        console.log(`⚠️ Números no encontrados:`, Array.from(phonesToFind));
+      }
+
+      return foundChats;
+    } catch (error) {
+      console.error('❌ Error searching chats by phone numbers:', error);
+      return [];
+    }
+  };
+
+  // Efecto para buscar leads y chats cuando cambia el query de búsqueda
+  useEffect(() => {
+    const performSearch = async () => {
+      if (!searchQuery.trim()) {
+        setSearchedLeads([]);
+        setSearchedChats([]);
+        return;
+      }
+      
+      const query = searchQuery.trim();
+      const queryIsPhone = isPhoneNumber(query);
+      
+      // Buscar leads
+      setIsSearchingLeads(true);
+      let leadsResults = [];
+      try {
+        leadsResults = await searchLeads(query);
+        setSearchedLeads(leadsResults);
+      } catch (error) {
+        console.error('Error searching leads:', error);
+        setSearchedLeads([]);
+      } finally {
+        setIsSearchingLeads(false);
+      }
+      
+      // Buscar chats directamente si es un número de teléfono o si encontramos leads
+      if (queryIsPhone || leadsResults.length > 0) {
+        setIsSearchingChats(true);
+        try {
+          const phoneNumbers = [];
+          
+          // Si es un número, agregarlo directamente
+          if (queryIsPhone) {
+            phoneNumbers.push(query);
+          }
+          
+          // Agregar números de los leads encontrados
+          leadsResults.forEach(lead => {
+            const phone = lead.telefono || lead.whatsapp_id || '';
+            if (phone) {
+              phoneNumbers.push(phone);
+            }
+          });
+          
+          // Buscar chats por estos números
+          if (phoneNumbers.length > 0) {
+            const foundChats = await searchChatsByPhoneNumbers(phoneNumbers);
+            setSearchedChats(foundChats);
+          } else {
+            setSearchedChats([]);
+          }
+        } catch (error) {
+          console.error('Error searching chats:', error);
+          setSearchedChats([]);
+        } finally {
+          setIsSearchingChats(false);
+        }
+      } else {
+        setSearchedChats([]);
+      }
+    };
+    
+    // Debounce la búsqueda para evitar demasiadas llamadas
+    const timeoutId = setTimeout(performSearch, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
   // Función para filtrar chats basado en la búsqueda
   const filterChats = (chatsList) => {
     if (!searchQuery.trim()) {
@@ -459,7 +672,8 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
     
     const query = searchQuery.toLowerCase().trim();
     
-    return chatsList.filter(chat => {
+    // Primero filtrar por chats cargados (búsqueda local)
+    const localMatches = chatsList.filter(chat => {
       // Buscar en nombre del contacto
       const name = getContactName(chat);
       if (name && name.toLowerCase().includes(query)) {
@@ -486,6 +700,42 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
       
       return false;
     });
+    
+    return localMatches;
+  };
+
+
+  // Función para obtener chats que coinciden con leads buscados
+  const getMatchingChatsForSearchedLeads = () => {
+    // Primero buscar en chats ya cargados
+    const localMatches = [];
+    if (searchedLeads.length > 0) {
+      searchedLeads.forEach(lead => {
+        const leadPhone = normalizePhoneNumber(lead.telefono || lead.whatsapp_id || '');
+        if (leadPhone) {
+          const matchingChat = chats.find(chat => {
+            const chatPhone = getChatPhoneNumber(chat);
+            if (!chatPhone) return false;
+            const normalizedChatPhone = normalizePhoneNumber(chatPhone);
+            return normalizedChatPhone === leadPhone;
+          });
+          
+          if (matchingChat && !localMatches.find(c => c.id === matchingChat.id)) {
+            localMatches.push(matchingChat);
+          }
+        }
+      });
+    }
+    
+    // Combinar con chats encontrados en la búsqueda
+    const allMatches = [...localMatches];
+    searchedChats.forEach(chat => {
+      if (!allMatches.find(c => c.id === chat.id)) {
+        allMatches.push(chat);
+      }
+    });
+    
+    return allMatches;
   };
   
   // Componente de menú desplegable con acciones del chat
@@ -792,8 +1042,14 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
     }).format(date);
   };
   
-  // Chats filtrados (definir antes de los early returns)
-  const filteredChats = filterChats(chats);
+  // Obtener chats que coinciden con leads buscados
+  const matchingChatsFromSearch = getMatchingChatsForSearchedLeads();
+  
+  // Combinar chats locales filtrados con chats encontrados en la búsqueda de leads
+  const localFilteredChats = filterChats(chats);
+  const allFilteredChats = searchQuery.trim() && (searchedLeads.length > 0 || matchingChatsFromSearch.length > 0)
+    ? [...new Map([...localFilteredChats, ...matchingChatsFromSearch].map(chat => [chat.id, chat])).values()]
+    : localFilteredChats;
 
   if (loading) {
     return (
@@ -853,7 +1109,10 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
         <div className="flex justify-between items-center mb-2">
           <div>
             <h2 className="text-sm font-semibold text-gray-800">
-              Chats de WhatsApp ({searchQuery ? filteredChats.length : chats.length})
+              Chats de WhatsApp ({searchQuery ? allFilteredChats.length : chats.length})
+              {(isSearchingLeads || isSearchingChats) && searchQuery.trim() && (
+                <span className="text-xs text-gray-500 ml-2">Buscando...</span>
+              )}
             </h2>
           </div>
           <button 
@@ -900,16 +1159,33 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
 
       {/* Lista de chats - scrolleable */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {filteredChats.length === 0 && searchQuery ? (
+        {allFilteredChats.length === 0 && searchQuery ? (
           <div className="text-center py-8">
-            <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <p className="text-gray-500 text-sm">No se encontraron chats</p>
-            <p className="text-gray-400 text-xs mt-1">Intenta con otros términos de búsqueda</p>
+            {(isSearchingLeads || isSearchingChats) ? (
+              <>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-3"></div>
+                <p className="text-gray-500 text-sm">Buscando en la base de datos...</p>
+                {isSearchingChats && (
+                  <p className="text-gray-400 text-xs mt-1">Buscando chats en Chatwoot...</p>
+                )}
+              </>
+            ) : (
+              <>
+                <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <p className="text-gray-500 text-sm">No se encontraron chats</p>
+                <p className="text-gray-400 text-xs mt-1">Intenta con otros términos de búsqueda</p>
+                {searchedLeads.length > 0 && (
+                  <p className="text-gray-400 text-xs mt-1">
+                    Se encontraron {searchedLeads.length} lead(s) pero no tienen chat asociado
+                  </p>
+                )}
+              </>
+            )}
           </div>
         ) : (
-          filteredChats.map((chat) => {
+          allFilteredChats.map((chat) => {
           const isRead = isChatRead(chat);
           const isSelected = selectedChat?.id === chat.id;
           

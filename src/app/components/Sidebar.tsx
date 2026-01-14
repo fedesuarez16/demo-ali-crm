@@ -25,27 +25,28 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
   // En mobile, la sidebar debe estar cerrada por defecto
   // En desktop, abierta por defecto
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.innerWidth < 1024; // lg breakpoint - cerrada en mobile, abierta en desktop
-    }
-    return true; // Por defecto cerrada (mobile-first)
-  });
+  // Usar true por defecto para evitar problemas de hidratación (mobile-first)
+  const [collapsed, setCollapsed] = useState(true);
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   
   // Ajustar según el tamaño de la ventana solo al montar (una sola vez)
   useEffect(() => {
     // Solo ejecutar al montar para establecer el estado inicial correcto
+    setMounted(true);
     if (typeof window !== 'undefined') {
       const isDesktop = window.innerWidth >= 1024;
       if (isDesktop) {
         // En desktop, abrir sidebar
         setCollapsed(false);
         if (onCollapse) onCollapse(false);
+      } else {
+        // En mobile, mantener cerrada
+        setCollapsed(true);
+        if (onCollapse) onCollapse(true);
       }
-      // En mobile, ya está cerrada por defecto (collapsed = true)
     }
-  }, []); // Solo ejecutar al montar - sin dependencias para evitar loops
+  }, [onCollapse]); // Solo ejecutar al montar
 
   const menuCategories: MenuCategory[] = [
     {
@@ -189,7 +190,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
       </button>
 
       {/* Overlay para cerrar sidebar en mobile */}
-      {!collapsed && (
+      {mounted && !collapsed && (
         <div
           className="lg:hidden fixed inset-0 bg-black/50 z-[90]"
           onClick={() => {
