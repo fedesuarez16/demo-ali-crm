@@ -303,6 +303,63 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
       onSelectionChange([]);
     }
   };
+
+  const handleSelectByStatus = (status: string) => {
+    // Obtener todos los leads de este estado
+    const leadsInStatus = groupedLeads[status] || [];
+    const newSelectedIds = new Set(selectedIds);
+    
+    // Agregar todos los leads de este estado a la selección
+    leadsInStatus.forEach(lead => {
+      newSelectedIds.add(lead.id);
+    });
+    
+    // Si es controlado externamente, solo notificar. Si no, actualizar estado interno
+    if (!isControlled) {
+      setInternalSelectedIds(newSelectedIds);
+    }
+    
+    // Notificar al padre sobre la selección
+    if (onSelectionChange) {
+      const selectedLeads = leads.filter(l => newSelectedIds.has(l.id));
+      onSelectionChange(selectedLeads);
+    }
+  };
+
+  const handleDeselectByStatus = (status: string) => {
+    // Obtener todos los leads de este estado
+    const leadsInStatus = groupedLeads[status] || [];
+    const newSelectedIds = new Set(selectedIds);
+    
+    // Remover todos los leads de este estado de la selección
+    leadsInStatus.forEach(lead => {
+      newSelectedIds.delete(lead.id);
+    });
+    
+    // Si es controlado externamente, solo notificar. Si no, actualizar estado interno
+    if (!isControlled) {
+      setInternalSelectedIds(newSelectedIds);
+    }
+    
+    // Notificar al padre sobre la selección
+    if (onSelectionChange) {
+      const selectedLeads = leads.filter(l => newSelectedIds.has(l.id));
+      onSelectionChange(selectedLeads);
+    }
+  };
+
+  // Verificar si todos los leads de un estado están seleccionados
+  const areAllLeadsInStatusSelected = (status: string) => {
+    const leadsInStatus = groupedLeads[status] || [];
+    if (leadsInStatus.length === 0) return false;
+    return leadsInStatus.every(lead => selectedIds.has(lead.id));
+  };
+
+  // Verificar si algunos leads de un estado están seleccionados
+  const areSomeLeadsInStatusSelected = (status: string) => {
+    const leadsInStatus = groupedLeads[status] || [];
+    return leadsInStatus.some(lead => selectedIds.has(lead.id));
+  };
   
   // Calcular si todos los leads visibles están seleccionados
   const allVisibleLeadsSelected = leads.length > 0 && leads.every(lead => selectedIds.has(lead.id));
@@ -406,7 +463,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
     if (!isDragging) return 'bg-transparent';
     
     // Color más visible cuando se arrastra sobre la columna
-    return 'bg-indigo-50 border-2 border-dashed border-indigo-300';
+    return 'bg-blackborder-2 border-dashed border-black';
   };
 
   const getStatusBorderColor = (status: string) => {
@@ -463,7 +520,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
     <>
       {/* Barra de selección múltiple - SOLO VISIBLE EN MODO SELECCIÓN */}
       {isSelectionMode && (
-        <div className="mb-3 px-4 py-2.5 bg-gradient-to-r from-indigo-50 to-blue-50 border-2 border-indigo-400 rounded-lg flex items-center justify-between shadow-md">
+        <div className="mb-3 px-4 py-2.5 bg-gradient-to-r from-gray-50 to-blue-50 border-2 border-gray-400 rounded-lg flex items-center justify-between shadow-md">
           <div className="flex items-center gap-3">
             <input
               type="checkbox"
@@ -475,7 +532,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                   handleSelectAll();
                 }
               }}
-              className="h-5 w-5 rounded border-2 border-gray-500 text-indigo-600 focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+              className="h-5 w-5 rounded border-2 border-gray-500 text-black focus:ring-2 focus:ring-black cursor-pointer"
               style={{ 
                 width: '20px', 
                 height: '20px',
@@ -493,7 +550,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
             {selectedIds.size > 0 && (
               <button
                 onClick={handleDeselectAll}
-                className="text-xs text-indigo-700 hover:text-indigo-900 font-bold px-3 py-1.5 rounded-md hover:bg-indigo-200 transition-colors border border-indigo-300"
+                className="text-xs text-black hover:text-black font-bold px-3 py-1.5 rounded-md hover:bg-black transition-colors border border-black"
               >
                 ✕ Deseleccionar todos
               </button>
@@ -523,9 +580,33 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                 <h3 className="text-xs font-semibold text-slate-700">
                   {getStatusTitle(status)}
                 </h3>
-                <span className={` items-center px-1.5 py-0.5 rounded-xl text-[10px] border ${getStatusBorderColor(status).split(' ')[0]} text-slate-500`}>
-                  {groupedLeads[status].length}
-                </span>
+                <div className="flex items-center gap-2">
+                  {isSelectionMode && groupedLeads[status].length > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (areAllLeadsInStatusSelected(status)) {
+                          handleDeselectByStatus(status);
+                        } else {
+                          handleSelectByStatus(status);
+                        }
+                      }}
+                      className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                        areAllLeadsInStatusSelected(status)
+                          ? 'bg-black text-white border-black'
+                          : areSomeLeadsInStatusSelected(status)
+                          ? 'bg-gray-200 text-gray-700 border-gray-400'
+                          : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
+                      }`}
+                      title={areAllLeadsInStatusSelected(status) ? 'Deseleccionar todos' : 'Seleccionar todos'}
+                    >
+                      {areAllLeadsInStatusSelected(status) ? '✓ Todos' : '☐ Todos'}
+                    </button>
+                  )}
+                  <span className={` items-center px-1.5 py-0.5 rounded-xl text-[10px] border ${getStatusBorderColor(status).split(' ')[0]} text-slate-500`}>
+                    {groupedLeads[status].length}
+                  </span>
+                </div>
               </div>
               
               {/* Área de drop que cubre toda la altura */}
@@ -556,7 +637,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                             onDragEnd={handleDragEnd}
                             className={`relative rounded-xl border-l-4 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer bg-white/90 backdrop-blur ${
                               isSelected 
-                                ? 'border-indigo-600 ring-2 ring-indigo-400' 
+                                ? 'border-black ring-2 ring-black' 
                                 : 'border-slate-200'
                             } ${getStatusColor(lead.estado)}`}
                             onClick={(e) => {

@@ -77,7 +77,7 @@ export default function NewPropertyPage() {
         <h1 className="text-2xl font-bold text-gray-800">Nueva Propiedad</h1>
         <Link 
           href="/propiedades" 
-          className="text-indigo-600 hover:text-indigo-800 font-medium"
+          className="text-black hover:text-blac font-medium"
         >
           Volver a propiedades
         </Link>
