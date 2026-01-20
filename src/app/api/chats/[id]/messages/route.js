@@ -30,9 +30,26 @@ export async function GET(request, { params }) {
       );
     }
 
+    // Obtener parámetros de query para paginación
+    const { searchParams } = new URL(request.url);
+    const before = searchParams.get('before'); // ID del mensaje más antiguo que queremos obtener
+    const after = searchParams.get('after'); // ID del mensaje más reciente que queremos obtener
+
     // Construir URL de la API de Chatwoot para mensajes
     const baseUrl = chatwootUrl.endsWith('/') ? chatwootUrl.slice(0, -1) : chatwootUrl;
-    const apiUrl = `${baseUrl}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`;
+    let apiUrl = `${baseUrl}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`;
+    
+    // Agregar parámetros de paginación si existen
+    const queryParams = [];
+    if (before) {
+      queryParams.push(`before=${before}`);
+    }
+    if (after) {
+      queryParams.push(`after=${after}`);
+    }
+    if (queryParams.length > 0) {
+      apiUrl += `?${queryParams.join('&')}`;
+    }
     
     console.log('Fetching messages from:', apiUrl);
 

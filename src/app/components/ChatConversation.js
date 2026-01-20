@@ -6,7 +6,7 @@ import { updateLead, getAllLeads } from '../services/leadService';
 import { programarSeguimiento, getSeguimientosPendientes, eliminarMensajeProgramado } from '../services/mensajeService';
 
 const ChatConversation = ({ conversation, onBack }) => {
-  const { messages, loading, error, refreshMessages, sendMessage } = useChatMessages(conversation?.id);
+  const { messages, loading, loadingMore, error, hasMore, refreshMessages, loadMoreMessages, sendMessage } = useChatMessages(conversation?.id);
   const messagesEndRef = useRef(null);
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
@@ -563,6 +563,34 @@ const ChatConversation = ({ conversation, onBack }) => {
           </div>
         ) : (
           <div className="max-w-4xl mx-auto space-y-4">
+            {/* Botón para cargar más mensajes antiguos */}
+            {hasMore && (
+              <div className="flex justify-center py-2">
+                <button
+                  onClick={loadMoreMessages}
+                  disabled={loadingMore}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    loadingMore
+                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300 shadow-sm'
+                  }`}
+                >
+                  {loadingMore ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                      <span>Cargando mensajes antiguos...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                      </svg>
+                      <span>Cargar mensajes antiguos</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
             {Object.entries(groupMessagesByDate(
               // Filtrar mensajes borrados también en el componente por si acaso
               messages.filter(msg => {

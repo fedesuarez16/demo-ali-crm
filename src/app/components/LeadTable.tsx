@@ -178,7 +178,7 @@ const LeadTable: React.FC<LeadTableProps> = ({ leads, visibleColumns, onSelectio
       >
         <div className="flex items-start gap-3">
           {/* CHECKBOX - SIEMPRE VISIBLE Y GRANDE - FORZAR VISIBILIDAD */}
-          <div className="flex-shrink-0" style={{ width: '240px', height: '24px' }}>
+          <div className="flex-shrink-0" style={{ width: '24px', height: '24px' }}>
             <input
               type="checkbox"
               checked={isSelected}

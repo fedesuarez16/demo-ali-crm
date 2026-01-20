@@ -232,7 +232,23 @@ export default function MensajesProgramadosPage() {
   };
 
   // Separar mensajes por estado
-  const mensajesPendientes = mensajes.filter(m => m.estado === 'pendiente');
+  // Filtrar mensajes pendientes: solo los programados para hoy en adelante
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0); // Inicio del día de hoy
+  
+  const mensajesPendientes = mensajes.filter(m => {
+    if (m.estado !== 'pendiente') return false;
+    
+    const fechaProgramada = m.fecha_programada || m.scheduled_at;
+    if (!fechaProgramada) return true; // Si no tiene fecha, mostrarlo (sin-fecha)
+    
+    const fechaMensaje = new Date(fechaProgramada);
+    fechaMensaje.setHours(0, 0, 0, 0); // Inicio del día de la fecha programada
+    
+    // Solo incluir si la fecha es hoy o en el futuro
+    return fechaMensaje >= hoy;
+  });
+  
   const mensajesEnviados = mensajes.filter(m => m.estado === 'enviado');
 
   // Agrupar mensajes pendientes por día
