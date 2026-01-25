@@ -325,13 +325,15 @@ export default function LeadsTablePage() {
             seguimientoData.chatwoot_conversation_id = (lead as any).chatwoot_conversation_id;
           }
 
-          const success = await programarSeguimiento(seguimientoData);
+          const result = await programarSeguimiento(seguimientoData);
 
-          if (success) {
+          if (result.success) {
             successCount++;
-            // Incrementar el contador de seguimientos en el lead
-            const newCount = ((lead as any).seguimientos_count || 0) + 1;
-            await updateLead(lead.id, { seguimientos_count: newCount });
+            // Solo incrementar el contador si se creó un nuevo seguimiento (no si se actualizó uno existente)
+            if (!result.actualizado) {
+              const newCount = ((lead as any).seguimientos_count || 0) + 1;
+              await updateLead(lead.id, { seguimientos_count: newCount });
+            }
           } else {
             errorCount++;
           }

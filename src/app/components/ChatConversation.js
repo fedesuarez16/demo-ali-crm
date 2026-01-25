@@ -231,19 +231,23 @@ const ChatConversation = ({ conversation, onBack }) => {
         seguimientoData.chatwoot_conversation_id = conversation.id;
       }
       
-      const success = await programarSeguimiento(seguimientoData);
+      const result = await programarSeguimiento(seguimientoData);
 
-      if (success) {
-        alert('✅ Seguimiento programado exitosamente para dentro de 23 horas');
-        // Incrementar el contador de seguimientos
-        const newCount = (seguimientosCount || 0) + 1;
-        setSeguimientosCount(newCount);
-        // Actualizar en la base de datos
-        const updatedLead = await updateLead(lead.id, { seguimientos_count: newCount });
-        if (updatedLead) {
-          setLead(updatedLead);
+      if (result.success) {
+        if (result.actualizado) {
+          alert('✅ Seguimiento actualizado exitosamente (fecha programada modificada)');
+        } else {
+          alert('✅ Seguimiento programado exitosamente para dentro de 23 horas');
+          // Solo incrementar el contador si se creó un nuevo seguimiento (no si se actualizó uno existente)
+          const newCount = (seguimientosCount || 0) + 1;
+          setSeguimientosCount(newCount);
+          // Actualizar en la base de datos
+          const updatedLead = await updateLead(lead.id, { seguimientos_count: newCount });
+          if (updatedLead) {
+            setLead(updatedLead);
+          }
         }
-        // Recargar seguimientos pendientes para actualizar el estado
+        // Recargar seguimientos pendientes para actualizar el estado en ambos casos
         const seguimientos = await getSeguimientosPendientes(remoteJid);
         if (seguimientos.length > 0) {
           setSeguimientoActivo({

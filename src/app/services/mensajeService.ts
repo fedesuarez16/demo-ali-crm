@@ -180,7 +180,13 @@ export const moverMensajeEntreTablas = async (
     }
     
     // Preparar datos para insertar (sin el ID para que genere uno nuevo)
+    // Preservar TODOS los campos incluyendo chatwoot_conversation_id
     const { id: _, created_at: __, updated_at: ___, ...dataToInsert } = mensajeData;
+    
+    // Log para verificar que chatwoot_conversation_id se preserve
+    if (mensajeData.chatwoot_conversation_id) {
+      console.log(`📋 Preservando chatwoot_conversation_id: ${mensajeData.chatwoot_conversation_id} al mover mensaje`);
+    }
     
     // Insertar en la tabla destino
     const { data: newMensaje, error: errorInsert } = await (getSupabase() as any)
@@ -192,6 +198,11 @@ export const moverMensajeEntreTablas = async (
     if (errorInsert || !newMensaje) {
       console.error(`Error insertando mensaje en ${tablaDestino}:`, errorInsert?.message);
       return null;
+    }
+    
+    // Verificar que chatwoot_conversation_id se preservó
+    if (mensajeData.chatwoot_conversation_id && newMensaje.chatwoot_conversation_id !== mensajeData.chatwoot_conversation_id) {
+      console.warn(`⚠️ chatwoot_conversation_id no se preservó correctamente. Original: ${mensajeData.chatwoot_conversation_id}, Nuevo: ${newMensaje.chatwoot_conversation_id}`);
     }
     
     // Eliminar de la tabla origen
@@ -219,8 +230,26 @@ export const moverMensajeEntreTablas = async (
 };
 
 /**
+ * Extrae el número del toque de una plantilla
+ * @param plantilla - Nombre de la plantilla (ej: 'toque_1_frio', 'toque_2_tibio', 'toque_3_tibio')
+ * @returns El número del toque (1, 2, o 3) o null si no se puede determinar
+ */
+const extraerNumeroToque = (plantilla: string | null): number | null => {
+  if (!plantilla) return null;
+  
+  // Buscar el patrón "toque_X_" donde X es el número
+  const match = plantilla.match(/toque_(\d+)_/);
+  if (match && match[1]) {
+    return parseInt(match[1], 10);
+  }
+  
+  return null;
+};
+
+/**
  * Actualiza la plantilla de un mensaje programado
  * Si la plantilla requiere estar en otra tabla, mueve el mensaje automáticamente
+ * También actualiza el seguimientos_count en cola_seguimientos según el número del toque
  * @param id - ID del mensaje
  * @param plantilla - Nombre de la plantilla a asignar (puede ser null para quitar la plantilla)
  * @param tablaOrigen - Tabla de origen: 'cola_seguimientos' o 'cola_seguimientos_dos'
@@ -239,9 +268,33 @@ export const actualizarPlantillaMensaje = async (
     // Cualquier otra plantilla o sin plantilla → debe estar en cola_seguimientos
     const tablaDestino = plantilla === 'toque_2_frio' ? 'cola_seguimientos_dos' : 'cola_seguimientos';
     
+    // Calcular seguimientos_count basado en el número del toque
+    // Toque 1 → seguimientos_count = 0
+    // Toque 2 → seguimientos_count = 1
+    // Toque 3 → seguimientos_count = 2
+    const numeroToque = extraerNumeroToque(plantilla);
+    const seguimientosCount = numeroToque !== null ? numeroToque - 1 : null;
+    
+    // Preparar los datos a actualizar
+    // IMPORTANTE: Solo actualizar plantilla y seguimientos_count
+    // NO tocar otros campos como chatwoot_conversation_id
+    const datosActualizacion: any = { plantilla: plantilla };
+    
+    // Solo actualizar seguimientos_count si estamos en cola_seguimientos
+    // y tenemos un número de toque válido
+    if (tablaDestino === 'cola_seguimientos' && seguimientosCount !== null) {
+      datosActualizacion.seguimientos_count = seguimientosCount;
+      console.log(`📊 Actualizando seguimientos_count a ${seguimientosCount} para toque ${numeroToque}`);
+    }
+    
+    // Log para debugging - verificar qué campos se van a actualizar
+    console.log(`🔄 Campos a actualizar:`, Object.keys(datosActualizacion));
+    
     // Si necesita moverse a otra tabla
     if (tabla !== tablaDestino) {
       console.log(`🔄 Moviendo mensaje de ${tabla} a ${tablaDestino} para plantilla ${plantilla}`);
+      
+      // Mover el mensaje entre tablas (esto preserva todos los campos incluyendo chatwoot_conversation_id)
       const nuevoId = await moverMensajeEntreTablas(id, tabla, tablaDestino);
       
       if (!nuevoId) {
@@ -249,10 +302,22 @@ export const actualizarPlantillaMensaje = async (
         return { success: false };
       }
       
-      // Actualizar la plantilla en la nueva tabla
+      // Verificar que el mensaje movido tenga chatwoot_conversation_id antes de actualizar
+      const { data: mensajeMovido, error: errorRead } = await (getSupabase() as any)
+        .from(tablaDestino)
+        .select('chatwoot_conversation_id, plantilla')
+        .eq('id', nuevoId)
+        .single();
+      
+      if (mensajeMovido?.chatwoot_conversation_id) {
+        console.log(`✅ chatwoot_conversation_id preservado después de mover: ${mensajeMovido.chatwoot_conversation_id}`);
+      }
+      
+      // Actualizar solo la plantilla y seguimientos_count en la nueva tabla
+      // No tocar otros campos como chatwoot_conversation_id
       const { error } = await (getSupabase() as any)
         .from(tablaDestino)
-        .update({ plantilla: plantilla })
+        .update(datosActualizacion)
         .eq('id', nuevoId);
       
       if (error) {
@@ -260,13 +325,27 @@ export const actualizarPlantillaMensaje = async (
         return { success: false };
       }
       
+      // Verificar que chatwoot_conversation_id sigue presente después de actualizar
+      const { data: mensajeActualizado, error: errorReadAfter } = await (getSupabase() as any)
+        .from(tablaDestino)
+        .select('chatwoot_conversation_id')
+        .eq('id', nuevoId)
+        .single();
+      
+      if (mensajeMovido?.chatwoot_conversation_id && !mensajeActualizado?.chatwoot_conversation_id) {
+        console.error(`❌ ERROR: chatwoot_conversation_id se perdió después de actualizar! Era: ${mensajeMovido.chatwoot_conversation_id}`);
+      } else if (mensajeActualizado?.chatwoot_conversation_id) {
+        console.log(`✅ chatwoot_conversation_id preservado después de actualizar: ${mensajeActualizado.chatwoot_conversation_id}`);
+      }
+      
       return { success: true, nuevaTabla: tablaDestino, nuevoId };
     }
     
-    // Si ya está en la tabla correcta, solo actualizar la plantilla
+    // Si ya está en la tabla correcta, actualizar solo la plantilla y seguimientos_count
+    // No tocar otros campos como chatwoot_conversation_id
     const { error } = await (getSupabase() as any)
       .from(tabla)
-      .update({ plantilla: plantilla })
+      .update(datosActualizacion)
       .eq('id', id);
     
     if (error) {
@@ -284,7 +363,7 @@ export const actualizarPlantillaMensaje = async (
 /**
  * Actualiza la fecha programada de un mensaje
  * @param id - ID del mensaje
- * @param fechaProgramada - Nueva fecha y hora programada en formato ISO string
+ * @param fechaProgramada - Nueva fecha y hora programada (puede ser ISO string o formato "YYYY-MM-DD HH:mm:ss")
  * @param tablaOrigen - Tabla de origen: 'cola_seguimientos' o 'cola_seguimientos_dos'
  */
 export const actualizarFechaProgramada = async (
@@ -295,8 +374,29 @@ export const actualizarFechaProgramada = async (
   try {
     const tabla = tablaOrigen || 'cola_seguimientos';
     
-    // Convertir la fecha a formato timestamp sin timezone (formato que usa Supabase)
-    const fechaFormateada = fechaProgramada.replace('T', ' ').slice(0, 19);
+    // Si ya está en formato "YYYY-MM-DD HH:mm:ss", usarlo directamente
+    // Si está en formato ISO (con 'T' o con 'Z'), convertirlo
+    let fechaFormateada: string;
+    
+    if (fechaProgramada.includes('T')) {
+      // Formato ISO: "YYYY-MM-DDTHH:mm:ss" o "YYYY-MM-DDTHH:mm:ss.sssZ"
+      fechaFormateada = fechaProgramada.replace('T', ' ').slice(0, 19);
+    } else if (fechaProgramada.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/)) {
+      // Ya está en formato "YYYY-MM-DD HH:mm:ss" o "YYYY-MM-DD HH:mm"
+      fechaFormateada = fechaProgramada.length === 16 
+        ? fechaProgramada + ':00' // Agregar segundos si faltan
+        : fechaProgramada.slice(0, 19); // Asegurar que tenga exactamente 19 caracteres
+    } else {
+      // Intentar parsear como Date y convertir
+      const date = new Date(fechaProgramada);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      fechaFormateada = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    }
     
     const { error } = await (getSupabase() as any)
       .from(tabla)
@@ -393,7 +493,9 @@ export const getSeguimientosPendientes = async (remoteJid: string): Promise<Cola
 
 /**
  * Programa un seguimiento para un lead en cola_seguimientos
- * Programa para dentro de 23 horas desde ahora
+ * Si ya existe un mensaje programado con el mismo remote_jid, actualiza solo la fecha_programada
+ * Si no existe, crea uno nuevo programado para dentro de 23 horas desde ahora
+ * @returns Objeto con { success: boolean, actualizado: boolean, mensajeId?: number }
  */
 export const programarSeguimiento = async (seguimientoData: {
   remote_jid: string;
@@ -402,19 +504,145 @@ export const programarSeguimiento = async (seguimientoData: {
   fecha_ultima_interaccion?: string;
   chatwoot_conversation_id?: number;
   seguimientos_count?: number;
-}): Promise<boolean> => {
+}): Promise<{ success: boolean; actualizado: boolean; mensajeId?: number }> => {
   try {
-    console.log('Programando seguimiento:', seguimientoData);
+    console.log('🔔 Programando seguimiento:', seguimientoData);
+    
+    // Normalizar remote_jid: remover espacios, caracteres especiales, etc.
+    const remoteJidNormalizado = seguimientoData.remote_jid
+      .trim()
+      .replace(/[^\d]/g, '') // Remover todo excepto dígitos
+      .replace(/^\+/, ''); // Remover + al inicio si existe
+    
+    console.log(`🔍 Buscando mensajes con remote_jid: "${seguimientoData.remote_jid}" (normalizado: "${remoteJidNormalizado}")`);
     
     // Calcular fecha programada: ahora + 23 horas
     const ahora = new Date();
     const fechaProgramada = new Date(ahora.getTime() + (23 * 60 * 60 * 1000)); // 23 horas en milisegundos
+    const fechaProgramadaFormateada = fechaProgramada.toISOString().replace('T', ' ').slice(0, 19); // Formato timestamp sin timezone
+    
+    // Primero buscar TODOS los mensajes con ese remote_jid (sin filtro de estado) para debug
+    const { data: todosLosMensajes, error: errorBusquedaTodos } = await (getSupabase() as any)
+      .from('cola_seguimientos')
+      .select('id, remote_jid, estado, fecha_programada')
+      .eq('remote_jid', seguimientoData.remote_jid);
+    
+    console.log(`📊 Total de mensajes encontrados con remote_jid "${seguimientoData.remote_jid}":`, todosLosMensajes?.length || 0);
+    if (todosLosMensajes && todosLosMensajes.length > 0) {
+      console.log('📋 Mensajes encontrados:', todosLosMensajes.map((m: any) => ({
+        id: m.id,
+        remote_jid: m.remote_jid,
+        estado: m.estado,
+        fecha_programada: m.fecha_programada
+      })));
+    }
+    
+    // Buscar si ya existe un mensaje programado con el mismo remote_jid en cola_seguimientos
+    // Buscar tanto pendientes como enviados, ordenados por fecha_programada (más próximo primero)
+    // Intentar búsqueda exacta primero
+    let mensajesExistentes: any[] = [];
+    let errorBusqueda: any = null;
+    
+    const { data: mensajesExactos, error: errorExacto } = await (getSupabase() as any)
+      .from('cola_seguimientos')
+      .select('*')
+      .eq('remote_jid', seguimientoData.remote_jid)
+      .in('estado', ['pendiente', 'enviado'])
+      .order('fecha_programada', { ascending: true });
+    
+    if (errorExacto) {
+      console.error('❌ Error en búsqueda exacta:', errorExacto.message);
+      errorBusqueda = errorExacto;
+    } else if (mensajesExactos && mensajesExactos.length > 0) {
+      mensajesExistentes = mensajesExactos;
+      console.log(`✅ Búsqueda exacta: ${mensajesExistentes.length} mensaje(s) encontrado(s)`);
+    } else {
+      // Si no se encuentra con búsqueda exacta, intentar buscar todos y filtrar manualmente
+      // Esto ayuda a detectar problemas de formato
+      console.log('⚠️ No se encontró con búsqueda exacta. Buscando todos los mensajes para comparación...');
+      
+      const { data: todosMensajes, error: errorTodos } = await (getSupabase() as any)
+        .from('cola_seguimientos')
+        .select('*')
+        .in('estado', ['pendiente', 'enviado']);
+      
+      if (!errorTodos && todosMensajes) {
+        // Normalizar y comparar manualmente
+        const mensajesCoincidentes = todosMensajes.filter((m: any) => {
+          if (!m.remote_jid) return false;
+          // Normalizar ambos para comparar
+          const mJidNormalizado = String(m.remote_jid).trim().replace(/[^\d]/g, '').replace(/^\+/, '');
+          const buscadoNormalizado = remoteJidNormalizado;
+          return mJidNormalizado === buscadoNormalizado;
+        });
+        
+        if (mensajesCoincidentes.length > 0) {
+          // Ordenar por fecha_programada
+          mensajesCoincidentes.sort((a: any, b: any) => {
+            const fechaA = a.fecha_programada ? new Date(a.fecha_programada).getTime() : 0;
+            const fechaB = b.fecha_programada ? new Date(b.fecha_programada).getTime() : 0;
+            return fechaA - fechaB;
+          });
+          mensajesExistentes = mensajesCoincidentes;
+          console.log(`✅ Búsqueda normalizada: ${mensajesExistentes.length} mensaje(s) encontrado(s) después de normalizar`);
+          console.log(`⚠️ ADVERTENCIA: Los remote_jid no coincidían exactamente. Original: "${seguimientoData.remote_jid}", Encontrado: "${mensajesExistentes[0].remote_jid}"`);
+        }
+      }
+    }
+    
+    console.log(`🔍 Total de mensajes pendientes/enviados encontrados:`, mensajesExistentes.length);
+    
+    if (errorBusqueda && mensajesExistentes.length === 0) {
+      console.error('❌ Error buscando mensajes existentes:', errorBusqueda.message, errorBusqueda);
+      // Continuar con la creación de un nuevo mensaje
+    } else if (mensajesExistentes && mensajesExistentes.length > 0) {
+      // Existe al menos un mensaje, actualizar el más próximo (el primero en la lista ordenada)
+      const mensajeMasProximo = mensajesExistentes[0];
+      console.log(`📋 Mensaje existente encontrado (ID: ${mensajeMasProximo.id}). Actualizando fecha_programada y seguimientos_count.`);
+      
+      // Preparar datos a actualizar: fecha_programada y seguimientos_count (si viene en los datos)
+      const datosActualizacion: any = { fecha_programada: fechaProgramadaFormateada };
+      
+      // Actualizar seguimientos_count si viene en los datos (por ejemplo, cuando se selecciona un toque)
+      if (seguimientoData.seguimientos_count !== undefined && seguimientoData.seguimientos_count !== null) {
+        datosActualizacion.seguimientos_count = seguimientoData.seguimientos_count;
+        console.log(`📊 Actualizando seguimientos_count a ${seguimientoData.seguimientos_count}`);
+      }
+      
+      // Actualizar fecha_programada y seguimientos_count (si aplica), sin tocar otros campos (especialmente chatwoot_conversation_id)
+      const { error: errorUpdate } = await (getSupabase() as any)
+        .from('cola_seguimientos')
+        .update(datosActualizacion)
+        .eq('id', mensajeMasProximo.id);
+      
+      if (errorUpdate) {
+        console.error('Error actualizando mensaje existente:', errorUpdate.message);
+        return { success: false, actualizado: false };
+      }
+      
+      console.log(`✅ Mensaje actualizado exitosamente (ID: ${mensajeMasProximo.id})`);
+      console.log(`📅 Nueva fecha: ${fechaProgramadaFormateada}`);
+      if (seguimientoData.seguimientos_count !== undefined) {
+        console.log(`📊 Nuevo seguimientos_count: ${seguimientoData.seguimientos_count}`);
+      }
+      
+      // Verificar que chatwoot_conversation_id se preservó
+      if (mensajeMasProximo.chatwoot_conversation_id) {
+        console.log(`✅ chatwoot_conversation_id preservado: ${mensajeMasProximo.chatwoot_conversation_id}`);
+      }
+      
+      return { success: true, actualizado: true, mensajeId: mensajeMasProximo.id };
+    }
+    
+    // No existe ningún mensaje, crear uno nuevo
+    console.log('📝 No se encontró mensaje existente con estado pendiente/enviado.');
+    console.log(`📝 Creando nuevo mensaje programado con remote_jid: "${seguimientoData.remote_jid}"`);
     
     // Preparar datos para insertar según la estructura real de la tabla
     const dataToInsert: any = {
       remote_jid: seguimientoData.remote_jid,
       session_id: seguimientoData.session_id || seguimientoData.remote_jid, // Usar remote_jid como fallback si no hay session_id
-      fecha_programada: fechaProgramada.toISOString().replace('T', ' ').slice(0, 19), // Formato timestamp sin timezone
+      fecha_programada: fechaProgramadaFormateada,
       estado: 'pendiente'
     };
     
@@ -427,6 +655,8 @@ export const programarSeguimiento = async (seguimientoData: {
       dataToInsert.fecha_ultima_interaccion = seguimientoData.fecha_ultima_interaccion;
     }
     
+    // IMPORTANTE: Agregar chatwoot_conversation_id solo si viene en los datos (para nuevos registros)
+    // Pero nunca modificar el existente
     if (seguimientoData.chatwoot_conversation_id) {
       dataToInsert.chatwoot_conversation_id = seguimientoData.chatwoot_conversation_id;
     }
@@ -442,13 +672,14 @@ export const programarSeguimiento = async (seguimientoData: {
     
     if (error) {
       console.error('Error programando seguimiento:', error.message, error);
-      return false;
+      return { success: false, actualizado: false };
     }
     
-    console.log('Seguimiento programado exitosamente:', data);
-    return true;
+    console.log('✅ Seguimiento programado exitosamente (nuevo):', data);
+    const nuevoMensajeId = data && data[0] ? data[0].id : undefined;
+    return { success: true, actualizado: false, mensajeId: nuevoMensajeId };
   } catch (e) {
     console.error('Exception programando seguimiento:', e);
-    return false;
+    return { success: false, actualizado: false };
   }
 };

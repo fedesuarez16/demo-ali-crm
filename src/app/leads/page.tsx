@@ -325,11 +325,12 @@ export default function LeadsKanbanPage() {
             seguimientoData.chatwoot_conversation_id = (lead as any).chatwoot_conversation_id;
           }
 
-          const success = await programarSeguimiento(seguimientoData);
+          const result = await programarSeguimiento(seguimientoData);
 
-          if (success) {
+          if (result.success) {
             successCount++;
             // Actualizar el contador de seguimientos en el lead con el toque seleccionado
+            // Tanto si se creó nuevo como si se actualizó existente (porque el seguimientos_count se actualiza en ambos casos)
             await updateLead(lead.id, { seguimientos_count: selectedToque });
           } else {
             errorCount++;

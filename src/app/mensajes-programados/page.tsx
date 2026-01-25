@@ -125,9 +125,26 @@ export default function MensajesProgramadosPage() {
     }
 
     try {
-      // Convertir el valor del input datetime-local a ISO string
-      const fechaISO = new Date(tempFecha).toISOString();
-      const success = await actualizarFechaProgramada(mensajeId, fechaISO, tablaOrigen);
+      // El input datetime-local devuelve el formato "YYYY-MM-DDTHH:mm"
+      // Necesitamos convertirlo a formato timestamp sin timezone (YYYY-MM-DD HH:mm:ss)
+      // Sin convertir a UTC para evitar problemas de zona horaria
+      const fechaLocal = new Date(tempFecha);
+      
+      // Obtener componentes en hora local (no UTC)
+      const year = fechaLocal.getFullYear();
+      const month = String(fechaLocal.getMonth() + 1).padStart(2, '0');
+      const day = String(fechaLocal.getDate()).padStart(2, '0');
+      const hours = String(fechaLocal.getHours()).padStart(2, '0');
+      const minutes = String(fechaLocal.getMinutes()).padStart(2, '0');
+      const seconds = String(fechaLocal.getSeconds()).padStart(2, '0');
+      
+      // Formato: YYYY-MM-DD HH:mm:ss (sin timezone)
+      const fechaFormateada = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+      
+      // Crear ISO string para actualizar el estado local (usando hora local)
+      const fechaISO = fechaLocal.toISOString();
+      
+      const success = await actualizarFechaProgramada(mensajeId, fechaFormateada, tablaOrigen);
       
       if (success) {
         // Actualizar el mensaje en el estado local

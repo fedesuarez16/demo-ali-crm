@@ -162,6 +162,134 @@ export default function Page() {
     }));
   }, [leads]);
 
+  // Obtener todas las campañas únicas de propiedad_interes
+  const uniqueCampaigns = useMemo(() => {
+    const campaigns = new Set<string>();
+    leads.forEach(lead => {
+      if (lead.propiedad_interes && lead.propiedad_interes.trim() !== '') {
+        campaigns.add(lead.propiedad_interes.trim());
+      }
+    });
+    return Array.from(campaigns).sort();
+  }, [leads]);
+
+  // Agrupar leads por campaña y fecha
+  const leadsByCampaign = useMemo(() => {
+    const today = new Date();
+    const dates: string[] = [];
+    
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      dates.push(dateStr);
+    }
+
+    // Crear estructura para cada campaña
+    const campaignData: Record<string, Record<string, number>> = {};
+    
+    // Inicializar todas las campañas con 0 para todas las fechas
+    uniqueCampaigns.forEach(campaign => {
+      campaignData[campaign] = {};
+      dates.forEach(date => {
+        campaignData[campaign][date] = 0;
+      });
+    });
+
+    // Contar leads por campaña y fecha
+    leads.forEach(lead => {
+      if (lead.propiedad_interes && lead.propiedad_interes.trim() !== '') {
+        const campaign = lead.propiedad_interes.trim();
+        const leadDate = new Date(lead.fechaContacto || lead.created_at || new Date());
+        const dateStr = leadDate.toISOString().split('T')[0];
+        
+        if (campaignData[campaign] && campaignData[campaign][dateStr] !== undefined) {
+          campaignData[campaign][dateStr]++;
+        }
+      }
+    });
+
+    // Convertir a formato para el gráfico
+    // Crear un objeto con todas las campañas como series
+    const result = dates.map(date => {
+      const dataPoint: any = { date };
+      uniqueCampaigns.forEach(campaign => {
+        // Usar un nombre de clave seguro para la campaña (reemplazar caracteres especiales)
+        const safeKey = campaign.replace(/[^a-zA-Z0-9]/g, '_');
+        dataPoint[safeKey] = campaignData[campaign][date] || 0;
+      });
+      return dataPoint;
+    });
+
+    return { data: result, campaigns: uniqueCampaigns };
+  }, [leads, uniqueCampaigns]);
+
+  // Configuración del gráfico de campañas (generar colores dinámicamente)
+  const campaignsChartConfig = useMemo(() => {
+    const colors = [
+      "#1E90FF", // Celeste
+      "#FFA500", // Naranja
+      "#4169E1", // Azul
+      "#FF4500", // Rojo/Naranja oscuro
+      "#10B981", // Verde
+      "#3B82F6", // Azul
+      "#F59E0B", // Amarillo/Naranja
+      "#8B5CF6", // Púrpura
+      "#EC4899", // Rosa
+      "#14B8A6", // Turquesa
+      "#F97316", // Naranja oscuro
+      "#6366F1", // Índigo
+    ];
+    
+    const config: ChartConfig = {};
+    uniqueCampaigns.forEach((campaign, index) => {
+      const safeKey = campaign.replace(/[^a-zA-Z0-9]/g, '_');
+      config[safeKey] = {
+        label: campaign,
+        color: colors[index % colors.length],
+      };
+    });
+    return config;
+  }, [uniqueCampaigns]);
+
+  // Datos individuales por campaña para gráficos separados
+  const individualCampaignsData = useMemo(() => {
+    const today = new Date();
+    const dates: string[] = [];
+    
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      dates.push(dateStr);
+    }
+
+    const campaignsData: Record<string, Array<{ date: string; leads: number }>> = {};
+    
+    // Inicializar todas las campañas
+    uniqueCampaigns.forEach(campaign => {
+      campaignsData[campaign] = dates.map(date => ({ date, leads: 0 }));
+    });
+
+    // Contar leads por campaña y fecha
+    leads.forEach(lead => {
+      if (lead.propiedad_interes && lead.propiedad_interes.trim() !== '') {
+        const campaign = lead.propiedad_interes.trim();
+        const leadDate = new Date(lead.fechaContacto || lead.created_at || new Date());
+        const dateStr = leadDate.toISOString().split('T')[0];
+        
+        if (campaignsData[campaign]) {
+          const dateIndex = campaignsData[campaign].findIndex(d => d.date === dateStr);
+          if (dateIndex !== -1) {
+            campaignsData[campaign][dateIndex].leads++;
+          }
+        }
+      }
+    });
+
+    return campaignsData;
+  }, [leads, uniqueCampaigns]);
+
   // Configuración del gráfico
   const chartConfig: ChartConfig = {
     leads: {
@@ -476,6 +604,69 @@ export default function Page() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Gráfico de leads por campaña */}
+        {uniqueCampaigns.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Leads por Campaña</CardTitle>
+              <CardDescription>
+                Cantidad de leads ingresados por campaña (propiedad_interes) en los últimos 30 días
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartAreaInteractive
+                data={leadsByCampaign.data}
+                config={campaignsChartConfig}
+                dateKey="date"
+                valueKey="leads"
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Gráficos individuales por campaña (máximo 6 campañas más importantes) */}
+        {uniqueCampaigns.length > 0 && (
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800 mb-4">Leads por Campaña Individual</h2>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {uniqueCampaigns.slice(0, 6).map((campaign) => {
+                const campaignData = individualCampaignsData[campaign] || [];
+                const safeKey = campaign.replace(/[^a-zA-Z0-9]/g, '_');
+                const campaignChartConfig: ChartConfig = {
+                  leads: {
+                    label: campaign,
+                    color: campaignsChartConfig[safeKey]?.color || "#1E90FF",
+                  },
+                };
+
+                return (
+                  <Card key={campaign}>
+                    <CardHeader>
+                      <CardTitle className="text-sm">{campaign}</CardTitle>
+                      <CardDescription className="text-xs">
+                        Leads de esta campaña en los últimos 30 días
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ChartAreaInteractive
+                        data={campaignData}
+                        config={campaignChartConfig}
+                        dateKey="date"
+                        valueKey="leads"
+                      />
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+            {uniqueCampaigns.length > 6 && (
+              <p className="text-sm text-gray-500 mt-4">
+                Mostrando las 6 campañas con más leads. Total de campañas: {uniqueCampaigns.length}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </AppLayout>
   );

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { X, MessageSquare, Phone, Mail, Calendar, ChevronDown, MapPin, DollarSign, Home, User, Clock, FileText, Building, Send, Plus, Minus, Wifi, WifiOff, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { programarMensaje, programarSeguimiento } from '../services/mensajeService';
+import { programarMensaje, programarSeguimiento, getSeguimientosPendientes, actualizarFechaProgramada, ColaSeguimiento } from '../services/mensajeService';
 import { useChatStatus } from '../../hooks/useChatStatus';
 import { updateLead } from '../services/leadService';
 
@@ -47,6 +47,10 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
   const [seguimientosCount, setSeguimientosCount] = useState(lead?.seguimientos_count || 0);
   const [isSavingSeguimientos, setIsSavingSeguimientos] = useState(false);
   const [isProgramandoSeguimiento, setIsProgramandoSeguimiento] = useState(false);
+  const [seguimientoPendiente, setSeguimientoPendiente] = useState<ColaSeguimiento | null>(null);
+  const [fechaProgramadaEdit, setFechaProgramadaEdit] = useState<string>('');
+  const [isEditingFechaProgramada, setIsEditingFechaProgramada] = useState(false);
+  const [isSavingFechaProgramada, setIsSavingFechaProgramada] = useState(false);
   
   // Hook para verificar el estado del chat via n8n webhook
   const phoneNumber = (lead as any)?.whatsapp_id || lead?.telefono;
@@ -61,6 +65,55 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
       setSeguimientosCount(lead.seguimientos_count);
     }
   }, [lead?.id, lead?.notas, lead?.seguimientos_count]);
+
+  // Cargar seguimiento pendiente cuando cambia el lead
+  useEffect(() => {
+    const loadSeguimientoPendiente = async () => {
+      if (!lead) {
+        setSeguimientoPendiente(null);
+        return;
+      }
+
+      try {
+        const remoteJid = (lead as any).whatsapp_id || lead.telefono || '';
+        if (!remoteJid) {
+          setSeguimientoPendiente(null);
+          return;
+        }
+
+        const seguimientos = await getSeguimientosPendientes(remoteJid);
+        if (seguimientos.length > 0) {
+          // Tomar el primer seguimiento pendiente (más próximo)
+          const seguimiento = seguimientos[0];
+          setSeguimientoPendiente(seguimiento);
+          
+          // Preparar fecha para el input datetime-local
+          const fechaProgramada = seguimiento.fecha_programada || seguimiento.scheduled_at;
+          if (fechaProgramada) {
+            const date = new Date(fechaProgramada);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            setFechaProgramadaEdit(`${year}-${month}-${day}T${hours}:${minutes}`);
+          } else {
+            setFechaProgramadaEdit('');
+          }
+        } else {
+          setSeguimientoPendiente(null);
+          setFechaProgramadaEdit('');
+        }
+      } catch (error) {
+        console.error('Error loading seguimiento pendiente:', error);
+        setSeguimientoPendiente(null);
+      }
+    };
+
+    if (isOpen && lead) {
+      loadSeguimientoPendiente();
+    }
+  }, [lead?.id, (lead as any)?.whatsapp_id, lead?.telefono, isOpen]);
   
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-AR', {
@@ -227,15 +280,36 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
         seguimientoData.chatwoot_conversation_id = (lead as any).chatwoot_conversation_id;
       }
       
-      const success = await programarSeguimiento(seguimientoData);
+      const result = await programarSeguimiento(seguimientoData);
 
-      if (success) {
-        alert('✅ Seguimiento programado exitosamente para dentro de 23 horas');
-        // Incrementar el contador de seguimientos
-        const newCount = (seguimientosCount || 0) + 1;
-        setSeguimientosCount(newCount);
-        // Actualizar en la base de datos
-        await updateLead(lead.id, { seguimientos_count: newCount });
+      if (result.success) {
+        if (result.actualizado) {
+          alert('✅ Seguimiento actualizado exitosamente (fecha programada modificada)');
+        } else {
+          alert('✅ Seguimiento programado exitosamente para dentro de 23 horas');
+          // Solo incrementar el contador si se creó un nuevo seguimiento (no si se actualizó uno existente)
+          const newCount = (seguimientosCount || 0) + 1;
+          setSeguimientosCount(newCount);
+          // Actualizar en la base de datos
+          await updateLead(lead.id, { seguimientos_count: newCount });
+        }
+        
+        // Recargar seguimiento pendiente en ambos casos
+        const seguimientos = await getSeguimientosPendientes(remoteJid);
+        if (seguimientos.length > 0) {
+          const seguimiento = seguimientos[0];
+          setSeguimientoPendiente(seguimiento);
+          const fechaProgramada = seguimiento.fecha_programada || seguimiento.scheduled_at;
+          if (fechaProgramada) {
+            const date = new Date(fechaProgramada);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            setFechaProgramadaEdit(`${year}-${month}-${day}T${hours}:${minutes}`);
+          }
+        }
       } else {
         alert('❌ Error al programar el seguimiento. Intenta nuevamente.');
       }
@@ -245,6 +319,72 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
     } finally {
       setIsProgramandoSeguimiento(false);
     }
+  };
+
+  // Función para guardar la fecha programada del seguimiento
+  const handleSaveFechaProgramada = async () => {
+    if (!seguimientoPendiente || !seguimientoPendiente.id || !fechaProgramadaEdit) {
+      alert('Por favor ingresa una fecha y hora válida');
+      return;
+    }
+
+    setIsSavingFechaProgramada(true);
+    try {
+      // El input datetime-local devuelve el formato "YYYY-MM-DDTHH:mm"
+      // Necesitamos convertirlo a formato timestamp sin timezone (YYYY-MM-DD HH:mm:ss)
+      // Sin convertir a UTC para evitar problemas de zona horaria
+      const fechaLocal = new Date(fechaProgramadaEdit);
+      
+      // Obtener componentes en hora local (no UTC)
+      const year = fechaLocal.getFullYear();
+      const month = String(fechaLocal.getMonth() + 1).padStart(2, '0');
+      const day = String(fechaLocal.getDate()).padStart(2, '0');
+      const hours = String(fechaLocal.getHours()).padStart(2, '0');
+      const minutes = String(fechaLocal.getMinutes()).padStart(2, '0');
+      const seconds = String(fechaLocal.getSeconds()).padStart(2, '0');
+      
+      // Formato: YYYY-MM-DD HH:mm:ss (sin timezone)
+      const fechaFormateada = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+      
+      // Crear ISO string para actualizar el estado local (usando hora local)
+      const fechaISO = fechaLocal.toISOString();
+      
+      const success = await actualizarFechaProgramada(
+        seguimientoPendiente.id,
+        fechaFormateada, // Enviar formato timestamp sin timezone
+        seguimientoPendiente.tabla_origen
+      );
+
+      if (success) {
+        // Actualizar el seguimiento local con la fecha ISO
+        setSeguimientoPendiente({
+          ...seguimientoPendiente,
+          fecha_programada: fechaISO
+        });
+        setIsEditingFechaProgramada(false);
+        alert('✅ Fecha programada actualizada exitosamente');
+      } else {
+        alert('❌ Error al actualizar la fecha programada');
+      }
+    } catch (error) {
+      console.error('Error updating fecha programada:', error);
+      alert('❌ Error al actualizar la fecha programada');
+    } finally {
+      setIsSavingFechaProgramada(false);
+    }
+  };
+
+  // Función para formatear fecha y hora
+  const formatDateTime = (dateString: string | undefined) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('es-AR', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
   };
   
   // Función helper para normalizar números de teléfono (consistente con ChatList.js)
@@ -828,6 +968,77 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                     </Button>
                   </div>
                 </div>
+                {/* Fecha programada del seguimiento pendiente */}
+                {seguimientoPendiente && (
+                  <div className="pt-2 border-t space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-muted-foreground">Fecha programada:</span>
+                    </div>
+                    {isEditingFechaProgramada ? (
+                      <div className="space-y-2">
+                        <Input
+                          type="datetime-local"
+                          value={fechaProgramadaEdit}
+                          onChange={(e) => setFechaProgramadaEdit(e.target.value)}
+                          className="h-8 text-sm"
+                          disabled={isSavingFechaProgramada}
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={handleSaveFechaProgramada}
+                            disabled={isSavingFechaProgramada || !fechaProgramadaEdit}
+                            className="h-7 flex-1"
+                          >
+                            {isSavingFechaProgramada ? (
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                            ) : (
+                              'Guardar'
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setIsEditingFechaProgramada(false);
+                              // Restaurar fecha original
+                              const fechaProgramada = seguimientoPendiente.fecha_programada || seguimientoPendiente.scheduled_at;
+                              if (fechaProgramada) {
+                                const date = new Date(fechaProgramada);
+                                const year = date.getFullYear();
+                                const month = String(date.getMonth() + 1).padStart(2, '0');
+                                const day = String(date.getDate()).padStart(2, '0');
+                                const hours = String(date.getHours()).padStart(2, '0');
+                                const minutes = String(date.getMinutes()).padStart(2, '0');
+                                setFechaProgramadaEdit(`${year}-${month}-${day}T${hours}:${minutes}`);
+                              }
+                            }}
+                            disabled={isSavingFechaProgramada}
+                            className="h-7 flex-1"
+                          >
+                            Cancelar
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div 
+                        className="flex items-center justify-between p-2 bg-muted rounded-md cursor-pointer hover:bg-muted/80 transition-colors"
+                        onClick={() => setIsEditingFechaProgramada(true)}
+                        title="Click para editar fecha y hora"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-sm">
+                            {formatDateTime(seguimientoPendiente.fecha_programada || seguimientoPendiente.scheduled_at)}
+                          </span>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
             

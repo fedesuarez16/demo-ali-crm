@@ -463,26 +463,14 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
   const [searchedChats, setSearchedChats] = useState([]);
   const [isSearchingChats, setIsSearchingChats] = useState(false);
 
-  // Función para cargar más chats y luego buscar
-  const searchChatsByPhoneNumbers = async (phoneNumbers) => {
-    if (!phoneNumbers || phoneNumbers.length === 0) {
-      return [];
-    }
-
-    console.log('🔍 Buscando chats para números:', phoneNumbers);
-    const normalizedPhones = phoneNumbers.map(p => normalizePhoneNumber(p)).filter(Boolean);
-    console.log('  Números normalizados:', normalizedPhones);
-
-    const phonesToFind = new Set(normalizedPhones);
-    const foundChats = [];
-    const maxPagesToLoad = 20; // Cargar hasta 20 páginas (1000 chats)
-
+  // Función auxiliar para cargar múltiples páginas de chats
+  const loadAllChats = async (maxPages = 20) => {
+    const allLoadedChats = [];
+    
     try {
-      // Primero cargar más chats
-      console.log('📥 Cargando chats para búsqueda...');
-      const allLoadedChats = [];
+      console.log('📥 Cargando chats para búsqueda exhaustiva...');
       
-      for (let page = 1; page <= maxPagesToLoad && phonesToFind.size > 0; page++) {
+      for (let page = 1; page <= maxPages; page++) {
         const response = await fetch(`/api/chats?page=${page}&per_page=50&assignee_id=all&status=all`);
         
         if (!response.ok) {
@@ -538,6 +526,105 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
       }
 
       console.log(`📊 Total de chats cargados: ${allLoadedChats.length}`);
+      return allLoadedChats;
+    } catch (error) {
+      console.error('❌ Error loading all chats:', error);
+      return allLoadedChats; // Retornar lo que se haya cargado hasta el momento
+    }
+  };
+
+  // Función para buscar chats por cualquier término (nombre, teléfono, propiedad, mensaje, etc.)
+  const searchAllChatsByQuery = async (query) => {
+    if (!query || !query.trim()) {
+      return [];
+    }
+
+    const searchQuery = query.toLowerCase().trim();
+    console.log('🔍 Buscando chats por query:', searchQuery);
+
+    try {
+      // Cargar todos los chats disponibles
+      const allLoadedChats = await loadAllChats(20); // Cargar hasta 20 páginas (1000 chats)
+      
+      // Filtrar chats que coincidan con el query
+      const foundChats = allLoadedChats.filter(chat => {
+        // Buscar en nombre del contacto
+        const name = getContactName(chat);
+        if (name && name.toLowerCase().includes(searchQuery)) {
+          return true;
+        }
+        
+        // Buscar en número de teléfono
+        const phone = getContactPhone(chat);
+        if (phone && phone.toLowerCase().includes(searchQuery)) {
+          return true;
+        }
+        
+        // Buscar en número de teléfono normalizado (para búsquedas por número)
+        const chatPhone = getChatPhoneNumber(chat);
+        if (chatPhone) {
+          const normalizedChatPhone = normalizePhoneNumber(chatPhone);
+          const normalizedQuery = normalizePhoneNumber(searchQuery);
+          if (normalizedChatPhone && normalizedQuery) {
+            // Comparación exacta
+            if (normalizedChatPhone === normalizedQuery) {
+              return true;
+            }
+            // Comparación por inclusión
+            if (normalizedChatPhone.includes(normalizedQuery) || normalizedQuery.includes(normalizedChatPhone)) {
+              return true;
+            }
+            // Comparación por últimos dígitos (útil para números con/sin código de país)
+            const minLength = Math.min(normalizedChatPhone.length, normalizedQuery.length);
+            if (minLength >= 8) {
+              const lastDigits1 = normalizedChatPhone.slice(-Math.min(10, normalizedChatPhone.length));
+              const lastDigits2 = normalizedQuery.slice(-Math.min(10, normalizedQuery.length));
+              if (lastDigits1 === lastDigits2) {
+                return true;
+              }
+            }
+          }
+        }
+        
+        // Buscar en propiedad_interes del lead asociado
+        const lead = getLeadForChat(chat);
+        if (lead?.propiedad_interes && lead.propiedad_interes.toLowerCase().includes(searchQuery)) {
+          return true;
+        }
+        
+        // Buscar en contenido del último mensaje
+        const lastMessage = chat.last_non_activity_message?.content;
+        if (lastMessage && lastMessage.toLowerCase().includes(searchQuery)) {
+          return true;
+        }
+        
+        return false;
+      });
+
+      console.log(`🎯 Total de chats encontrados: ${foundChats.length}`);
+      return foundChats;
+    } catch (error) {
+      console.error('❌ Error searching all chats by query:', error);
+      return [];
+    }
+  };
+
+  // Función para cargar más chats y luego buscar por números de teléfono
+  const searchChatsByPhoneNumbers = async (phoneNumbers) => {
+    if (!phoneNumbers || phoneNumbers.length === 0) {
+      return [];
+    }
+
+    console.log('🔍 Buscando chats para números:', phoneNumbers);
+    const normalizedPhones = phoneNumbers.map(p => normalizePhoneNumber(p)).filter(Boolean);
+    console.log('  Números normalizados:', normalizedPhones);
+
+    const phonesToFind = new Set(normalizedPhones);
+    const foundChats = [];
+
+    try {
+      // Cargar todos los chats disponibles
+      const allLoadedChats = await loadAllChats(20);
 
       // Ahora buscar entre todos los chats cargados
       allLoadedChats.forEach(chat => {
@@ -622,10 +709,14 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
         setIsSearchingLeads(false);
       }
       
-      // Buscar chats directamente si es un número de teléfono o si encontramos leads
-      if (queryIsPhone || leadsResults.length > 0) {
-        setIsSearchingChats(true);
-        try {
+      // SIEMPRE buscar chats cuando hay un query de búsqueda
+      // Esto asegura que busquemos en TODA la lista de chats, no solo en los 25 iniciales
+      setIsSearchingChats(true);
+      try {
+        let foundChats = [];
+        
+        // Si es un número de teléfono o encontramos leads, usar búsqueda por números (más eficiente)
+        if (queryIsPhone || leadsResults.length > 0) {
           const phoneNumbers = [];
           
           // Si es un número, agregarlo directamente
@@ -643,19 +734,28 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
           
           // Buscar chats por estos números
           if (phoneNumbers.length > 0) {
-            const foundChats = await searchChatsByPhoneNumbers(phoneNumbers);
-            setSearchedChats(foundChats);
-          } else {
-            setSearchedChats([]);
+            foundChats = await searchChatsByPhoneNumbers(phoneNumbers);
           }
-        } catch (error) {
-          console.error('Error searching chats:', error);
-          setSearchedChats([]);
-        } finally {
-          setIsSearchingChats(false);
         }
-      } else {
+        
+        // SIEMPRE hacer una búsqueda general por query para encontrar por nombre, mensaje, propiedad, etc.
+        // Esto asegura que encontremos chats incluso si no están en los leads o no es un número
+        const generalSearchChats = await searchAllChatsByQuery(query);
+        
+        // Combinar resultados, eliminando duplicados
+        const allFoundChats = [...foundChats];
+        generalSearchChats.forEach(chat => {
+          if (!allFoundChats.find(c => c.id === chat.id)) {
+            allFoundChats.push(chat);
+          }
+        });
+        
+        setSearchedChats(allFoundChats);
+      } catch (error) {
+        console.error('Error searching chats:', error);
         setSearchedChats([]);
+      } finally {
+        setIsSearchingChats(false);
       }
     };
     
@@ -1045,11 +1145,15 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
   // Obtener chats que coinciden con leads buscados
   const matchingChatsFromSearch = getMatchingChatsForSearchedLeads();
   
-  // Combinar chats locales filtrados con chats encontrados en la búsqueda de leads
+  // Cuando hay una búsqueda activa, usar los chats encontrados en la búsqueda exhaustiva
+  // De lo contrario, usar los chats locales filtrados
   const localFilteredChats = filterChats(chats);
-  const allFilteredChats = searchQuery.trim() && (searchedLeads.length > 0 || matchingChatsFromSearch.length > 0)
-    ? [...new Map([...localFilteredChats, ...matchingChatsFromSearch].map(chat => [chat.id, chat])).values()]
-    : localFilteredChats;
+  const allFilteredChats = searchQuery.trim()
+    ? (searchedChats.length > 0 
+        ? searchedChats // Usar resultados de búsqueda exhaustiva
+        : [...new Map([...localFilteredChats, ...matchingChatsFromSearch].map(chat => [chat.id, chat])).values()] // Fallback a búsqueda local + leads
+      )
+    : localFilteredChats; // Sin búsqueda, mostrar todos los chats locales
 
   if (loading) {
     return (
