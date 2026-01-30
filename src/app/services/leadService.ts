@@ -214,11 +214,16 @@ const normalizeEstadoFromDB = (estado: string | null | undefined): string => {
 };
 
 // Map a DB row (snake_case or camelCase) into our Lead type
+// Nota: mapLeadRow es síncrono, pero calificarLead es asíncrono
+// Por lo tanto, si el estado necesita calificación, se hará después de forma asíncrona
 const mapLeadRow = (row: any): Lead => {
-  // Si el estado es null, 'inicial' o 'activo', calificar automáticamente
+  // Si el estado es null, 'inicial' o 'activo', mantenerlo para calificar después de forma asíncrona
+  // Por ahora, usar 'frio' como valor por defecto temporal
   let estado = row.estado;
   if (!estado || estado === 'inicial' || estado === 'activo') {
-    estado = calificarLead(row);
+    // No podemos llamar a calificarLead aquí porque es asíncrono
+    // Se calificará después en getAllLeads
+    estado = 'frio'; // Valor temporal, se actualizará después
   } else {
     // Normalizar el estado si viene de la BD (ej: "Fríos" -> "frío")
     estado = normalizeEstadoFromDB(estado);
@@ -258,6 +263,8 @@ const mapLeadRow = (row: any): Lead => {
     // Si es null, undefined, 1 o '1', se considera 1 (activo por defecto)
     // Solo si es explícitamente 0 o '0', se considera inactivo
     estado_chat: (row.estado_chat === null || row.estado_chat === undefined || row.estado_chat === 1 || row.estado_chat === '1') ? 1 : 0,
+    // chatwoot_conversation_id para calificación automática basada en mensajes
+    chatwoot_conversation_id: row.chatwoot_conversation_id ?? undefined,
   };
 };
 
@@ -326,7 +333,7 @@ export const getAllLeads = async (): Promise<Lead[]> => {
         leadsToRecalify.map(async (lead) => {
           const leadData = data.find((d: any) => String(d.id) === lead.id);
           if (leadData) {
-            const newEstado = calificarLead(leadData);
+            const newEstado = await calificarLead(leadData);
             // Siempre actualizar si el estado anterior era inválido
             if (!lead.estado || lead.estado === 'activo' || lead.estado === 'inicial' || newEstado !== lead.estado) {
               await updateLeadStatus(lead.id, newEstado);
@@ -600,77 +607,90 @@ export const updateAllHotLeadsToFrio = async (): Promise<boolean> => {
 };
 
 /**
- * Califica automáticamente un lead según los datos disponibles
- * - Si solo tiene whatsapp_id y nombre (2 datos): "frio"
- * - Si tiene 3 o más datos (whatsapp_id, nombre, y al menos otro): "tibio"
+ * Obtiene el conteo total de mensajes de una conversación de Chatwoot
+ * Cuenta todos los mensajes, no solo los de la primera página
  */
-const calificarLead = (leadData: any): 'frio' | 'tibio' => {
-  // Contar cuántos datos tiene el lead (excluyendo campos técnicos y null/vacíos)
-  let datosCount = 0;
-  
-  // whatsapp_id siempre está presente (campo requerido)
-  if (leadData.whatsapp_id && leadData.whatsapp_id.trim() !== '') {
-    datosCount++;
+const getMessagesCount = async (conversationId: number): Promise<number> => {
+  try {
+    let totalMessages = 0;
+    let before = null; // Para paginación
+    let hasMore = true;
+    
+    // Cargar todas las páginas de mensajes
+    while (hasMore) {
+      let url = `/api/chats/${conversationId}/messages`;
+      if (before) {
+        url += `?before=${before}`;
+      }
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.warn(`⚠️ Error obteniendo mensajes para conversación ${conversationId}:`, response.status);
+        break;
+      }
+      
+      const data = await response.json();
+      if (data.success && Array.isArray(data.data)) {
+        const pageMessages = data.data;
+        totalMessages += pageMessages.length;
+        
+        // Si recibimos menos de 50 mensajes, probablemente no hay más páginas
+        // (asumiendo que la API devuelve 50 por página por defecto)
+        if (pageMessages.length < 50) {
+          hasMore = false;
+        } else {
+          // Usar el ID del mensaje más antiguo como 'before' para la siguiente página
+          before = pageMessages[pageMessages.length - 1]?.id || null;
+          if (!before) {
+            hasMore = false;
+          }
+        }
+      } else {
+        hasMore = false;
+      }
+      
+      // Limitar a 10 páginas para evitar loops infinitos (500 mensajes máximo)
+      if (totalMessages >= 500) {
+        hasMore = false;
+      }
+    }
+    
+    console.log(`📊 Conversación ${conversationId}: ${totalMessages} mensajes totales`);
+    return totalMessages;
+  } catch (error) {
+    console.error(`❌ Error contando mensajes para conversación ${conversationId}:`, error);
+    return 0;
+  }
+};
+
+/**
+ * Califica automáticamente un lead según la cantidad de mensajes en su conversación
+ * - Si la conversación tiene 2 mensajes o menos (no ha respondido mucho): "frio"
+ * - Si la conversación tiene más de 2 mensajes: "tibio"
+ * 
+ * Si no hay chatwoot_conversation_id, devuelve "frio" por defecto
+ */
+const calificarLead = async (leadData: any): Promise<'frio' | 'tibio'> => {
+  // Si no hay chatwoot_conversation_id, no podemos contar mensajes
+  // Por defecto, consideramos el lead como "frio"
+  if (!leadData.chatwoot_conversation_id) {
+    console.log(`📊 Lead sin chatwoot_conversation_id, calificando como "frio" por defecto`);
+    return 'frio';
   }
   
-  // nombre
-  if (leadData.nombre != null && typeof leadData.nombre === 'string' && leadData.nombre.trim() !== '') {
-    datosCount++;
+  try {
+    // Obtener el conteo de mensajes de la conversación
+    const messagesCount = await getMessagesCount(leadData.chatwoot_conversation_id);
+    console.log(`📊 Conversación ${leadData.chatwoot_conversation_id}: ${messagesCount} mensajes`);
+    
+    // Si tiene 2 mensajes o menos → "frio"
+    // Si tiene más de 2 mensajes → "tibio"
+    return messagesCount <= 2 ? 'frio' : 'tibio';
+  } catch (error) {
+    console.error(`❌ Error calificando lead con conversación ${leadData.chatwoot_conversation_id}:`, error);
+    // En caso de error, devolver "frio" por defecto
+    return 'frio';
   }
-  
-  // presupuesto (solo si es mayor a 0)
-  if (leadData.presupuesto != null && leadData.presupuesto !== 0) {
-    datosCount++;
-  }
-  
-  // zona
-  if (leadData.zona != null && typeof leadData.zona === 'string' && leadData.zona.trim() !== '') {
-    datosCount++;
-  }
-  
-  // tipo_propiedad
-  if (leadData.tipo_propiedad != null && typeof leadData.tipo_propiedad === 'string' && leadData.tipo_propiedad.trim() !== '') {
-    datosCount++;
-  }
-  
-  // forma_pago
-  if (leadData.forma_pago != null && typeof leadData.forma_pago === 'string' && leadData.forma_pago.trim() !== '') {
-    datosCount++;
-  }
-  
-  // intencion
-  if (leadData.intencion != null && typeof leadData.intencion === 'string' && leadData.intencion.trim() !== '') {
-    datosCount++;
-  }
-  
-  // caracteristicas_buscadas
-  if (leadData.caracteristicas_buscadas != null && typeof leadData.caracteristicas_buscadas === 'string' && leadData.caracteristicas_buscadas.trim() !== '') {
-    datosCount++;
-  }
-  
-  // caracteristicas_venta
-  if (leadData.caracteristicas_venta != null && typeof leadData.caracteristicas_venta === 'string' && leadData.caracteristicas_venta.trim() !== '') {
-    datosCount++;
-  }
-  
-  // propiedades_mostradas
-  if (leadData.propiedades_mostradas != null && typeof leadData.propiedades_mostradas === 'string' && leadData.propiedades_mostradas.trim() !== '') {
-    datosCount++;
-  }
-  
-  // propiedad_interes
-  if (leadData.propiedad_interes != null && typeof leadData.propiedad_interes === 'string' && leadData.propiedad_interes.trim() !== '') {
-    datosCount++;
-  }
-  
-  // notas
-  if (leadData.notas != null && typeof leadData.notas === 'string' && leadData.notas.trim() !== '') {
-    datosCount++;
-  }
-  
-  // Si tiene 2 o menos datos (solo whatsapp_id y nombre) → "frio"
-  // Si tiene 3 o más datos → "tibio"
-  return datosCount <= 2 ? 'frio' : 'tibio';
 };
 
 /**
@@ -696,6 +716,7 @@ export const createLead = async (leadData: Partial<Lead>): Promise<Lead | null> 
       ultima_interaccion: new Date().toISOString(),
       seguimientos_count: leadData.seguimientos_count ?? 0,
       notas: leadData.notas ?? null,
+      chatwoot_conversation_id: leadData.chatwoot_conversation_id || null,
     };
     
     // Calificar automáticamente el lead SIEMPRE (a menos que se especifique manualmente un estado diferente)
@@ -703,7 +724,7 @@ export const createLead = async (leadData: Partial<Lead>): Promise<Lead | null> 
     // Si se especifica otro estado manualmente (como 'caliente', 'llamada', 'visita', etc.), se respeta
     // NUNCA usar 'inicial' o 'activo' - estos estados no deben existir
     if (!leadData.estado || leadData.estado === 'inicial' || leadData.estado === 'activo') {
-      dataToInsert.estado = calificarLead(dataToInsert);
+      dataToInsert.estado = await calificarLead(dataToInsert);
     } else {
       // Si se especifica un estado válido, usarlo
       dataToInsert.estado = leadData.estado;
@@ -829,7 +850,7 @@ export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promi
       if (leadData.estado === 'inicial' || leadData.estado === 'activo') {
         // Si se intenta establecer un estado inválido, recalificar automáticamente
         const combinedData = { ...currentLead, ...dataToUpdate };
-        dataToUpdate.estado = calificarLead(combinedData);
+        dataToUpdate.estado = await calificarLead(combinedData);
       } else {
         // Si se especifica un estado válido, usarlo
         dataToUpdate.estado = leadData.estado;
@@ -837,7 +858,7 @@ export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promi
     } else if (currentEstado === 'inicial' || currentEstado === 'activo') {
       // Solo recalificar si el estado actual es inválido
       const combinedData = { ...currentLead, ...dataToUpdate };
-      dataToUpdate.estado = calificarLead(combinedData);
+      dataToUpdate.estado = await calificarLead(combinedData);
     }
     // Si el estado actual es válido y no se especifica un nuevo estado, NO cambiar el estado
     

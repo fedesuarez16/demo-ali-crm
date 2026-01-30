@@ -35,6 +35,7 @@ export interface Lead {
   seguimientos_count?: number;
   notas?: string;
   estado_chat?: number; // Estado del chat: 1 = activo, 0 = inactivo (independiente del estado del lead)
+  chatwoot_conversation_id?: number; // ID de la conversación en Chatwoot para calificación automática
 }
 
 export interface FilterOptions {
