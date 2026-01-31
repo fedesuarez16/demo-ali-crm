@@ -52,7 +52,7 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
     return 0;
   };
   
-  // Marcar un chat como leído (guardamos el timestamp del último mensaje visto)
+  // Marcar un chat como leído manualmente (override de la lógica automática)
   const markAsRead = (chatId, lastMessageTimestamp = null) => {
     setReadChats(prev => {
       const chat = chats.find(c => c.id === chatId);
@@ -61,14 +61,28 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
         ...prev,
         [chatId]: {
           read: true,
-          lastSeenTimestamp: timestamp
+          lastSeenTimestamp: timestamp,
+          manualOverride: true // Marcar como override manual
         }
       };
     });
   };
   
-  // Marcar un chat como no leído
+  // Marcar un chat como no leído manualmente (override de la lógica automática)
   const markAsUnread = (chatId) => {
+    setReadChats(prev => {
+      return {
+        ...prev,
+        [chatId]: {
+          read: false,
+          manualOverride: false // Marcar como override manual
+        }
+      };
+    });
+  };
+  
+  // Remover el marcado manual y volver a la lógica automática
+  const removeManualOverride = (chatId) => {
     setReadChats(prev => {
       const newRead = { ...prev };
       delete newRead[chatId];
@@ -76,27 +90,39 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
     });
   };
   
-  // Verificar si un chat está leído y si tiene nuevos mensajes
-  const isChatRead = (chat) => {
-    const chatReadData = readChats[chat.id];
+  // Verificar si el último mensaje fue enviado por el agente
+  const isLastMessageFromAgent = (chat) => {
+    const lastMessage = chat.last_non_activity_message;
     
-    // Si no hay datos de lectura, el chat no está leído
-    if (!chatReadData) {
+    if (!lastMessage) {
+      // Si no hay mensaje, considerar como no leído (el contacto no ha enviado nada)
       return false;
     }
     
-    // Si es un objeto con timestamp, comparar con el último mensaje
-    if (chatReadData.lastSeenTimestamp) {
-      const lastMessageTimestamp = getLastMessageTimestamp(chat);
-      // Si el último mensaje es más reciente que el último visto, hay nuevos mensajes
-      if (lastMessageTimestamp > chatReadData.lastSeenTimestamp) {
-        return false; // Hay nuevos mensajes, no está leído
-      }
-      return true; // No hay nuevos mensajes, está leído
+    // Verificar si el mensaje fue enviado por el agente/usuario
+    // En Chatwoot:
+    // - message_type === 1 = mensaje saliente (del agente)
+    // - message_type === 0 = mensaje entrante (del contacto)
+    // - sender_type === 'User' = enviado por el agente/usuario
+    // - sender_type === 'Contact' = enviado por el contacto
+    const isOutgoing = lastMessage.message_type === 1 || lastMessage.sender_type === 'User';
+    
+    return isOutgoing;
+  };
+
+  // Verificar si un chat está leído basándose en si el agente contestó
+  // La lógica es: si el agente contestó (último mensaje es del agente) → leído
+  // Si el agente NO contestó (último mensaje es del contacto) → no leído
+  const isChatRead = (chat) => {
+    // Verificar si hay un marcado manual (para permitir override si es necesario)
+    const chatReadData = readChats[chat.id];
+    if (chatReadData && chatReadData.manualOverride !== undefined) {
+      return chatReadData.manualOverride;
     }
     
-    // Compatibilidad con formato antiguo (solo boolean)
-    return chatReadData === true || chatReadData.read === true;
+    // Lógica automática: si el último mensaje fue enviado por el agente, el chat está "leído"
+    // Si el último mensaje fue enviado por el contacto, el chat está "no leído"
+    return isLastMessageFromAgent(chat);
   };
   
   // Manejar selección de chat y marcarlo como leído
@@ -117,22 +143,9 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
     }
   }, [selectedChat?.id]);
   
-  // Efecto para detectar nuevos mensajes automáticamente
-  useEffect(() => {
-    chats.forEach(chat => {
-      const chatReadData = readChats[chat.id];
-      
-      // Si el chat ya está marcado como leído con timestamp
-      if (chatReadData && chatReadData.lastSeenTimestamp) {
-        const lastMessageTimestamp = getLastMessageTimestamp(chat);
-        // Si hay un mensaje más reciente, marcar como no leído automáticamente
-        if (lastMessageTimestamp > chatReadData.lastSeenTimestamp) {
-          // No marcar automáticamente, solo detectar (el usuario debe abrir el chat)
-          // Esto permite que el indicador de "no leído" aparezca
-        }
-      }
-    });
-  }, [chats, readChats]);
+  // Nota: Ya no necesitamos un efecto para detectar nuevos mensajes automáticamente
+  // porque la lógica de lectura ahora es automática basada en quién envió el último mensaje
+  // Si el agente contestó → leído, si el contacto envió → no leído
 
   // Función para obtener el nombre del contacto
   const getContactName = (chat) => {
@@ -839,11 +852,14 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
   };
   
   // Componente de menú desplegable con acciones del chat
-  const ChatActionsMenu = ({ chat, lead, isRead, markAsRead, markAsUnread, leadsMap, setLeadsMap }) => {
+  const ChatActionsMenu = ({ chat, lead, isRead, markAsRead, markAsUnread, removeManualOverride, leadsMap, setLeadsMap }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isEditingPropiedad, setIsEditingPropiedad] = useState(false);
     const [editValue, setEditValue] = useState(lead?.propiedad_interes || '');
     const [isSaving, setIsSaving] = useState(false);
+    
+    // Verificar si hay un override manual
+    const hasManualOverride = readChats[chat.id]?.manualOverride !== undefined;
     
     // Cerrar menú al hacer clic fuera
     useEffect(() => {
@@ -956,26 +972,43 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
         
         {isMenuOpen && (
           <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-30 py-1">
+            {hasManualOverride && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeManualOverride(chat.id);
+                  setIsMenuOpen(false);
+                }}
+                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                title="Remover marcado manual y volver a la lógica automática"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Usar lógica automática
+              </button>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handleToggleRead();
               }}
               className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+              title={hasManualOverride ? "Cambiar marcado manual" : "Marcar manualmente (override)"}
             >
               {isRead ? (
                 <>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                   </svg>
-                  Marcar como no leído
+                  Marcar como no leído {hasManualOverride && '(manual)'}
                 </>
               ) : (
                 <>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  Marcar como leído
+                  Marcar como leído {hasManualOverride && '(manual)'}
                 </>
               )}
             </button>
@@ -1382,6 +1415,7 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
                         isRead={isRead}
                         markAsRead={() => markAsRead(chat.id, getLastMessageTimestamp(chat))}
                         markAsUnread={() => markAsUnread(chat.id)}
+                        removeManualOverride={removeManualOverride}
                         leadsMap={leadsMap}
                         setLeadsMap={setLeadsMap}
                       />
