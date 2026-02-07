@@ -307,6 +307,57 @@ export const searchLeads = async (query: string): Promise<Lead[]> => {
 };
 
 /**
+ * Recalifica un lead específico basándose en la cantidad de mensajes
+ * Solo recalifica si el lead tiene chatwoot_conversation_id y estado 'frio' o 'tibio'
+ */
+export const recalificarLead = async (leadId: string): Promise<boolean> => {
+  try {
+    const { data: leadData, error } = await getSupabase()
+      .from('leads')
+      .select('*')
+      .eq('id', leadId)
+      .single();
+    
+    if (error || !leadData) {
+      console.error(`Error obteniendo lead ${leadId} para recalificar:`, error?.message);
+      return false;
+    }
+    
+    // Solo recalificar si tiene chatwoot_conversation_id y estado 'frío' o 'tibio'
+    if (!leadData.chatwoot_conversation_id) {
+      return false;
+    }
+    
+    const currentEstado = normalizeEstadoFromDB(leadData.estado);
+    // Comparar con 'frío' (con acento) y también aceptar 'frio' (sin acento) para compatibilidad
+    if (currentEstado !== 'frío' && currentEstado !== 'frio' && currentEstado !== 'tibio') {
+      // No recalificar si el estado es 'caliente', 'llamada', 'visita', etc.
+      return false;
+    }
+    
+    const newEstado = await calificarLead(leadData);
+    
+    // Solo actualizar si el estado cambió
+    if (newEstado !== currentEstado) {
+      console.log(`🔄 Recalificando lead ${leadId}: ${currentEstado} → ${newEstado}`);
+      await updateLeadStatus(leadId, newEstado);
+      // Actualizar en el cache
+      cachedLeads = cachedLeads.map(l => 
+        String(l.id) === String(leadId) 
+          ? { ...l, estado: newEstado as Lead['estado'] }
+          : l
+      );
+      return true;
+    }
+    
+    return false;
+  } catch (e) {
+    console.error(`Error recalificando lead ${leadId}:`, e);
+    return false;
+  }
+};
+
+/**
  * Obtiene todos los leads disponibles
  */
 export const getAllLeads = async (): Promise<Lead[]> => {
@@ -320,22 +371,39 @@ export const getAllLeads = async (): Promise<Lead[]> => {
     }
     const normalized: Lead[] = ((data as any[]) || []).map(mapLeadRow);
     
-    // Recalificar automáticamente leads con estado "activo" o "inicial" (estos estados NO deben existir)
-    // También recalificar leads con estado null o undefined
-    const leadsToRecalify = normalized.filter(lead => 
-      !lead.estado || lead.estado === 'activo' || lead.estado === 'inicial'
-    );
+    // Recalificar automáticamente:
+    // 1. Leads con estado inválido (null, "activo" o "inicial")
+      // 2. Leads con chatwoot_conversation_id y estado 'frío' o 'tibio' (para actualizar según mensajes)
+      const leadsToRecalify = normalized.filter(lead => {
+        const estado = normalizeEstadoFromDB(lead.estado);
+        const hasChatwootId = (lead as any).chatwoot_conversation_id;
+        
+        // Recalificar si:
+        // - Estado inválido (null, "activo", "inicial")
+        // - Tiene chatwoot_conversation_id y estado es 'frío' o 'tibio' (puede cambiar según mensajes)
+        return !lead.estado || 
+               lead.estado === 'activo' || 
+               lead.estado === 'inicial' ||
+               (hasChatwootId && (estado === 'frío' || estado === 'frio' || estado === 'tibio'));
+      });
     
     if (leadsToRecalify.length > 0) {
-      console.log(`🔄 Recalificando ${leadsToRecalify.length} leads con estado inválido (null, "activo" o "inicial")`);
+      console.log(`🔄 Recalificando ${leadsToRecalify.length} leads automáticamente`);
       // Recalificar en lote (sin esperar a que termine para no bloquear la UI)
       Promise.all(
         leadsToRecalify.map(async (lead) => {
           const leadData = data.find((d: any) => String(d.id) === lead.id);
           if (leadData) {
             const newEstado = await calificarLead(leadData);
-            // Siempre actualizar si el estado anterior era inválido
-            if (!lead.estado || lead.estado === 'activo' || lead.estado === 'inicial' || newEstado !== lead.estado) {
+            const currentEstado = normalizeEstadoFromDB(lead.estado);
+            
+            // Actualizar si:
+            // - El estado anterior era inválido
+            // - El estado cambió (frio ↔ tibio)
+            if (!lead.estado || 
+                lead.estado === 'activo' || 
+                lead.estado === 'inicial' || 
+                newEstado !== currentEstado) {
               await updateLeadStatus(lead.id, newEstado);
               // Actualizar en el array normalizado
               lead.estado = newEstado as Lead['estado'];
@@ -665,17 +733,17 @@ const getMessagesCount = async (conversationId: number): Promise<number> => {
 
 /**
  * Califica automáticamente un lead según la cantidad de mensajes en su conversación
- * - Si la conversación tiene 2 mensajes o menos (no ha respondido mucho): "frio"
+ * - Si la conversación tiene 2 mensajes o menos (no ha respondido mucho): "frío"
  * - Si la conversación tiene más de 2 mensajes: "tibio"
  * 
- * Si no hay chatwoot_conversation_id, devuelve "frio" por defecto
+ * Si no hay chatwoot_conversation_id, devuelve "frío" por defecto
  */
-const calificarLead = async (leadData: any): Promise<'frio' | 'tibio'> => {
+const calificarLead = async (leadData: any): Promise<'frío' | 'tibio'> => {
   // Si no hay chatwoot_conversation_id, no podemos contar mensajes
-  // Por defecto, consideramos el lead como "frio"
+  // Por defecto, consideramos el lead como "frío"
   if (!leadData.chatwoot_conversation_id) {
-    console.log(`📊 Lead sin chatwoot_conversation_id, calificando como "frio" por defecto`);
-    return 'frio';
+    console.log(`📊 Lead sin chatwoot_conversation_id, calificando como "frío" por defecto`);
+    return 'frío';
   }
   
   try {
@@ -683,13 +751,13 @@ const calificarLead = async (leadData: any): Promise<'frio' | 'tibio'> => {
     const messagesCount = await getMessagesCount(leadData.chatwoot_conversation_id);
     console.log(`📊 Conversación ${leadData.chatwoot_conversation_id}: ${messagesCount} mensajes`);
     
-    // Si tiene 2 mensajes o menos → "frio"
+    // Si tiene 2 mensajes o menos → "frío"
     // Si tiene más de 2 mensajes → "tibio"
-    return messagesCount <= 2 ? 'frio' : 'tibio';
+    return messagesCount <= 2 ? 'frío' : 'tibio';
   } catch (error) {
     console.error(`❌ Error calificando lead con conversación ${leadData.chatwoot_conversation_id}:`, error);
-    // En caso de error, devolver "frio" por defecto
-    return 'frio';
+    // En caso de error, devolver "frío" por defecto
+    return 'frío';
   }
 };
 
@@ -842,9 +910,17 @@ export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promi
       console.log(`📝 Actualizando estado_chat a: ${dataToUpdate.estado_chat} (tipo: ${typeof dataToUpdate.estado_chat})`);
     }
     
-    // Solo recalificar automáticamente si el estado actual es inválido ('inicial' o 'activo')
-    // NO recalificar si el estado es válido y no se está cambiando explícitamente
-    const currentEstado = currentLead?.estado;
+    // Recalificar automáticamente si:
+    // 1. El estado actual es inválido ('inicial' o 'activo')
+    // 2. Se actualiza chatwoot_conversation_id y el estado es 'frío' o 'tibio'
+    // 3. El estado actual es 'frío' o 'tibio' y se está actualizando el lead (puede haber nuevos mensajes)
+    const currentEstado = normalizeEstadoFromDB(currentLead?.estado);
+    const isUpdatingChatwootId = leadData.chatwoot_conversation_id !== undefined && 
+                                  leadData.chatwoot_conversation_id !== currentLead?.chatwoot_conversation_id;
+    const hasChatwootId = (leadData.chatwoot_conversation_id ?? currentLead?.chatwoot_conversation_id);
+    // Comparar con 'frío' (con acento) y también aceptar 'frio' (sin acento) para compatibilidad
+    const shouldAutoRecalify = hasChatwootId && (currentEstado === 'frío' || currentEstado === 'frio' || currentEstado === 'tibio');
+    
     if (leadData.estado !== undefined) {
       // Si se especificó un estado manualmente, respetarlo
       if (leadData.estado === 'inicial' || leadData.estado === 'activo') {
@@ -856,9 +932,19 @@ export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promi
         dataToUpdate.estado = leadData.estado;
       }
     } else if (currentEstado === 'inicial' || currentEstado === 'activo') {
-      // Solo recalificar si el estado actual es inválido
+      // Recalificar si el estado actual es inválido
       const combinedData = { ...currentLead, ...dataToUpdate };
       dataToUpdate.estado = await calificarLead(combinedData);
+    } else if (isUpdatingChatwootId || shouldAutoRecalify) {
+      // Recalificar automáticamente si se actualiza chatwoot_conversation_id o si el lead tiene estado 'frio'/'tibio'
+      // Esto asegura que la calificación se actualice cuando hay nuevos mensajes
+      const combinedData = { ...currentLead, ...dataToUpdate };
+      const newEstado = await calificarLead(combinedData);
+      // Solo actualizar si el estado cambió
+      if (newEstado !== currentEstado) {
+        dataToUpdate.estado = newEstado;
+        console.log(`🔄 Auto-recalificando lead ${leadId}: ${currentEstado} → ${newEstado}`);
+      }
     }
     // Si el estado actual es válido y no se especifica un nuevo estado, NO cambiar el estado
     

@@ -13,7 +13,8 @@ import {
   getUniquePropertyTypes,
   getUniqueInterestReasons,
   getUniquePropertyInterests,
-  updateLead
+  updateLead,
+  recalificarLead
 } from '../../services/leadService';
 import { programarSeguimiento } from '../../services/mensajeService';
 import { exportLeadsToCSV } from '../../utils/exportUtils';
@@ -136,6 +137,61 @@ export default function LeadsTablePage() {
     
     loadData();
   }, []);
+
+  // Recalificar automáticamente los leads con chatwoot_conversation_id cada 2 minutos
+  // Esto asegura que la calificación se actualice cuando hay nuevos mensajes
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      // Recalificar solo los leads que tienen chatwoot_conversation_id y estado 'frío' o 'tibio'
+      const leadsToRecalify = leads.filter(lead => {
+        const hasChatwootId = (lead as any).chatwoot_conversation_id;
+        const estado = (lead.estado as string)?.toLowerCase();
+        // Aceptar tanto 'frio' como 'frío' para compatibilidad
+        return hasChatwootId && (estado === 'frio' || estado === 'frío' || estado === 'tibio');
+      });
+
+      if (leadsToRecalify.length > 0) {
+        console.log(`🔄 Recalificando ${leadsToRecalify.length} leads automáticamente...`);
+        // Recalificar en paralelo (sin bloquear la UI)
+        const recalifyPromises = leadsToRecalify.map(lead => recalificarLead(lead.id));
+        const results = await Promise.allSettled(recalifyPromises);
+        
+        // Contar cuántos se actualizaron
+        const updated = results.filter(r => r.status === 'fulfilled' && r.value === true).length;
+        if (updated > 0) {
+          console.log(`✅ ${updated} leads actualizados automáticamente`);
+          // Recargar los leads para reflejar los cambios
+          const allLeads = await getAllLeads();
+          const normalizedLeads = allLeads.map(lead => {
+            const estado = lead.estado as string;
+            if (estado) {
+              const estadoLower = estado.toLowerCase().trim();
+              if (estadoLower === 'fríos' || estadoLower === 'frios') {
+                return { ...lead, estado: 'frío' as any };
+              }
+              if (estadoLower === 'tibios') {
+                return { ...lead, estado: 'tibio' as any };
+              }
+              if (estadoLower === 'calientes') {
+                return { ...lead, estado: 'caliente' as any };
+              }
+              if (estadoLower === 'llamadas') {
+                return { ...lead, estado: 'llamada' as any };
+              }
+              if (estadoLower === 'visitas') {
+                return { ...lead, estado: 'visita' as any };
+              }
+            }
+            return lead;
+          });
+          setLeads(normalizedLeads);
+        }
+      }
+    }, 120000); // Cada 2 minutos (120000 ms)
+
+    // Limpiar el intervalo cuando el componente se desmonte
+    return () => clearInterval(interval);
+  }, [leads]);
   
   // Aplicar filtros y búsqueda cuando cambien las opciones
   useEffect(() => {

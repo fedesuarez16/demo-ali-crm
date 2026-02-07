@@ -224,8 +224,8 @@ const LeadTable: React.FC<LeadTableProps> = ({ leads, visibleColumns, onSelectio
             <div className="text-gray-500 text-xs truncate leading-tight">{(lead as any).zona || lead.zonaInteres || ''}</div>
           </div>
         </div>
-      </div>
-    );
+    </div>
+  );
   };
 
   // Calcular si todos los leads visibles están seleccionados

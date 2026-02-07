@@ -24,6 +24,7 @@ export default function MensajesProgramadosPage() {
   const [updatingPlantilla, setUpdatingPlantilla] = useState<number | null>(null);
   const [editingFecha, setEditingFecha] = useState<number | null>(null);
   const [tempFecha, setTempFecha] = useState<string>('');
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadMensajes();
@@ -248,6 +249,35 @@ export default function MensajesProgramadosPage() {
     }).format(date);
   };
 
+  // Función para obtener el número de toque basado en seguimientos_count
+  const getToqueNumber = (mensaje: ColaSeguimiento): number => {
+    // seguimientos_count = 0 → Toque 1
+    // seguimientos_count = 1 → Toque 2
+    // seguimientos_count = 2 → Toque 3
+    // etc.
+    if (mensaje.seguimientos_count !== undefined && mensaje.seguimientos_count !== null) {
+      return mensaje.seguimientos_count + 1;
+    }
+    // Fallback: usar tabla_origen si no hay seguimientos_count
+    if (mensaje.tabla_origen === 'cola_seguimientos_dos') {
+      return 2;
+    }
+    return 1;
+  };
+
+  // Función para toggle del acordeón
+  const toggleDay = (dayKey: string) => {
+    setExpandedDays(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(dayKey)) {
+        newSet.delete(dayKey);
+      } else {
+        newSet.add(dayKey);
+      }
+      return newSet;
+    });
+  };
+
   // Separar mensajes por estado
   // Filtrar mensajes pendientes: solo los programados para hoy en adelante
   const hoy = new Date();
@@ -381,68 +411,83 @@ export default function MensajesProgramadosPage() {
                   <p>No hay mensajes pendientes</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto pb-4">
-                  <div className="flex gap-4 min-w-max">
-                    {diasPendientesOrdenados.map((dayKey) => {
-                      const mensajesDelDia = mensajesPendientesPorDia[dayKey];
-                      
-                      return (
-                        <div
-                          key={dayKey}
-                          className="flex-shrink-0 w-80 border border-gray-200 rounded-lg bg-gray-50"
+                <div className="flex gap-4 overflow-x-auto pb-4">
+                  {diasPendientesOrdenados.map((dayKey) => {
+                    const mensajesDelDia = mensajesPendientesPorDia[dayKey];
+                    const isExpanded = expandedDays.has(dayKey);
+                    
+                    return (
+                      <div
+                        key={dayKey}
+                        className="flex-shrink-0 w-80 border border-gray-200 rounded-lg bg-white overflow-hidden"
+                      >
+                        {/* Encabezado del acordeón */}
+                        <button
+                          onClick={() => toggleDay(dayKey)}
+                          className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
                         >
-                          {/* Encabezado de la columna */}
-                          <div className="p-3 border-b border-gray-200 bg-white rounded-t-lg">
-                            <h3 className="text-sm font-semibold text-gray-900">
-                              {formatDayLabel(dayKey === 'sin-fecha' ? new Date().toISOString() : dayKey)}
-                            </h3>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {mensajesDelDia.length} mensaje{mensajesDelDia.length !== 1 ? 's' : ''}
-                            </p>
+                          <div className="flex items-center gap-3">
+                            <svg
+                              className={`h-5 w-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                            <div className="text-left">
+                              <h3 className="text-sm font-semibold text-gray-900">
+                                {formatDayLabel(dayKey === 'sin-fecha' ? new Date().toISOString() : dayKey)}
+                              </h3>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {mensajesDelDia.length} mensaje{mensajesDelDia.length !== 1 ? 's' : ''}
+                              </p>
+                            </div>
                           </div>
-                          
-                          {/* Lista de mensajes del día */}
-                          <div className="p-2 space-y-2 max-h-[600px] overflow-y-auto">
-                            {mensajesDelDia
-                              .sort((a, b) => {
-                                const fechaA = a.fecha_programada || a.scheduled_at;
-                                const fechaB = b.fecha_programada || b.scheduled_at;
-                                if (!fechaA) return 1;
-                                if (!fechaB) return -1;
-                                return new Date(fechaA).getTime() - new Date(fechaB).getTime();
-                              })
-                              .map((mensaje) => {
-                                const fechaProgramada = mensaje.fecha_programada || mensaje.scheduled_at;
-                                const telefono = normalizePhoneNumber(mensaje.remote_jid || String(mensaje.lead_id || ''));
-                                
-                                return (
-                                  <div
-                                    key={mensaje.id}
-                                    className="border border-gray-200 rounded-md p-2 hover:shadow-sm transition-shadow bg-white"
-                                  >
-                                    <div className="flex justify-between items-start gap-2">
-                                      <div className="flex-1 min-w-0">
-                                        {/* Teléfono */}
-                                        <div className="flex items-center gap-1.5 mb-1.5">
-                                          <svg className="h-3 w-3 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                          </svg>
-                                          <span className="text-xs font-medium text-gray-900 truncate">
-                                            {telefono}
-                                          </span>
-                                        </div>
-                                        
-                                        {/* Estado y Tabla origen */}
-                                        <div className="flex items-center gap-1.5 mb-1.5">
-                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800 border border-orange-200">
-                                            {mensaje.estado || 'pendiente'}
-                                          </span>
-                                          {mensaje.tabla_origen && (
-                                            <span className="text-[10px] text-gray-500">
-                                              ({mensaje.tabla_origen === 'cola_seguimientos_dos' ? 'Toque 2' : 'Toque 1'})
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                            Pendiente
+                          </span>
+                        </button>
+                        
+                        {/* Contenido desplegable */}
+                        {isExpanded && (
+                          <div className="border-t border-gray-200 p-4 bg-gray-50 max-h-[600px] overflow-y-auto">
+                            <div className="space-y-3">
+                              {mensajesDelDia
+                                .sort((a, b) => {
+                                  const fechaA = a.fecha_programada || a.scheduled_at;
+                                  const fechaB = b.fecha_programada || b.scheduled_at;
+                                  if (!fechaA) return 1;
+                                  if (!fechaB) return -1;
+                                  return new Date(fechaA).getTime() - new Date(fechaB).getTime();
+                                })
+                                .map((mensaje) => {
+                                  const fechaProgramada = mensaje.fecha_programada || mensaje.scheduled_at;
+                                  const telefono = normalizePhoneNumber(mensaje.remote_jid || String(mensaje.lead_id || ''));
+                                  const toqueNumber = getToqueNumber(mensaje);
+                                  
+                                  return (
+                                    <div
+                                      key={mensaje.id}
+                                      className="border border-gray-200 rounded-md p-3 hover:shadow-sm transition-shadow bg-white"
+                                    >
+                                      <div className="flex justify-between items-start gap-3">
+                                        <div className="flex-1 min-w-0">
+                                          {/* Teléfono y Toque */}
+                                          <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-1.5">
+                                              <svg className="h-4 w-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                              </svg>
+                                              <span className="text-sm font-medium text-gray-900 truncate">
+                                                {telefono}
+                                              </span>
+                                            </div>
+                                            {/* Badge de Toque */}
+                                            <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                              Toque {toqueNumber}
                                             </span>
-                                          )}
-                                        </div>
+                                          </div>
                                         
                                         {/* Selector de Plantilla */}
                                         <div className="mb-1.5">
@@ -529,11 +574,12 @@ export default function MensajesProgramadosPage() {
                                   </div>
                                 );
                               })}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -559,174 +605,206 @@ export default function MensajesProgramadosPage() {
                   <p>No hay mensajes enviados</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto pb-4">
-                  <div className="flex gap-4 min-w-max">
-                    {diasEnviadosOrdenados.map((dayKey) => {
-                      const mensajesDelDia = mensajesEnviadosPorDia[dayKey];
-                      
-                      return (
-                        <div
-                          key={dayKey}
-                          className="flex-shrink-0 w-80 border border-gray-200 rounded-lg bg-gray-50"
+                <div className="space-y-2">
+                  {diasEnviadosOrdenados.map((dayKey) => {
+                    const mensajesDelDia = mensajesEnviadosPorDia[dayKey];
+                    const isExpanded = expandedDays.has(`enviado-${dayKey}`);
+                    
+                    return (
+                      <div
+                        key={dayKey}
+                        className="border border-gray-200 rounded-lg bg-white overflow-hidden"
+                      >
+                        {/* Encabezado del acordeón */}
+                        <button
+                          onClick={() => toggleDay(`enviado-${dayKey}`)}
+                          className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
                         >
-                          {/* Encabezado de la columna */}
-                          <div className="p-3 border-b border-gray-200 bg-white rounded-t-lg">
-                            <h3 className="text-sm font-semibold text-gray-900">
-                              {formatDayLabel(dayKey === 'sin-fecha' ? new Date().toISOString() : dayKey)}
-                            </h3>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {mensajesDelDia.length} mensaje{mensajesDelDia.length !== 1 ? 's' : ''}
-                            </p>
+                          <div className="flex items-center gap-3">
+                            <svg
+                              className={`h-5 w-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                            <div className="text-left">
+                              <h3 className="text-sm font-semibold text-gray-900">
+                                {formatDayLabel(dayKey === 'sin-fecha' ? new Date().toISOString() : dayKey)}
+                              </h3>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {mensajesDelDia.length} mensaje{mensajesDelDia.length !== 1 ? 's' : ''}
+                              </p>
+                            </div>
                           </div>
-                          
-                          {/* Lista de mensajes del día */}
-                          <div className="p-2 space-y-2 max-h-[600px] overflow-y-auto">
-                            {mensajesDelDia
-                              .sort((a, b) => {
-                                const fechaA = a.enviado_at || a.fecha_programada || a.scheduled_at;
-                                const fechaB = b.enviado_at || b.fecha_programada || b.scheduled_at;
-                                if (!fechaA) return 1;
-                                if (!fechaB) return -1;
-                                return new Date(fechaB).getTime() - new Date(fechaA).getTime(); // Más recientes primero
-                              })
-                              .map((mensaje) => {
-                                const fechaProgramada = mensaje.fecha_programada || mensaje.scheduled_at;
-                                const fechaEnviado = mensaje.enviado_at;
-                                const telefono = normalizePhoneNumber(mensaje.remote_jid || String(mensaje.lead_id || ''));
-                                
-                                return (
-                                  <div
-                                    key={mensaje.id}
-                                    className="border border-gray-200 rounded-md p-2 hover:shadow-sm transition-shadow bg-white"
-                                  >
-                                    <div className="flex justify-between items-start gap-2">
-                                      <div className="flex-1 min-w-0">
-                                        {/* Teléfono */}
-                                        <div className="flex items-center gap-1.5 mb-1.5">
-                                          <svg className="h-3 w-3 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                          </svg>
-                                          <span className="text-xs font-medium text-gray-900 truncate">
-                                            {telefono}
-                                          </span>
-                                        </div>
-                                        
-                                        {/* Estado y Tabla origen */}
-                                        <div className="flex items-center gap-1.5 mb-1.5">
-                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800 border border-green-200">
-                                            {mensaje.estado || 'enviado'}
-                                          </span>
-                                          {mensaje.tabla_origen && (
-                                            <span className="text-[10px] text-gray-500">
-                                              ({mensaje.tabla_origen === 'cola_seguimientos_dos' ? 'Toque 2' : 'Toque 1'})
-                                            </span>
-                                          )}
-                                        </div>
-                                        
-                                        {/* Selector de Plantilla */}
-                                        <div className="mb-1.5">
-                                          <Select
-                                            value={mensaje.plantilla || 'none'}
-                                            onValueChange={(value) => mensaje.id && handleUpdatePlantilla(mensaje.id, value, mensaje.tabla_origen)}
-                                            disabled={updatingPlantilla === mensaje.id}
-                                          >
-                                            <SelectTrigger className="h-7 text-xs">
-                                              <SelectValue placeholder="Sin plantilla" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="none">Sin plantilla</SelectItem>
-                                              {PLANTILLAS.map((plantilla) => (
-                                                <SelectItem key={plantilla.value} value={plantilla.value}>
-                                                  {plantilla.label}
-                                                </SelectItem>
-                                              ))}
-                                            </SelectContent>
-                                          </Select>
-                                        </div>
-                                        
-                                        {/* Hora programada - Editable */}
-                                        {editingFecha === mensaje.id ? (
-                                          <div className="space-y-1 mb-1">
-                                            <input
-                                              type="datetime-local"
-                                              value={tempFecha}
-                                              onChange={(e) => setTempFecha(e.target.value)}
-                                              className="w-full px-2 py-1 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                              autoFocus
-                                            />
-                                            <div className="flex gap-1">
-                                              <button
-                                                onClick={() => mensaje.id && handleSaveFecha(mensaje.id, mensaje.tabla_origen)}
-                                                className="flex-1 px-2 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-                                              >
-                                                Guardar
-                                              </button>
-                                              <button
-                                                onClick={handleCancelEditFecha}
-                                                className="flex-1 px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-                                              >
-                                                Cancelar
-                                              </button>
-                                            </div>
-                                          </div>
-                                        ) : (
-                                          fechaProgramada && (
-                                            <div 
-                                              className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-blue-900 mb-1 cursor-pointer hover:bg-blue-100 transition-colors"
-                                              onClick={() => handleStartEditFecha(mensaje)}
-                                              title="Click para editar fecha y hora"
-                                            >
-                                              <svg className="h-3 w-3 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                            Enviado
+                          </span>
+                        </button>
+                        
+                        {/* Contenido desplegable */}
+                        {isExpanded && (
+                          <div className="border-t border-gray-200 p-4 bg-gray-50">
+                            <div className="space-y-3">
+                              {mensajesDelDia
+                                .sort((a, b) => {
+                                  const fechaA = a.enviado_at || a.fecha_programada || a.scheduled_at;
+                                  const fechaB = b.enviado_at || b.fecha_programada || b.scheduled_at;
+                                  if (!fechaA) return 1;
+                                  if (!fechaB) return -1;
+                                  return new Date(fechaB).getTime() - new Date(fechaA).getTime(); // Más recientes primero
+                                })
+                                .map((mensaje) => {
+                                  const fechaProgramada = mensaje.fecha_programada || mensaje.scheduled_at;
+                                  const fechaEnviado = mensaje.enviado_at;
+                                  const telefono = normalizePhoneNumber(mensaje.remote_jid || String(mensaje.lead_id || ''));
+                                  const toqueNumber = getToqueNumber(mensaje);
+                                  
+                                  return (
+                                    <div
+                                      key={mensaje.id}
+                                      className="border border-gray-200 rounded-md p-3 hover:shadow-sm transition-shadow bg-white"
+                                    >
+                                      <div className="flex justify-between items-start gap-3">
+                                        <div className="flex-1 min-w-0">
+                                          {/* Teléfono y Toque */}
+                                          <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-1.5">
+                                              <svg className="h-4 w-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                                               </svg>
-                                              <span className="text-xs font-semibold">
-                                                Programado: {formatTimeOnly(fechaProgramada)}
+                                              <span className="text-sm font-medium text-gray-900 truncate">
+                                                {telefono}
                                               </span>
-                                              <svg className="h-3 w-3 text-blue-600 flex-shrink-0 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                              </svg>
                                             </div>
-                                          )
-                                        )}
-                                        
-                                        {/* Hora enviado */}
-                                        {fechaEnviado && (
-                                          <div className="flex items-center gap-1 px-2 py-0.5 bg-green-50 border border-green-200 rounded text-green-900">
-                                            <svg className="h-3 w-3 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                            <span className="text-xs font-semibold">
-                                              Enviado: {formatTimeOnly(fechaEnviado)}
+                                            {/* Badge de Toque */}
+                                            <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                              Toque {toqueNumber}
                                             </span>
                                           </div>
-                                        )}
+                                          
+                                          {/* Selector de Plantilla */}
+                                          <div className="mb-2">
+                                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                                              Plantilla
+                                            </label>
+                                            <Select
+                                              value={mensaje.plantilla || 'none'}
+                                              onValueChange={(value) => mensaje.id && handleUpdatePlantilla(mensaje.id, value, mensaje.tabla_origen)}
+                                              disabled={updatingPlantilla === mensaje.id}
+                                            >
+                                              <SelectTrigger className="h-8 text-xs">
+                                                <SelectValue placeholder="Sin plantilla" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="none">Sin plantilla</SelectItem>
+                                                {PLANTILLAS.map((plantilla) => (
+                                                  <SelectItem key={plantilla.value} value={plantilla.value}>
+                                                    {plantilla.label}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                          
+                                          {/* Fechas */}
+                                          <div className="space-y-2">
+                                            {/* Hora programada - Editable */}
+                                            {fechaProgramada && (
+                                              <div>
+                                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                                  Fecha Programada
+                                                </label>
+                                                {editingFecha === mensaje.id ? (
+                                                  <div className="space-y-2">
+                                                    <input
+                                                      type="datetime-local"
+                                                      value={tempFecha}
+                                                      onChange={(e) => setTempFecha(e.target.value)}
+                                                      className="w-full px-2 py-1.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                      autoFocus
+                                                    />
+                                                    <div className="flex gap-2">
+                                                      <button
+                                                        onClick={() => mensaje.id && handleSaveFecha(mensaje.id, mensaje.tabla_origen)}
+                                                        className="flex-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                                                      >
+                                                        Guardar
+                                                      </button>
+                                                      <button
+                                                        onClick={handleCancelEditFecha}
+                                                        className="flex-1 px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                                                      >
+                                                        Cancelar
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                ) : (
+                                                  <div 
+                                                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded text-blue-900 cursor-pointer hover:bg-blue-100 transition-colors"
+                                                    onClick={() => handleStartEditFecha(mensaje)}
+                                                    title="Click para editar fecha y hora"
+                                                  >
+                                                    <svg className="h-4 w-4 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                    <span className="text-xs font-semibold">
+                                                      {formatTimeOnly(fechaProgramada)}
+                                                    </span>
+                                                    <svg className="h-4 w-4 text-blue-600 flex-shrink-0 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )}
+                                            
+                                            {/* Hora enviado */}
+                                            {fechaEnviado && (
+                                              <div>
+                                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                                  Fecha Enviado
+                                                </label>
+                                                <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded text-green-900">
+                                                  <svg className="h-4 w-4 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                  </svg>
+                                                  <span className="text-xs font-semibold">
+                                                    {formatTimeOnly(fechaEnviado)}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                        
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => mensaje.id && handleDelete(mensaje.id, mensaje.tabla_origen)}
+                                          disabled={isDeleting === mensaje.id}
+                                          className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0 flex-shrink-0"
+                                          title="Eliminar mensaje"
+                                        >
+                                          {isDeleting === mensaje.id ? (
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                                          ) : (
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                          )}
+                                        </Button>
                                       </div>
-                                      
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => mensaje.id && handleDelete(mensaje.id, mensaje.tabla_origen)}
-                                        disabled={isDeleting === mensaje.id}
-                                        className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 w-6 p-0 flex-shrink-0"
-                                        title="Eliminar mensaje"
-                                      >
-                                        {isDeleting === mensaje.id ? (
-                                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-600"></div>
-                                        ) : (
-                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                          </svg>
-                                        )}
-                                      </Button>
                                     </div>
-                                  </div>
-                                );
-                              })}
+                                  );
+                                })}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
