@@ -323,19 +323,22 @@ export const recalificarLead = async (leadId: string): Promise<boolean> => {
       return false;
     }
     
+    // Type assertion para que TypeScript reconozca el tipo Lead
+    const lead = leadData as Lead;
+    
     // Solo recalificar si tiene chatwoot_conversation_id y estado 'frío' o 'tibio'
-    if (!leadData.chatwoot_conversation_id) {
+    if (!lead.chatwoot_conversation_id) {
       return false;
     }
     
-    const currentEstado = normalizeEstadoFromDB(leadData.estado);
+    const currentEstado = normalizeEstadoFromDB(lead.estado);
     // Comparar con 'frío' (con acento) y también aceptar 'frio' (sin acento) para compatibilidad
     if (currentEstado !== 'frío' && currentEstado !== 'frio' && currentEstado !== 'tibio') {
       // No recalificar si el estado es 'caliente', 'llamada', 'visita', etc.
       return false;
     }
     
-    const newEstado = await calificarLead(leadData);
+    const newEstado = await calificarLead(lead);
     
     // Solo actualizar si el estado cambió
     if (newEstado !== currentEstado) {
