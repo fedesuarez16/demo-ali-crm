@@ -9,12 +9,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import Link from 'next/link';
 
 // Plantillas disponibles
+// 8 toques fríos (1-8) → seguimientos_count = 1-8
+// 8 toques tibios (1-8 en nombre) → seguimientos_count = 9-16
 const PLANTILLAS = [
+  // Toques fríos (1-8)
   { value: 'toque_1_frio', label: 'Toque 1 Frio' },
   { value: 'toque_2_frio', label: 'Toque 2 Frio' },
+  { value: 'toque_3_frio', label: 'Toque 3 Frio' },
+  { value: 'toque_4_frio', label: 'Toque 4 Frio' },
+  { value: 'toque_5_frio', label: 'Toque 5 Frio' },
+  { value: 'toque_6_frio', label: 'Toque 6 Frio' },
+  { value: 'toque_7_frio', label: 'Toque 7 Frio' },
+  { value: 'toque_8_frio', label: 'Toque 8 Frio' },
+  // Toques tibios (1-8 en nombre, pero seguimientos_count = 9-16)
   { value: 'toque_1_tibio', label: 'Toque 1 Tibio' },
   { value: 'toque_2_tibio', label: 'Toque 2 Tibio' },
   { value: 'toque_3_tibio', label: 'Toque 3 Tibio' },
+  { value: 'toque_4_tibio', label: 'Toque 4 Tibio' },
+  { value: 'toque_5_tibio', label: 'Toque 5 Tibio' },
+  { value: 'toque_6_tibio', label: 'Toque 6 Tibio' },
+  { value: 'toque_7_tibio', label: 'Toque 7 Tibio' },
+  { value: 'toque_8_tibio', label: 'Toque 8 Tibio' },
 ];
 
 export default function MensajesProgramadosPage() {
@@ -251,12 +266,19 @@ export default function MensajesProgramadosPage() {
 
   // Función para obtener el número de toque basado en seguimientos_count
   const getToqueNumber = (mensaje: ColaSeguimiento): number => {
-    // seguimientos_count = 0 → Toque 1
-    // seguimientos_count = 1 → Toque 2
-    // seguimientos_count = 2 → Toque 3
-    // etc.
+    // Fríos: seguimientos_count = 1-8 → Toque 1-8
+    // Tibios: seguimientos_count = 9-16 → Toque 1-8 (en nombre, pero seguimientos_count 9-16)
     if (mensaje.seguimientos_count !== undefined && mensaje.seguimientos_count !== null) {
-      return mensaje.seguimientos_count + 1;
+      const count = mensaje.seguimientos_count;
+      if (count >= 1 && count <= 8) {
+        // Es un toque frío (1-8)
+        return count;
+      } else if (count >= 9 && count <= 16) {
+        // Es un toque tibio (9-16 en seguimientos_count, pero 1-8 en nombre)
+        return count - 8;
+      }
+      // Si está fuera del rango, mostrar el valor directamente
+      return count;
     }
     // Fallback: usar tabla_origen si no hay seguimientos_count
     if (mensaje.tabla_origen === 'cola_seguimientos_dos') {

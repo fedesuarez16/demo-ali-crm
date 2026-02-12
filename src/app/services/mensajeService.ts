@@ -232,7 +232,7 @@ export const moverMensajeEntreTablas = async (
 /**
  * Extrae el número del toque de una plantilla
  * @param plantilla - Nombre de la plantilla (ej: 'toque_1_frio', 'toque_2_tibio', 'toque_3_tibio')
- * @returns El número del toque (1, 2, o 3) o null si no se puede determinar
+ * @returns El número del toque (1-8) o null si no se puede determinar
  */
 const extraerNumeroToque = (plantilla: string | null): number | null => {
   if (!plantilla) return null;
@@ -242,6 +242,20 @@ const extraerNumeroToque = (plantilla: string | null): number | null => {
   if (match && match[1]) {
     return parseInt(match[1], 10);
   }
+  
+  return null;
+};
+
+/**
+ * Determina si una plantilla es de tipo "frio" o "tibio"
+ * @param plantilla - Nombre de la plantilla
+ * @returns 'frio', 'tibio', o null si no se puede determinar
+ */
+const extraerTipoToque = (plantilla: string | null): 'frio' | 'tibio' | null => {
+  if (!plantilla) return null;
+  
+  if (plantilla.includes('_frio')) return 'frio';
+  if (plantilla.includes('_tibio')) return 'tibio';
   
   return null;
 };
@@ -268,12 +282,22 @@ export const actualizarPlantillaMensaje = async (
     // Cualquier otra plantilla o sin plantilla → debe estar en cola_seguimientos
     const tablaDestino = plantilla === 'toque_2_frio' ? 'cola_seguimientos_dos' : 'cola_seguimientos';
     
-    // Calcular seguimientos_count basado en el número del toque
-    // Toque 1 → seguimientos_count = 0
-    // Toque 2 → seguimientos_count = 1
-    // Toque 3 → seguimientos_count = 2
+    // Calcular seguimientos_count basado en el número del toque y tipo
+    // Fríos: Toque 1-8 → seguimientos_count = 1-8
+    // Tibios: Toque 1-8 (en nombre) → seguimientos_count = 9-16
     const numeroToque = extraerNumeroToque(plantilla);
-    const seguimientosCount = numeroToque !== null ? numeroToque - 1 : null;
+    const tipoToque = extraerTipoToque(plantilla);
+    
+    let seguimientosCount: number | null = null;
+    if (numeroToque !== null && tipoToque) {
+      if (tipoToque === 'frio') {
+        // Fríos: seguimientos_count = número del toque (1-8)
+        seguimientosCount = numeroToque;
+      } else if (tipoToque === 'tibio') {
+        // Tibios: seguimientos_count = número del toque + 8 (9-16)
+        seguimientosCount = numeroToque + 8;
+      }
+    }
     
     // Preparar los datos a actualizar
     // IMPORTANTE: Solo actualizar plantilla y seguimientos_count
