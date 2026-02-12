@@ -266,24 +266,15 @@ export default function MensajesProgramadosPage() {
 
   // Función para obtener el número de toque basado en seguimientos_count
   const getToqueNumber = (mensaje: ColaSeguimiento): number => {
-    // Fríos: seguimientos_count = 1-8 → Toque 1-8
-    // Tibios: seguimientos_count = 9-16 → Toque 1-8 (en nombre, pero seguimientos_count 9-16)
+    // seguimientos_count = 0 → Toque 1
+    // seguimientos_count = 1 → Toque 2
+    // seguimientos_count = 2 → Toque 3
+    // etc.
+    // seguimientos_count = null → Toque 1
     if (mensaje.seguimientos_count !== undefined && mensaje.seguimientos_count !== null) {
-      const count = mensaje.seguimientos_count;
-      if (count >= 1 && count <= 8) {
-        // Es un toque frío (1-8)
-        return count;
-      } else if (count >= 9 && count <= 16) {
-        // Es un toque tibio (9-16 en seguimientos_count, pero 1-8 en nombre)
-        return count - 8;
-      }
-      // Si está fuera del rango, mostrar el valor directamente
-      return count;
+      return mensaje.seguimientos_count + 1;
     }
-    // Fallback: usar tabla_origen si no hay seguimientos_count
-    if (mensaje.tabla_origen === 'cola_seguimientos_dos') {
-      return 2;
-    }
+    // Si es null, mostrar Toque 1
     return 1;
   };
 
