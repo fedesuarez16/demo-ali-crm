@@ -597,6 +597,8 @@ const ChatConversation = ({ conversation, onBack }) => {
             )}
             {Object.entries(groupMessagesByDate(
               // Filtrar mensajes borrados también en el componente por si acaso
+              // NOTA: No filtramos mensajes privados (msg.private === true) porque pueden ser mensajes
+              // enviados por workflows de n8n que queremos mostrar
               messages.filter(msg => {
                 const content = (msg.content || '').toLowerCase();
                 return !(
@@ -604,7 +606,6 @@ const ChatConversation = ({ conversation, onBack }) => {
                   content.includes('mensaje eliminado') ||
                   content.includes('message was deleted') ||
                   msg.content_attributes?.deleted === true ||
-                  msg.private === true ||
                   msg.deleted === true ||
                   msg.status === 'deleted'
                 );

@@ -13,13 +13,14 @@ export const useChatMessages = (conversationId) => {
       // 1. Tengan contenido que indique que fue borrado
       // 2. Tengan content_attributes que indiquen que fue borrado
       // 3. Tengan un flag deleted
+      // NOTA: No filtramos mensajes privados (msg.private === true) porque pueden ser mensajes
+      // enviados por workflows de n8n que queremos mostrar
       const content = (msg.content || '').toLowerCase();
       const isDeleted = 
         content.includes('this message was deleted') ||
         content.includes('mensaje eliminado') ||
         content.includes('message was deleted') ||
         msg.content_attributes?.deleted === true ||
-        msg.private === true ||
         msg.deleted === true ||
         msg.status === 'deleted';
       

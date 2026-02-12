@@ -116,13 +116,14 @@ export async function GET(request, { params }) {
       if (!msg.content || msg.content.trim() === '') return false;
       
       // Filtrar mensajes borrados - no mostrar mensajes que contengan "deleted" o estén marcados como borrados
+      // NOTA: No filtramos mensajes privados (msg.private === true) porque pueden ser mensajes
+      // enviados por workflows de n8n que queremos mostrar
       const content = (msg.content || '').toLowerCase();
       const isDeleted = 
         content.includes('this message was deleted') ||
         content.includes('mensaje eliminado') ||
         content.includes('message was deleted') ||
         msg.content_attributes?.deleted === true ||
-        msg.private === true ||
         msg.deleted === true ||
         msg.status === 'deleted';
       
