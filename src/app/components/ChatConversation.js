@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useChatMessages } from '../../hooks/useChatMessages';
 import { updateLead, getAllLeads } from '../services/leadService';
-import { programarSeguimiento, getSeguimientosPendientes, eliminarMensajeProgramado } from '../services/mensajeService';
+import { programarSeguimiento, getSeguimientosPendientes, eliminarMensajeProgramado, eliminarTodosSeguimientosPendientes, existeSeguimientoParaLead } from '../services/mensajeService';
 
 const ChatConversation = ({ conversation, onBack }) => {
   const { messages, loading, loadingMore, error, hasMore, refreshMessages, loadMoreMessages, sendMessage } = useChatMessages(conversation?.id);
@@ -15,7 +15,7 @@ const ChatConversation = ({ conversation, onBack }) => {
   const [isTogglingChat, setIsTogglingChat] = useState(false);
   const [isProgramandoSeguimiento, setIsProgramandoSeguimiento] = useState(false);
   const [seguimientosCount, setSeguimientosCount] = useState(0);
-  const [seguimientoActivo, setSeguimientoActivo] = useState(null); // { id, tabla_origen }
+  const [tieneSeguimiento, setTieneSeguimiento] = useState(false); // true si el remote_jid existe en cola_seguimientos
   const [deletingMessageId, setDeletingMessageId] = useState(null); // ID del mensaje que se está borrando
 
   // Cargar el lead cuando hay una conversación
@@ -67,22 +67,17 @@ const ChatConversation = ({ conversation, onBack }) => {
         setLead(foundLead);
         if (foundLead) {
           setSeguimientosCount(foundLead.seguimientos_count || 0);
-          // Cargar seguimientos pendientes para este lead
+          // Verificar si el lead tiene seguimientos en la tabla
           const remoteJid = foundLead.whatsapp_id || foundLead.telefono || '';
           if (remoteJid) {
-            const seguimientos = await getSeguimientosPendientes(remoteJid);
-            if (seguimientos.length > 0) {
-              // Tomar el primer seguimiento pendiente (más próximo)
-              setSeguimientoActivo({
-                id: seguimientos[0].id,
-                tabla_origen: seguimientos[0].tabla_origen || 'cola_seguimientos'
-              });
-            } else {
-              setSeguimientoActivo(null);
-            }
+            const existe = await existeSeguimientoParaLead(remoteJid);
+            setTieneSeguimiento(existe);
+            console.log(`📋 Lead ${remoteJid} tiene seguimiento en tabla: ${existe}`);
+          } else {
+            setTieneSeguimiento(false);
           }
         } else {
-          setSeguimientoActivo(null);
+          setTieneSeguimiento(false);
         }
       } catch (error) {
         console.error('Error loading lead:', error);
@@ -181,28 +176,6 @@ const ChatConversation = ({ conversation, onBack }) => {
   const handleProgramarSeguimiento = async () => {
     if (!lead) return;
     
-    // Si hay un seguimiento activo, desactivarlo
-    if (seguimientoActivo) {
-      setIsProgramandoSeguimiento(true);
-      try {
-        const success = await eliminarMensajeProgramado(seguimientoActivo.id, seguimientoActivo.tabla_origen);
-        
-        if (success) {
-          alert('✅ Seguimiento desactivado exitosamente');
-          setSeguimientoActivo(null);
-        } else {
-          alert('❌ Error al desactivar el seguimiento. Intenta nuevamente.');
-        }
-      } catch (error) {
-        console.error('Error desactivando seguimiento:', error);
-        alert('❌ Error al desactivar el seguimiento. Intenta nuevamente.');
-      } finally {
-        setIsProgramandoSeguimiento(false);
-      }
-      return;
-    }
-    
-    // Si no hay seguimiento activo, programar uno nuevo
     const remoteJid = lead.whatsapp_id || lead.telefono || '';
     
     if (!remoteJid) {
@@ -211,8 +184,22 @@ const ChatConversation = ({ conversation, onBack }) => {
     }
     
     setIsProgramandoSeguimiento(true);
+    
     try {
-      // Preparar datos del seguimiento
+      if (tieneSeguimiento) {
+        // DESACTIVAR: Eliminar TODOS los seguimientos del lead de la tabla
+        console.log(`🗑️ Desactivando seguimientos para ${remoteJid}...`);
+        const success = await eliminarTodosSeguimientosPendientes(remoteJid);
+        
+        if (success) {
+          setTieneSeguimiento(false);
+          console.log(`✅ Seguimientos eliminados para ${remoteJid}`);
+        } else {
+          alert('❌ Error al desactivar los seguimientos. Intenta nuevamente.');
+        }
+      } else {
+        // ACTIVAR: Programar un nuevo seguimiento
+        console.log(`➕ Activando seguimiento para ${remoteJid}...`);
       const seguimientoData = {
         remote_jid: remoteJid,
         tipo_lead: lead.estado || null,
@@ -231,36 +218,28 @@ const ChatConversation = ({ conversation, onBack }) => {
         seguimientoData.chatwoot_conversation_id = conversation.id;
       }
       
-      const result = await programarSeguimiento(seguimientoData);
+        const result = await programarSeguimiento(seguimientoData);
 
-      if (result.success) {
-        if (result.actualizado) {
-          alert('✅ Seguimiento actualizado exitosamente (fecha programada modificada)');
-        } else {
-          alert('✅ Seguimiento programado exitosamente para dentro de 23 horas');
-          // Solo incrementar el contador si se creó un nuevo seguimiento (no si se actualizó uno existente)
-          const newCount = (seguimientosCount || 0) + 1;
-          setSeguimientosCount(newCount);
-          // Actualizar en la base de datos
-          const updatedLead = await updateLead(lead.id, { seguimientos_count: newCount });
-          if (updatedLead) {
-            setLead(updatedLead);
+        if (result.success) {
+          setTieneSeguimiento(true);
+
+          if (!result.actualizado) {
+            // Solo incrementar el contador si se creó un nuevo seguimiento
+        const newCount = (seguimientosCount || 0) + 1;
+        setSeguimientosCount(newCount);
+        const updatedLead = await updateLead(lead.id, { seguimientos_count: newCount });
+        if (updatedLead) {
+          setLead(updatedLead);
+        }
           }
-        }
-        // Recargar seguimientos pendientes para actualizar el estado en ambos casos
-        const seguimientos = await getSeguimientosPendientes(remoteJid);
-        if (seguimientos.length > 0) {
-          setSeguimientoActivo({
-            id: seguimientos[0].id,
-            tabla_origen: seguimientos[0].tabla_origen || 'cola_seguimientos'
-          });
-        }
+          console.log(`✅ Seguimiento activado para ${remoteJid}`);
       } else {
         alert('❌ Error al programar el seguimiento. Intenta nuevamente.');
+        }
       }
     } catch (error) {
-      console.error('Error programando seguimiento:', error);
-      alert('❌ Error al programar el seguimiento. Intenta nuevamente.');
+      console.error('Error en handleProgramarSeguimiento:', error);
+      alert('❌ Error al procesar el seguimiento. Intenta nuevamente.');
     } finally {
       setIsProgramandoSeguimiento(false);
     }
@@ -686,9 +665,9 @@ const ChatConversation = ({ conversation, onBack }) => {
                   const isDeleting = deletingMessageId === message.id;
                   
                   return (
-                    <div
-                      key={message.id}
-                      className={`flex ${isOutgoing(message) ? 'justify-end' : 'justify-start'} mb-2`}
+                  <div
+                    key={message.id}
+                    className={`flex ${isOutgoing(message) ? 'justify-end' : 'justify-start'} mb-2`}
                       onDoubleClick={() => {
                         // Solo permitir borrar con doble click
                         if (!isDeleting) {
@@ -697,16 +676,16 @@ const ChatConversation = ({ conversation, onBack }) => {
                       }}
                       style={{ cursor: 'pointer' }}
                       title="Doble click para borrar este mensaje"
-                    >
-                      <div
+                  >
+                    <div
                         className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg transition-opacity ${
                           isDeleting ? 'opacity-50' : ''
                         } ${
-                          isOutgoing(message)
-                            ? 'bg-green-500 text-white'
-                            : 'bg-white border border-gray-200 text-gray-800'
-                        }`}
-                      >
+                        isOutgoing(message)
+                          ? 'bg-green-500 text-white'
+                          : 'bg-white border border-gray-200 text-gray-800'
+                      }`}
+                    >
                         {/* Mostrar reproductor de audio si hay audio */}
                         {hasAudio && audioUrl ? (
                           <div className="space-y-1">
@@ -752,22 +731,22 @@ const ChatConversation = ({ conversation, onBack }) => {
                         ) : (
                           /* Mostrar contenido de texto normal */
                           message.content && message.content.trim() && (
-                            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                           )
                         )}
                         
-                        <p className={`text-xs mt-1 ${
-                          isOutgoing(message) ? 'text-green-100' : 'text-gray-500'
-                        }`}>
-                          {formatMessageTime(message.created_at)}
-                          {isOutgoing(message) && (
-                            <svg className="inline ml-1 w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                            </svg>
-                          )}
-                        </p>
-                      </div>
+                      <p className={`text-xs mt-1 ${
+                        isOutgoing(message) ? 'text-green-100' : 'text-gray-500'
+                      }`}>
+                        {formatMessageTime(message.created_at)}
+                        {isOutgoing(message) && (
+                          <svg className="inline ml-1 w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                          </svg>
+                        )}
+                      </p>
                     </div>
+                  </div>
                   );
                 })}
               </div>
@@ -857,14 +836,14 @@ const ChatConversation = ({ conversation, onBack }) => {
                         <>
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
+                        </svg>
                           <span>Chat Activo</span>
                         </>
                       ) : (
                         <>
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
+                        </svg>
                           <span>Chat Inactivo</span>
                         </>
                       )}
@@ -878,15 +857,15 @@ const ChatConversation = ({ conversation, onBack }) => {
                   onClick={handleProgramarSeguimiento}
                   disabled={isProgramandoSeguimiento || isLoadingLead || !lead}
                   className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-colors shadow-sm ${
-                    seguimientoActivo
+                    tieneSeguimiento
                       ? 'bg-red-100 text-red-800 hover:bg-red-200 border border-red-300'
                       : 'bg-blue-100 text-blue-800 hover:bg-blue-200 border border-blue-300'
                   } ${isProgramandoSeguimiento || isLoadingLead ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  title={seguimientoActivo ? 'Desactivar seguimiento programado' : 'Activar seguimiento (programa para dentro de 23 horas)'}
+                  title={tieneSeguimiento ? 'Desactivar seguimiento (elimina de la tabla)' : 'Activar seguimiento (programa para dentro de 23 horas)'}
                 >
                   {isProgramandoSeguimiento ? (
                     <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-current"></div>
-                  ) : seguimientoActivo ? (
+                  ) : tieneSeguimiento ? (
                     <>
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />

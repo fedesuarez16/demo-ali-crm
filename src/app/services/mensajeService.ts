@@ -155,6 +155,105 @@ export const eliminarMensajeProgramado = async (id: number, tablaOrigen?: string
 };
 
 /**
+ * Genera variantes de un remote_jid para buscar en la DB
+ * Ya que puede estar guardado con o sin +, con o sin @s.whatsapp.net, etc.
+ */
+const getRemoteJidVariantes = (remoteJid: string): string[] => {
+  const soloDigitos = remoteJid.replace(/[^\d]/g, '');
+  const variantes = new Set<string>();
+  variantes.add(remoteJid); // Original
+  variantes.add(soloDigitos); // Solo dígitos
+  variantes.add(`+${soloDigitos}`); // Con +
+  return Array.from(variantes);
+};
+
+/**
+ * Elimina TODOS los seguimientos de un lead por su remote_jid (cualquier estado)
+ * Busca y elimina en ambas tablas: cola_seguimientos y cola_seguimientos_dos
+ * Prueba múltiples variantes del remote_jid (con/sin +) para asegurar que se eliminen todos
+ */
+export const eliminarTodosSeguimientosPendientes = async (remoteJid: string): Promise<boolean> => {
+  try {
+    let allSuccess = true;
+    const variantes = getRemoteJidVariantes(remoteJid);
+    console.log(`🗑️ Eliminando seguimientos para variantes:`, variantes);
+    
+    // Eliminar de cola_seguimientos con todas las variantes del remote_jid
+    const { error: errorCola1 } = await (getSupabase() as any)
+      .from('cola_seguimientos')
+      .delete()
+      .in('remote_jid', variantes);
+    
+    if (errorCola1) {
+      console.error('Error eliminando seguimientos de cola_seguimientos:', errorCola1.message);
+      allSuccess = false;
+    } else {
+      console.log(`✅ Seguimientos eliminados de cola_seguimientos para ${remoteJid}`);
+    }
+    
+    // Eliminar de cola_seguimientos_dos con todas las variantes
+    const { error: errorCola2 } = await (getSupabase() as any)
+      .from('cola_seguimientos_dos')
+      .delete()
+      .in('remote_jid', variantes);
+    
+    if (errorCola2) {
+      console.error('Error eliminando seguimientos de cola_seguimientos_dos:', errorCola2.message);
+      allSuccess = false;
+    } else {
+      console.log(`✅ Seguimientos eliminados de cola_seguimientos_dos para ${remoteJid}`);
+    }
+    
+    return allSuccess;
+  } catch (e) {
+    console.error('Exception eliminando todos los seguimientos:', e);
+    return false;
+  }
+};
+
+/**
+ * Verifica si un remote_jid tiene seguimientos en cola_seguimientos (cualquier estado)
+ * Prueba múltiples variantes del remote_jid (con/sin +) para encontrar coincidencias
+ * Retorna true si existe al menos un registro
+ */
+export const existeSeguimientoParaLead = async (remoteJid: string): Promise<boolean> => {
+  try {
+    const variantes = getRemoteJidVariantes(remoteJid);
+    console.log(`🔍 Buscando seguimientos para variantes:`, variantes);
+    
+    // Buscar en cola_seguimientos con todas las variantes
+    const { data: dataCola1, error: errorCola1 } = await (getSupabase() as any)
+      .from('cola_seguimientos')
+      .select('id')
+      .in('remote_jid', variantes)
+      .limit(1);
+    
+    if (!errorCola1 && dataCola1 && dataCola1.length > 0) {
+      console.log(`✅ Seguimiento encontrado en cola_seguimientos`);
+      return true;
+    }
+    
+    // Buscar en cola_seguimientos_dos con todas las variantes
+    const { data: dataCola2, error: errorCola2 } = await (getSupabase() as any)
+      .from('cola_seguimientos_dos')
+      .select('id')
+      .in('remote_jid', variantes)
+      .limit(1);
+    
+    if (!errorCola2 && dataCola2 && dataCola2.length > 0) {
+      console.log(`✅ Seguimiento encontrado en cola_seguimientos_dos`);
+      return true;
+    }
+    
+    console.log(`❌ No se encontraron seguimientos para ${remoteJid}`);
+    return false;
+  } catch (e) {
+    console.error('Exception verificando existencia de seguimiento:', e);
+    return false;
+  }
+};
+
+/**
  * Mueve un mensaje de una tabla a otra
  * @param id - ID del mensaje
  * @param tablaOrigen - Tabla de origen: 'cola_seguimientos' o 'cola_seguimientos_dos'
