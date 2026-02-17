@@ -332,9 +332,9 @@ export const recalificarLead = async (leadId: string): Promise<boolean> => {
     }
     
     const currentEstado = normalizeEstadoFromDB(lead.estado);
-    // Comparar con 'frío' (con acento) y también aceptar 'frio' (sin acento) para compatibilidad
-    if (currentEstado !== 'frío' && currentEstado !== 'frio' && currentEstado !== 'tibio') {
-      // No recalificar si el estado es 'caliente', 'llamada', 'visita', etc.
+    // Recalificar si el estado es 'frío', 'tibio' o 'caliente' (los 3 estados automáticos basados en mensajes)
+    // No recalificar 'llamada', 'visita' u otros estados manuales
+    if (currentEstado !== 'frío' && currentEstado !== 'frio' && currentEstado !== 'tibio' && currentEstado !== 'caliente') {
       return false;
     }
     
@@ -374,46 +374,22 @@ export const getAllLeads = async (): Promise<Lead[]> => {
     }
     const normalized: Lead[] = ((data as any[]) || []).map(mapLeadRow);
     
-    // Recalificar automáticamente:
-    // 1. Leads con estado inválido (null, "activo" o "inicial")
-      // 2. Leads con chatwoot_conversation_id y estado 'frío' o 'tibio' (para actualizar según mensajes)
-      const leadsToRecalify = normalized.filter(lead => {
-        const estado = normalizeEstadoFromDB(lead.estado);
-        const hasChatwootId = (lead as any).chatwoot_conversation_id;
-        
-        // Recalificar si:
-        // - Estado inválido (null, "activo", "inicial")
-        // - Tiene chatwoot_conversation_id y estado es 'frío' o 'tibio' (puede cambiar según mensajes)
-        return !lead.estado || 
-               lead.estado === 'activo' || 
-               lead.estado === 'inicial' ||
-               (hasChatwootId && (estado === 'frío' || estado === 'frio' || estado === 'tibio'));
-      });
+    // Nota: La calificación automática de leads (frío/tibio/caliente) se maneja desde n8n,
+    // no desde el frontend. El workflow de n8n cuenta los mensajes del historial de Chatwoot
+    // y actualiza el estado del lead directamente en la base de datos.
+    // Solo corregimos estados inválidos ('activo', 'inicial') a 'frío' por defecto.
+    const leadsWithInvalidState = normalized.filter(lead => 
+      !lead.estado || lead.estado === 'activo' || lead.estado === 'inicial'
+    );
     
-    if (leadsToRecalify.length > 0) {
-      console.log(`🔄 Recalificando ${leadsToRecalify.length} leads automáticamente`);
-      // Recalificar en lote (sin esperar a que termine para no bloquear la UI)
+    if (leadsWithInvalidState.length > 0) {
+      console.log(`🔄 Corrigiendo ${leadsWithInvalidState.length} leads con estado inválido`);
       Promise.all(
-        leadsToRecalify.map(async (lead) => {
-          const leadData = data.find((d: any) => String(d.id) === lead.id);
-          if (leadData) {
-            const newEstado = await calificarLead(leadData);
-            const currentEstado = normalizeEstadoFromDB(lead.estado);
-            
-            // Actualizar si:
-            // - El estado anterior era inválido
-            // - El estado cambió (frio ↔ tibio)
-            if (!lead.estado || 
-                lead.estado === 'activo' || 
-                lead.estado === 'inicial' || 
-                newEstado !== currentEstado) {
-              await updateLeadStatus(lead.id, newEstado);
-              // Actualizar en el array normalizado
-              lead.estado = newEstado as Lead['estado'];
-            }
-          }
+        leadsWithInvalidState.map(async (lead) => {
+          await updateLeadStatus(lead.id, 'frío');
+          lead.estado = 'frío' as Lead['estado'];
         })
-      ).catch(err => console.error('Error recalificando leads:', err));
+      ).catch(err => console.error('Error corrigiendo estados:', err));
     }
     
     // Sort desc by fechaContacto
@@ -736,12 +712,13 @@ const getMessagesCount = async (conversationId: number): Promise<number> => {
 
 /**
  * Califica automáticamente un lead según la cantidad de mensajes en su conversación
- * - Si la conversación tiene 2 mensajes o menos (no ha respondido mucho): "frío"
- * - Si la conversación tiene más de 2 mensajes: "tibio"
+ * - Si la conversación tiene 2 mensajes o menos: "frío"
+ * - Si la conversación tiene más de 2 y hasta 15 mensajes: "tibio"
+ * - Si la conversación tiene más de 15 mensajes: "caliente"
  * 
  * Si no hay chatwoot_conversation_id, devuelve "frío" por defecto
  */
-const calificarLead = async (leadData: any): Promise<'frío' | 'tibio'> => {
+const calificarLead = async (leadData: any): Promise<'frío' | 'tibio' | 'caliente'> => {
   // Si no hay chatwoot_conversation_id, no podemos contar mensajes
   // Por defecto, consideramos el lead como "frío"
   if (!leadData.chatwoot_conversation_id) {
@@ -754,9 +731,17 @@ const calificarLead = async (leadData: any): Promise<'frío' | 'tibio'> => {
     const messagesCount = await getMessagesCount(leadData.chatwoot_conversation_id);
     console.log(`📊 Conversación ${leadData.chatwoot_conversation_id}: ${messagesCount} mensajes`);
     
-    // Si tiene 2 mensajes o menos → "frío"
-    // Si tiene más de 2 mensajes → "tibio"
-    return messagesCount <= 2 ? 'frío' : 'tibio';
+    // Calificación basada en cantidad de mensajes:
+    // <= 2 mensajes → "frío"
+    // > 2 y <= 15 mensajes → "tibio"
+    // > 15 mensajes → "caliente"
+    if (messagesCount <= 2) {
+      return 'frío';
+    } else if (messagesCount <= 15) {
+      return 'tibio';
+    } else {
+      return 'caliente';
+    }
   } catch (error) {
     console.error(`❌ Error calificando lead con conversación ${leadData.chatwoot_conversation_id}:`, error);
     // En caso de error, devolver "frío" por defecto
@@ -787,7 +772,7 @@ export const createLead = async (leadData: Partial<Lead>): Promise<Lead | null> 
       ultima_interaccion: new Date().toISOString(),
       seguimientos_count: leadData.seguimientos_count ?? 0,
       notas: leadData.notas ?? null,
-      chatwoot_conversation_id: leadData.chatwoot_conversation_id || null,
+      estado_chat: leadData.estado_chat ?? null,
     };
     
     // Calificar automáticamente el lead SIEMPRE (a menos que se especifique manualmente un estado diferente)
@@ -808,6 +793,35 @@ export const createLead = async (leadData: Partial<Lead>): Promise<Lead | null> 
       .single();
     
     if (error) {
+      // Si el error es 409 (duplicate key), el lead ya existe, intentar buscarlo
+      if (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('unique constraint')) {
+        console.log('⚠️ Lead ya existe, buscando lead existente...');
+        const whatsappId = dataToInsert.whatsapp_id;
+        
+        // Buscar el lead existente
+        const { data: existingLead, error: fetchError } = await (getSupabase() as any)
+          .from('leads')
+          .select('*')
+          .eq('whatsapp_id', whatsappId)
+          .single();
+        
+        if (fetchError || !existingLead) {
+          console.error('Error fetching existing lead:', fetchError);
+          return null;
+        }
+        
+        console.log('✅ Lead existente encontrado:', existingLead);
+        const mappedLead = mapLeadRow(existingLead);
+        
+        // Actualizar el cache si no está ya presente
+        const existingInCache = cachedLeads.find(l => l.id === mappedLead.id);
+        if (!existingInCache) {
+          cachedLeads.unshift(mappedLead);
+        }
+        
+        return mappedLead;
+      }
+      
       console.error('Error creating lead in Supabase:', error.message, error);
       return null;
     }
@@ -821,6 +835,55 @@ export const createLead = async (leadData: Partial<Lead>): Promise<Lead | null> 
     return newLead;
   } catch (e) {
     console.error('Exception creating lead:', e);
+    return null;
+  }
+};
+
+/**
+ * Busca un lead directamente en Supabase por número de teléfono (whatsapp_id).
+ * Intenta múltiples variantes del número para manejar diferencias de formato (+, sin +, etc.)
+ */
+export const findLeadByPhone = async (phone: string): Promise<Lead | null> => {
+  try {
+    // Normalizar: solo dígitos
+    const digitsOnly = phone.replace(/[^\d]/g, '');
+    if (!digitsOnly) return null;
+    
+    // Variantes a buscar
+    const variants = [
+      digitsOnly,           // 5492215954777
+      `+${digitsOnly}`,     // +5492215954777
+    ];
+    
+    console.log('🔍 Buscando lead en DB por teléfono, variantes:', variants);
+    
+    const { data, error } = await (getSupabase() as any)
+      .from('leads')
+      .select('*')
+      .in('whatsapp_id', variants);
+    
+    if (error) {
+      console.error('Error buscando lead por teléfono:', error.message);
+      return null;
+    }
+    
+    if (data && data.length > 0) {
+      console.log('✅ Lead encontrado en DB directamente:', data[0]);
+      const mappedLead = mapLeadRow(data[0]);
+      
+      // Asegurar que esté en el cache
+      const existingInCache = cachedLeads.find(l => l.id === mappedLead.id);
+      if (!existingInCache) {
+        cachedLeads.unshift(mappedLead);
+      }
+      
+      return mappedLead;
+    }
+    
+    console.log('❌ Lead no encontrado en DB para variantes:', variants);
+    return null;
+  } catch (e) {
+    console.error('Exception buscando lead por teléfono:', e);
     return null;
   }
 };
@@ -921,8 +984,8 @@ export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promi
     const isUpdatingChatwootId = leadData.chatwoot_conversation_id !== undefined && 
                                   leadData.chatwoot_conversation_id !== currentLead?.chatwoot_conversation_id;
     const hasChatwootId = (leadData.chatwoot_conversation_id ?? currentLead?.chatwoot_conversation_id);
-    // Comparar con 'frío' (con acento) y también aceptar 'frio' (sin acento) para compatibilidad
-    const shouldAutoRecalify = hasChatwootId && (currentEstado === 'frío' || currentEstado === 'frio' || currentEstado === 'tibio');
+    // Recalificar automáticamente si el estado es uno de los automáticos (frío, tibio, caliente)
+    const shouldAutoRecalify = hasChatwootId && (currentEstado === 'frío' || currentEstado === 'frio' || currentEstado === 'tibio' || currentEstado === 'caliente');
     
     if (leadData.estado !== undefined) {
       // Si se especificó un estado manualmente, respetarlo

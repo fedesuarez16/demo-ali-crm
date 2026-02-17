@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, Save, Home, MapPin, DollarSign, Bed, Bath, Car, Square, Layers, Link as LinkIcon, Building2 } from 'lucide-react';
+import { X, Save, Home, MapPin, DollarSign, Bed, Bath, Car, Square, Layers, Link as LinkIcon, Building2, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface PropiedadEditSidebarProps {
@@ -48,6 +48,7 @@ const PropiedadEditSidebar: React.FC<PropiedadEditSidebarProps> = ({
     alternativa_mayor_3: '',
     alternativa_mayor_4: '',
     alternativa_mayor_5: '',
+    notas: '',
   });
 
   const [isSaving, setIsSaving] = useState(false);
@@ -81,6 +82,7 @@ const PropiedadEditSidebar: React.FC<PropiedadEditSidebarProps> = ({
         alternativa_mayor_3: propiedad.alternativa_mayor_3 || '',
         alternativa_mayor_4: propiedad.alternativa_mayor_4 || '',
         alternativa_mayor_5: propiedad.alternativa_mayor_5 || '',
+        notas: propiedad.notas || '',
       });
     } else {
       // Reset para nueva propiedad
@@ -109,6 +111,7 @@ const PropiedadEditSidebar: React.FC<PropiedadEditSidebarProps> = ({
         alternativa_mayor_3: '',
         alternativa_mayor_4: '',
         alternativa_mayor_5: '',
+        notas: '',
       });
     }
     setErrors({});
@@ -168,6 +171,7 @@ const PropiedadEditSidebar: React.FC<PropiedadEditSidebarProps> = ({
       alternativa_mayor_3: propiedad.alternativa_mayor_3 || '',
       alternativa_mayor_4: propiedad.alternativa_mayor_4 || '',
       alternativa_mayor_5: propiedad.alternativa_mayor_5 || '',
+      notas: propiedad.notas || '',
     }) : Object.values(formData).some(val => val !== '');
 
     if (hasChanges) {
@@ -410,6 +414,21 @@ const PropiedadEditSidebar: React.FC<PropiedadEditSidebarProps> = ({
                         onChange={(e) => handleChange('link', e.target.value)}
                         className="pl-10"
                         placeholder="https://..."
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="notas">Notas</Label>
+                    <div className="relative">
+                      <FileText className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <textarea
+                        id="notas"
+                        value={formData.notas || ''}
+                        onChange={(e) => handleChange('notas', e.target.value)}
+                        className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 pl-10 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        placeholder="Agregar detalles específicos acerca de la propiedad..."
+                        rows={4}
                       />
                     </div>
                   </div>

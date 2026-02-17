@@ -44,6 +44,7 @@ const mapPropiedadRow = (row: any): SupabasePropiedad => {
     alternativa_mayor_3: row.alternativa_mayor_3 || '',
     alternativa_mayor_4: row.alternativa_mayor_4 || '',
     alternativa_mayor_5: row.alternativa_mayor_5 || '',
+    notas: row.notas || '',
   };
 };
 

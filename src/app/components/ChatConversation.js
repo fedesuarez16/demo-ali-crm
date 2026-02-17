@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useChatMessages } from '../../hooks/useChatMessages';
-import { updateLead, getAllLeads } from '../services/leadService';
+import { updateLead, getAllLeads, createLead, findLeadByPhone } from '../services/leadService';
 import { programarSeguimiento, getSeguimientosPendientes, eliminarMensajeProgramado, eliminarTodosSeguimientosPendientes, existeSeguimientoParaLead } from '../services/mensajeService';
 
 const ChatConversation = ({ conversation, onBack }) => {
@@ -17,6 +17,83 @@ const ChatConversation = ({ conversation, onBack }) => {
   const [seguimientosCount, setSeguimientosCount] = useState(0);
   const [tieneSeguimiento, setTieneSeguimiento] = useState(false); // true si el remote_jid existe en cola_seguimientos
   const [deletingMessageId, setDeletingMessageId] = useState(null); // ID del mensaje que se está borrando
+  const [isCreatingLead, setIsCreatingLead] = useState(false); // Estado para controlar si se está creando un lead
+  const [phoneNumber, setPhoneNumber] = useState(null); // Guardar el número de teléfono extraído para poder crear el lead
+
+  // Función para obtener el número de teléfono del contacto (misma lógica que ChatList.js)
+  const getContactPhone = (conversation) => {
+    // 1. PRIMERO: Usar campos enriquecidos de la API si existen
+    if (conversation.enriched_phone_number) {
+      return conversation.enriched_phone_number;
+    }
+
+    if (conversation.enriched_identifier) {
+      return conversation.enriched_identifier;
+    }
+
+    if (conversation.enriched_phone_raw) {
+      return conversation.enriched_phone_raw;
+    }
+
+    if (Array.isArray(conversation.enriched_phone_candidates)) {
+      const candidate = conversation.enriched_phone_candidates.find(Boolean);
+      if (candidate) return candidate;
+    }
+
+    // 2. Intentar múltiples fuentes de datos (fallback)
+    const sender = conversation.last_non_activity_message?.sender;
+    const contact = conversation.contact;
+    
+    // 3. Buscar en sender phone_number
+    if (sender?.phone_number) {
+      return sender.phone_number;
+    }
+    
+    // 4. Buscar en sender identifier (puede ser JID)
+    if (sender?.identifier) {
+      return sender.identifier;
+    }
+    
+    // 5. Buscar en contact phone_number
+    if (contact?.phone_number) {
+      return contact.phone_number;
+    }
+    
+    // 6. Buscar en contact identifier
+    if (contact?.identifier) {
+      return contact.identifier;
+    }
+    
+    // 7. Buscar en meta.sender (Chatwoot puede guardar info aquí)
+    if (conversation.meta?.sender?.phone_number || conversation.meta?.sender?.phone) {
+      return conversation.meta.sender.phone_number || conversation.meta.sender.phone;
+    }
+
+    if (conversation.meta?.sender?.identifier) {
+      return conversation.meta.sender.identifier;
+    }
+
+    // 8. Buscar en additional_attributes
+    if (conversation.additional_attributes?.phone_number || conversation.additional_attributes?.phone) {
+      return conversation.additional_attributes.phone_number || conversation.additional_attributes.phone;
+    }
+
+    if (conversation.additional_attributes?.wa_id) {
+      return conversation.additional_attributes.wa_id;
+    }
+
+    // 9. Buscar en source_id (formato WAID:numero)
+    if (conversation.last_non_activity_message?.source_id) {
+      return conversation.last_non_activity_message.source_id;
+    }
+
+    // 10. Buscar en contact_inbox
+    if (conversation.contact_inbox?.source_id) {
+      return conversation.contact_inbox.source_id;
+    }
+    
+    return null;
+  };
 
   // Cargar el lead cuando hay una conversación
   useEffect(() => {
@@ -28,32 +105,49 @@ const ChatConversation = ({ conversation, onBack }) => {
 
       setIsLoadingLead(true);
       try {
-        // Obtener el número de teléfono de la conversación
-        const phoneNumber = conversation.enriched_phone_number || 
-                           conversation.last_non_activity_message?.sender?.phone_number ||
-                           conversation.contact?.phone_number ||
-                           conversation.enriched_identifier?.replace('@s.whatsapp.net', '') ||
-                           null;
+        // Obtener el número de teléfono de la conversación usando la función completa
+        const phoneNumberValue = getContactPhone(conversation);
+        setPhoneNumber(phoneNumberValue); // Guardar para poder crear el lead si no existe
 
-        if (!phoneNumber) {
+        if (!phoneNumberValue) {
+          console.log('⚠️ No se pudo extraer número de teléfono de la conversación:', conversation.id);
           setLead(null);
           return;
         }
 
         const allLeads = await getAllLeads();
-        // Normalizar el número de teléfono para comparación (solo dígitos, sin +)
-        const normalizedPhone = phoneNumber.replace(/[^\d]/g, '').replace(/^\+/, '');
+        // Normalizar el número de teléfono para comparación (misma lógica que ChatList.js)
+        // Remover @s.whatsapp.net si existe
+        let normalizedPhone = phoneNumberValue.replace('@s.whatsapp.net', '').replace('@c.us', '');
+        // Remover prefijos comunes
+        normalizedPhone = normalizedPhone.replace(/^WAID:/, '');
+        normalizedPhone = normalizedPhone.replace(/^whatsapp:/, '');
+        // Remover todo lo que no sean números y el símbolo +
+        normalizedPhone = normalizedPhone.replace(/[^\d+]/g, '');
+        // Remover + al inicio para comparación consistente
+        normalizedPhone = normalizedPhone.replace(/^\+/, '');
+        
+        console.log('📞 Número extraído:', phoneNumberValue);
         console.log('📞 Buscando lead con número normalizado:', normalizedPhone);
         
-        const foundLead = allLeads.find(l => {
+        let foundLead = allLeads.find(l => {
           // El whatsapp_id en la DB es como "5491133370937" sin el +
-          const leadPhone = String(l.whatsapp_id || l.telefono || '').replace(/[^\d]/g, '').replace(/^\+/, '');
+          const leadPhone = String(l.whatsapp_id || l.telefono || '').replace(/[^\d]/g, '');
           const matches = leadPhone === normalizedPhone;
           if (matches) {
-            console.log('✅ Lead encontrado:', { id: l.id, whatsapp_id: l.whatsapp_id, estado_chat: l.estado_chat });
+            console.log('✅ Lead encontrado en cache:', { id: l.id, whatsapp_id: l.whatsapp_id, estado_chat: l.estado_chat });
           }
           return matches;
         }) || null;
+
+        // Si no se encontró en el cache, buscar directamente en la base de datos
+        if (!foundLead) {
+          console.log('🔍 Lead no encontrado en cache, buscando directamente en DB...');
+          foundLead = await findLeadByPhone(normalizedPhone);
+          if (foundLead) {
+            console.log('✅ Lead encontrado en DB directamente:', { id: foundLead.id, whatsapp_id: foundLead.whatsapp_id });
+          }
+        }
 
         if (foundLead) {
           // Asegurar que estado_chat esté normalizado (0 o 1)
@@ -128,25 +222,28 @@ const ChatConversation = ({ conversation, onBack }) => {
         
         // Recargar todos los leads y buscar el correcto por whatsapp_id
         const allLeads = await getAllLeads();
-        const phoneNumber = conversation?.enriched_phone_number || 
-                           conversation?.last_non_activity_message?.sender?.phone_number ||
-                           conversation?.contact?.phone_number ||
-                           conversation?.enriched_identifier?.replace('@s.whatsapp.net', '') ||
-                           null;
+        const phoneNumber = getContactPhone(conversation);
         
         console.log('📞 Número de teléfono encontrado:', phoneNumber);
         
         if (phoneNumber) {
-          // Normalizar: remover todo excepto dígitos, y remover el + si existe
-          const normalizedPhone = phoneNumber.replace(/[^\d]/g, '').replace(/^\+/, '');
+          // Normalizar: misma lógica que arriba
+          let normalizedPhone = phoneNumber.replace('@s.whatsapp.net', '').replace('@c.us', '');
+          normalizedPhone = normalizedPhone.replace(/^WAID:/, '');
+          normalizedPhone = normalizedPhone.replace(/^whatsapp:/, '');
+          normalizedPhone = normalizedPhone.replace(/[^\d+]/g, '');
+          normalizedPhone = normalizedPhone.replace(/^\+/, '');
           console.log('📞 Número normalizado:', normalizedPhone);
           
-          const foundLead = allLeads.find(l => {
-            // El whatsapp_id en la DB es como "5491133370937" sin el +
-            const leadPhone = String(l.whatsapp_id || l.telefono || '').replace(/[^\d]/g, '').replace(/^\+/, '');
-            console.log(`🔍 Comparando: "${leadPhone}" con "${normalizedPhone}"`);
+          let foundLead = allLeads.find(l => {
+            const leadPhone = String(l.whatsapp_id || l.telefono || '').replace(/[^\d]/g, '');
             return leadPhone === normalizedPhone;
           });
+          
+          // Fallback: buscar directamente en DB
+          if (!foundLead) {
+            foundLead = await findLeadByPhone(normalizedPhone);
+          }
           
           if (foundLead) {
             console.log('✅ Lead encontrado y recargado desde DB:', foundLead);
@@ -245,6 +342,57 @@ const ChatConversation = ({ conversation, onBack }) => {
     }
   };
 
+  // Función para crear un lead en la base de datos
+  const handleCreateLead = async () => {
+    if (!phoneNumber || !conversation) {
+      alert('❌ No se puede crear el lead: falta información del contacto');
+      return;
+    }
+
+    setIsCreatingLead(true);
+    try {
+      // Normalizar el número de teléfono
+      let normalizedPhone = phoneNumber.replace('@s.whatsapp.net', '').replace('@c.us', '');
+      normalizedPhone = normalizedPhone.replace(/^WAID:/, '');
+      normalizedPhone = normalizedPhone.replace(/^whatsapp:/, '');
+      normalizedPhone = normalizedPhone.replace(/[^\d+]/g, '');
+      normalizedPhone = normalizedPhone.replace(/^\+/, '');
+
+      // Obtener el nombre del contacto si está disponible
+      const contactName = getContactName(conversation);
+
+      // Preparar datos del lead
+      const leadData = {
+        whatsapp_id: normalizedPhone,
+        nombre: contactName || null,
+        estado_chat: 1, // Activo por defecto
+        ultima_interaccion: new Date().toISOString(),
+        seguimientos_count: 0,
+        estado: 'frío', // Estado inicial
+        // Nota: chatwoot_conversation_id no existe en la tabla leads
+      };
+
+      console.log('➕ Creando lead con datos:', leadData);
+
+      const newLead = await createLead(leadData);
+
+      if (newLead) {
+        console.log('✅ Lead creado exitosamente:', newLead);
+        // Actualizar el estado local con el nuevo lead
+        setLead(newLead);
+        setTieneSeguimiento(false); // Inicialmente no tiene seguimientos
+        setSeguimientosCount(0);
+      } else {
+        alert('❌ Error al crear el lead. Por favor, intenta de nuevo.');
+      }
+    } catch (error) {
+      console.error('❌ Error creando lead:', error);
+      alert('❌ Error al crear el lead. Por favor, intenta de nuevo.');
+    } finally {
+      setIsCreatingLead(false);
+    }
+  };
+
   // Scroll al final cuando se cargan nuevos mensajes
   useEffect(() => {
     scrollToBottom();
@@ -311,43 +459,6 @@ const ChatConversation = ({ conversation, onBack }) => {
         conversation.meta.sender.name.trim() !== '' &&
         conversation.meta.sender.name.trim().length > 2) {
       return conversation.meta.sender.name.trim();
-    }
-    
-    return null;
-  };
-
-  // Función para obtener el número de teléfono del contacto
-  const getContactPhone = (conversation) => {
-    const sender = conversation.last_non_activity_message?.sender;
-    const contact = conversation.contact;
-    
-    // Priorizar campos enriquecidos
-    if (conversation.enriched_phone_number) {
-      return conversation.enriched_phone_number;
-    }
-    
-    if (conversation.enriched_phone_raw) {
-      return conversation.enriched_phone_raw;
-    }
-    
-    // Buscar en sender
-    if (sender?.phone_number) {
-      return sender.phone_number;
-    }
-    
-    // Buscar en contact
-    if (contact?.phone_number) {
-      return contact.phone_number;
-    }
-    
-    // Buscar en meta.sender
-    if (conversation.meta?.sender?.phone_number || conversation.meta?.sender?.phone) {
-      return conversation.meta.sender.phone_number || conversation.meta.sender.phone;
-    }
-    
-    // Buscar en additional_attributes
-    if (conversation.additional_attributes?.phone_number || conversation.additional_attributes?.phone) {
-      return conversation.additional_attributes.phone_number || conversation.additional_attributes.phone;
     }
     
     return null;
@@ -882,6 +993,35 @@ const ChatConversation = ({ conversation, onBack }) => {
                   )}
                 </button>
               </>
+            )}
+
+            {/* Botón para agregar lead a la base de datos si no existe */}
+            {!lead && phoneNumber && !isLoadingLead && (
+              <button
+                type="button"
+                onClick={handleCreateLead}
+                disabled={isCreatingLead}
+                className={`inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors shadow-sm ${
+                  isCreatingLead
+                    ? 'bg-gray-400 text-white cursor-not-allowed'
+                    : 'bg-purple-500 text-white hover:bg-purple-600 border border-purple-600'
+                }`}
+                title="Agregar este contacto a la base de datos de leads"
+              >
+                {isCreatingLead ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>
+                    <span>Agregando...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>Agregar a base de datos</span>
+                  </>
+                )}
+              </button>
             )}
 
             {/* Send Button */}

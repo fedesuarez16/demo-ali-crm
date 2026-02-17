@@ -201,4 +201,5 @@ export interface SupabasePropiedad {
   alternativa_mayor_3: string;
   alternativa_mayor_4: string;
   alternativa_mayor_5: string;
+  notas?: string;
 }
