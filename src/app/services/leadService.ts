@@ -367,7 +367,9 @@ export const getAllLeads = async (): Promise<Lead[]> => {
   try {
     const { data, error } = await getSupabase()
       .from('leads')
-      .select('*');
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1000);
     if (error) {
       console.error('Error fetching leads from Supabase:', error.message);
       return [];
