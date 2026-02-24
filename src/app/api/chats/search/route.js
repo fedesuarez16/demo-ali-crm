@@ -156,7 +156,7 @@ export async function POST(request) {
 
     const baseUrl = chatwootUrl.endsWith('/') ? chatwootUrl.slice(0, -1) : chatwootUrl;
     const foundChats = [];
-    const maxPages = 100; // Buscar hasta 100 páginas (5000 chats)
+    const maxPages = 50; // Buscar hasta 50 páginas (~1250 chats con page size 25 de Chatwoot)
     const phonesToFind = new Set(normalizedSearchPhones);
 
     // Buscar en todas las páginas hasta encontrar todos los números o alcanzar el límite
@@ -177,7 +177,18 @@ export async function POST(request) {
       }
 
       const data = await response.json();
-      const conversations = data.payload || data.data || [];
+      
+      // Manejar diferentes estructuras de respuesta de Chatwoot
+      let conversations = [];
+      if (Array.isArray(data)) {
+        conversations = data;
+      } else if (data.data && data.data.payload && Array.isArray(data.data.payload)) {
+        conversations = data.data.payload;
+      } else if (data.data && Array.isArray(data.data)) {
+        conversations = data.data;
+      } else if (data.payload && Array.isArray(data.payload)) {
+        conversations = data.payload;
+      }
       
       if (conversations.length === 0) {
         console.log(`📄 No hay más datos en página ${page}`);
@@ -186,14 +197,8 @@ export async function POST(request) {
 
       console.log(`📄 Página ${page}: ${conversations.length} conversaciones`);
 
-      // Filtrar solo conversaciones de WhatsApp
-      const whatsappChats = conversations.filter(chat => {
-        const inbox = chat.inbox || chat.meta?.inbox;
-        return inbox?.channel_type === 'api' || inbox?.channel_type === 'whatsapp';
-      });
-
-      // Enriquecer conversaciones con información de contacto
-      const enrichedChats = whatsappChats.map(chat => {
+      // Enriquecer PRIMERO, filtrar DESPUÉS (misma lógica que /api/chats/route.js)
+      const enrichedChats = conversations.map(chat => {
         try {
           let phoneNumber = null;
           let identifier = null;
@@ -280,6 +285,14 @@ export async function POST(request) {
         }
       });
 
+      const chatsWithPhone = enrichedChats.filter(c => c.enriched_phone_number);
+      if (page === 1) {
+        console.log(`📱 Página ${page}: ${enrichedChats.length} enriquecidos, ${chatsWithPhone.length} con teléfono`);
+        if (chatsWithPhone.length > 0) {
+          console.log(`📱 Ejemplo: ${chatsWithPhone[0].id} → ${chatsWithPhone[0].enriched_phone_number}`);
+        }
+      }
+
       // Buscar chats que coincidan con los números buscados
       enrichedChats.forEach(chat => {
         const chatPhone = getChatPhoneNumber(chat);
@@ -332,11 +345,8 @@ export async function POST(request) {
         break;
       }
 
-      // Si recibimos menos de 50 conversaciones, no hay más páginas
-      if (conversations.length < 50) {
-        console.log(`📄 No hay más páginas (recibidos ${conversations.length} < 50)`);
-        break;
-      }
+      // Nota: Chatwoot puede ignorar per_page=50 y devolver su propio page size (ej: 25).
+      // El break por 0 resultados ya está arriba. Seguimos paginando hasta encontrar o agotar.
     }
 
     console.log(`🎯 Total de chats encontrados: ${foundChats.length}`);

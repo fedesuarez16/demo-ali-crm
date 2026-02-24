@@ -358,6 +358,35 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
     return false;
   };
 
+  // Estado para rastrear si ya se buscó el targetPhoneNumber via API server-side
+  const [targetPhoneSearched, setTargetPhoneSearched] = useState(false);
+  const [isSearchingTarget, setIsSearchingTarget] = useState(false);
+  // Chat encontrado via búsqueda server-side que no estaba en los chats pre-cargados
+  const [serverFoundChat, setServerFoundChat] = useState(null);
+
+  // Helper: buscar un chat por número en una lista de chats
+  const findChatByPhone = (chatsList, normalizedTarget) => {
+    return chatsList.find(chat => {
+      const chatPhone = getChatPhoneNumber(chat);
+      if (!chatPhone) return false;
+      
+      const normalizedChatPhone = normalizePhoneNumber(chatPhone);
+      
+      if (normalizedChatPhone === normalizedTarget) return true;
+      
+      const minLength = Math.min(normalizedChatPhone.length, normalizedTarget.length);
+      if (minLength >= 8) {
+        const lastDigits1 = normalizedChatPhone.slice(-Math.min(10, normalizedChatPhone.length));
+        const lastDigits2 = normalizedTarget.slice(-Math.min(10, normalizedTarget.length));
+        if (lastDigits1 === lastDigits2) return true;
+      }
+      
+      if (normalizedChatPhone.includes(normalizedTarget) || normalizedTarget.includes(normalizedChatPhone)) return true;
+      
+      return false;
+    });
+  };
+
   // Efecto para buscar automáticamente el chat cuando se proporciona un número objetivo
   useEffect(() => {
     if (targetPhoneNumber && chats.length > 0 && !loading) {
@@ -367,59 +396,54 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
       console.log('📱 Número normalizado:', normalizedTarget);
       
       if (normalizedTarget) {
-        const foundChat = chats.find(chat => {
-          const chatPhone = getChatPhoneNumber(chat);
-          if (!chatPhone) return false;
-          
-          // Comparar números normalizados
-          const normalizedChatPhone = normalizePhoneNumber(chatPhone);
-          
-          // Comparación exacta
-          if (normalizedChatPhone === normalizedTarget) {
-            console.log('✅ Chat encontrado (comparación exacta):', chat.id, 'Número:', chatPhone);
-            return true;
-          }
-          
-          // Comparación por últimos dígitos (útil para números con/sin código de país)
-          const minLength = Math.min(normalizedChatPhone.length, normalizedTarget.length);
-          if (minLength >= 8) {
-            const lastDigits1 = normalizedChatPhone.slice(-Math.min(10, normalizedChatPhone.length));
-            const lastDigits2 = normalizedTarget.slice(-Math.min(10, normalizedTarget.length));
-            if (lastDigits1 === lastDigits2) {
-              console.log('✅ Chat encontrado (últimos dígitos):', chat.id, 'Número:', chatPhone);
-              return true;
-            }
-          }
-          
-          // Comparación por inclusión (uno contiene al otro)
-          if (normalizedChatPhone.includes(normalizedTarget) || normalizedTarget.includes(normalizedChatPhone)) {
-            console.log('✅ Chat encontrado (inclusión):', chat.id, 'Número:', chatPhone);
-            return true;
-          }
-          
-          return false;
-        });
+        // Primero buscar en los chats ya cargados
+        const foundChat = findChatByPhone(chats, normalizedTarget);
         
         if (foundChat && onSelectChat) {
-          console.log('🎯 Chat seleccionado:', foundChat.id);
+          console.log('🎯 Chat seleccionado (local):', foundChat.id);
           onSelectChat(foundChat);
-        } else {
-          console.warn('⚠️ No se encontró chat para el número:', normalizedTarget);
-          const availableChats = chats.map(chat => {
-            const rawPhone = getChatPhoneNumber(chat);
-            return {
-              id: chat.id,
-              phone: rawPhone,
-              normalized: normalizePhoneNumber(rawPhone),
-              enriched_phone: chat.enriched_phone_number,
-              enriched_identifier: chat.enriched_identifier
-            };
-          });
-          console.log('📋 Chats disponibles:', availableChats);
+        } else if (!targetPhoneSearched && !isSearchingTarget) {
+          // No se encontró localmente → buscar via API server-side
+          console.log('⚠️ Chat no encontrado en los', chats.length, 'chats pre-cargados, buscando en servidor...');
+          setIsSearchingTarget(true);
+          
+          fetch('/api/chats/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phoneNumbers: [targetPhoneNumber] })
+          })
+            .then(res => res.json())
+            .then(data => {
+              if (data.success && data.data && data.data.length > 0) {
+                const foundServerChat = data.data[0];
+                console.log('✅ Chat encontrado via API server-side:', foundServerChat.id);
+                // Guardar el chat encontrado para que aparezca en la lista
+                setServerFoundChat(foundServerChat);
+                // Seleccionar el chat encontrado
+                if (onSelectChat) {
+                  onSelectChat(foundServerChat);
+                }
+              } else {
+                console.warn('⚠️ Chat no encontrado ni localmente ni en servidor para:', normalizedTarget);
+              }
+            })
+            .catch(err => {
+              console.error('❌ Error buscando chat en servidor:', err);
+            })
+            .finally(() => {
+              setTargetPhoneSearched(true);
+              setIsSearchingTarget(false);
+            });
         }
       }
     }
-  }, [targetPhoneNumber, chats, loading, onSelectChat]);
+  }, [targetPhoneNumber, chats, loading, onSelectChat, targetPhoneSearched, isSearchingTarget]);
+
+  // Resetear el estado de búsqueda cuando cambia el targetPhoneNumber
+  useEffect(() => {
+    setTargetPhoneSearched(false);
+    setServerFoundChat(null);
+  }, [targetPhoneNumber]);
 
   // Cargar leads y crear un mapa de teléfono -> lead
   useEffect(() => {
@@ -1180,7 +1204,11 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
   
   // Cuando hay una búsqueda activa, usar los chats encontrados en la búsqueda exhaustiva
   // De lo contrario, usar los chats locales filtrados
-  const localFilteredChats = filterChats(chats);
+  // Incluir el chat encontrado via server-side si existe y no está ya en la lista
+  const chatsWithServerFound = serverFoundChat && !chats.find(c => c.id === serverFoundChat.id)
+    ? [serverFoundChat, ...chats]
+    : chats;
+  const localFilteredChats = filterChats(chatsWithServerFound);
   const allFilteredChats = searchQuery.trim()
     ? (searchedChats.length > 0 
         ? searchedChats // Usar resultados de búsqueda exhaustiva
@@ -1293,6 +1321,16 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
           )}
         </div>
       </div>
+
+      {/* Indicador de búsqueda de chat por targetPhoneNumber */}
+      {isSearchingTarget && (
+        <div className="flex-shrink-0 px-4 py-2 bg-blue-50 border-b border-blue-200">
+          <div className="flex items-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            <span className="text-xs text-blue-700">Buscando conversación...</span>
+          </div>
+        </div>
+      )}
 
       {/* Lista de chats - scrolleable */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
