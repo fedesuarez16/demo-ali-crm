@@ -365,16 +365,42 @@ export const recalificarLead = async (leadId: string): Promise<boolean> => {
  */
 export const getAllLeads = async (): Promise<Lead[]> => {
   try {
-    const { data, error } = await getSupabase()
-      .from('leads')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1000);
-    if (error) {
-      console.error('Error fetching leads from Supabase:', error.message);
-      return [];
+    // Supabase limita a 1000 filas por request por defecto.
+    // Paginamos para traer TODOS los leads de la tabla.
+    const PAGE_SIZE = 1000;
+    let allData: any[] = [];
+    let page = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error } = await getSupabase()
+        .from('leads')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (error) {
+        console.error('Error fetching leads from Supabase:', error.message);
+        break;
+      }
+
+      const rows = (data as any[]) || [];
+      allData = allData.concat(rows);
+
+      // Si recibimos menos de PAGE_SIZE, ya no hay más páginas
+      if (rows.length < PAGE_SIZE) {
+        hasMore = false;
+      } else {
+        page++;
+      }
     }
-    const normalized: Lead[] = ((data as any[]) || []).map(mapLeadRow);
+
+    console.log(`📊 Total leads cargados de Supabase: ${allData.length}`);
+
+    const normalized: Lead[] = allData.map(mapLeadRow);
     
     // Nota: La calificación automática de leads (frío/tibio/caliente) se maneja desde n8n,
     // no desde el frontend. El workflow de n8n cuenta los mensajes del historial de Chatwoot
