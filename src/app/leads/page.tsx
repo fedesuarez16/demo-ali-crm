@@ -203,7 +203,7 @@ export default function LeadsKanbanPage() {
   };
 
   const handleExportCSV = () => {
-    exportLeadsToCSV(filteredLeads, 'leads_inmobiliaria');
+    exportLeadsToCSV(filteredLeads, 'leads');
   };
 
   const toggleFilterVisibility = () => {
@@ -737,11 +737,11 @@ export default function LeadsKanbanPage() {
             </div>
           </div>
 
-          {/* Barra de campañas */}
+          {/* Barra de productos/servicios */}
           {propiedadesInteres.length > 0 && (
             <div className="px-6 py-3 border-t border-gray-200 bg-white/70">
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-                <span className="text-xs font-medium text-gray-600 mr-1 whitespace-nowrap">Campañas:</span>
+                <span className="text-xs font-medium text-gray-600 mr-1 whitespace-nowrap">Productos:</span>
                 <button
                   onClick={() => handleFilterChange({ ...filterOptions, propiedadInteres: undefined })}
                   className={`px-3 py-1 text-xs rounded-full border transition-colors whitespace-nowrap ${

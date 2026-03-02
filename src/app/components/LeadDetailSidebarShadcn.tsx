@@ -219,91 +219,6 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
               </CardContent>
             </Card>
             
-            {/* Interests */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Home className="h-4 w-4" />
-                  Intereses
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Presupuesto:</span>
-                  <div className="flex items-center gap-1">
-                    <DollarSign className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-sm font-medium">{formatCurrency(Number(lead.presupuesto ?? 0))}</span>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Zona:</span>
-                  <div className="flex items-center gap-1">
-                    <MapPin className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-sm font-medium">{lead.zonaInteres || (lead as any).zona}</span>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Tipo de propiedad:</span>
-                  <div className="flex items-center gap-1">
-                    <Building className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-sm font-medium">{(lead as any).tipo_propiedad || (lead as any).tipoPropiedad || lead.tipoPropiedad}</span>
-                  </div>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Intención:</span>
-                  <span className="text-sm font-medium">{(lead as any).intencion || (lead as any).motivoInteres || lead.motivoInteres}</span>
-                </div>
-                {lead.propiedad_interes && (
-                  <div className="flex justify-between items-start">
-                    <span className="text-sm text-muted-foreground">Propiedad de interés:</span>
-                    <span className="text-sm font-medium text-right max-w-[250px]">{lead.propiedad_interes}</span>
-                  </div>
-                )}
-                {(lead as any).forma_pago && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Forma de pago:</span>
-                    <span className="text-sm font-medium">{(lead as any).forma_pago}</span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            
-            {/* Requirements */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Requerimientos
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between items-start">
-                  <span className="text-sm text-muted-foreground">Características buscadas:</span>
-                  <span className="text-sm font-medium text-right max-w-[250px]">
-                    {(lead as any).caracteristicas_buscadas || '-'}
-                  </span>
-                </div>
-                <div className="flex justify-between items-start">
-                  <span className="text-sm text-muted-foreground">Características de venta:</span>
-                  <span className="text-sm font-medium text-right max-w-[250px]">
-                    {(lead as any).caracteristicas_venta || '-'}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Superficie mínima:</span>
-                  <span className="text-sm font-medium">
-                    {lead.superficieMinima ? `${lead.superficieMinima} m²` : '-'}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Cantidad de ambientes:</span>
-                  <span className="text-sm font-medium">
-                    {lead.cantidadAmbientes || '-'}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-            
             {/* Notes */}
             {(lead.observaciones || (lead as any).propiedades_mostradas) && (
               <Card>
@@ -327,7 +242,7 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                 <CardHeader>
                   <CardTitle className="text-sm flex items-center gap-2">
                     <Building className="h-4 w-4" />
-                    Propiedades Coincidentes
+                    Productos Coincidentes
                     <Badge variant="secondary" className="ml-2">
                       {matchingProperties.length}
                     </Badge>
@@ -374,7 +289,7 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                                 onClose();
                               }}
                             >
-                              Ver propiedad
+                              Ver producto
                             </Button>
                           </div>
                         </div>

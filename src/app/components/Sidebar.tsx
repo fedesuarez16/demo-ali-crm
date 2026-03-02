@@ -50,7 +50,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
 
   const menuCategories: MenuCategory[] = [
     {
-      name: 'Dashboard',
+      name: 'General',
       items: [
         {
           name: 'Dashboard',
@@ -61,10 +61,52 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
             </svg>
           ),
         },
-      ]
+      ],
     },
     {
-      name: 'Captaciones',
+      name: 'Inbound',
+      items: [
+        {
+          name: 'Chats',
+          path: '/chat',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+          ),
+        },
+        {
+          name: 'Leads',
+          path: '/leads',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          ),
+        },
+        {
+          name: 'Mailboxes',
+          path: '/mailboxes',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8a4 4 0 014-4h10a4 4 0 014 4v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 12h.01M11 12h.01M15 12h.01" />
+            </svg>
+          ),
+        },
+        {
+          name: 'Analytics',
+          path: '/analytics-inbound',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3v18M6 8l5-5 5 5M5 13h4m6 0h4m-9 4h6m-3-4v7" />
+            </svg>
+          ),
+        },
+      ],
+    },
+    {
+      name: 'Outbound',
       items: [
         {
           name: 'Leads',
@@ -76,61 +118,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
           ),
         },
         {
-          name: 'Chats',
-          path: '/chat',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-            </svg>
-          ),
-        },
-        {
-          name: 'Coincidencias',
-          path: '/coincidencias',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          ),
-        },
-      ]
-    },
-    {
-      name: 'Propiedades',
-      items: [
-        {
-          name: 'Propiedades',
-          path: '/propiedades',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          ),
-        },
-        {
-          name: 'Cotizaciones',
-          path: '/cotizaciones',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
-          ),
-        },
-        {
-          name: 'Campañas activas',
-          path: '/campanas-activas',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-            </svg>
-          ),
-        },
-      ]
-    },
-    {
-      name: 'Comunicación',
-      items: [
-        {
           name: 'Mensajes Programados',
           path: '/mensajes-programados',
           icon: (
@@ -139,33 +126,54 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
             </svg>
           ),
         },
-      ]
-    },
-    {
-      name: 'Herramientas',
-      items: [
         {
-          name: 'Gestión Redis',
-          path: '/redis-manager',
+          name: 'Bases de datos',
+          path: '/bases-datos',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 1.79 4 4 4h8c0-2.21-1.79-4-4-4H4V7z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 15h16M4 11h16" />
+              <ellipse cx="12" cy="5" rx="7" ry="3" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5v6c0 1.657 3.134 3 7 3s7-1.343 7-3V5M5 11v6c0 1.657 3.134 3 7 3s7-1.343 7-3v-6" />
             </svg>
           ),
         },
         {
-          name: 'Documentación',
-          path: '/documentacion',
+          name: 'Mails',
+          path: '/mails',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h16v16H4V4z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7l8 6 8-6" />
             </svg>
           ),
         },
-      ]
+        {
+          name: 'Analytics',
+          path: '/analytics-outbound',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 19h16M5 17l3-7 4 5 4-9 3 8" />
+            </svg>
+          ),
+        },
+      ],
     },
   ];
+
+  // Estado para expandir/colapsar categorías (Inbound / Outbound / General)
+  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    menuCategories.forEach((category) => {
+      initial[category.name] = true;
+    });
+    return initial;
+  });
+
+  const toggleCategory = (name: string) => {
+    setOpenCategories((prev) => ({
+      ...prev,
+      [name]: !prev[name],
+    }));
+  };
 
   const toggleSidebar = () => {
     const newCollapsedState = !collapsed;
@@ -220,9 +228,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
         {!collapsed && (
           <div className="flex items-center  gap-3">
             <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
-              T
+              O
             </div>
-            <div className="font-semibold text-foreground">Team Ali</div>
+            <div className="font-semibold text-smtext-foreground">Opting</div>
           </div>
         )}
         <Button 
@@ -244,47 +252,71 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
       </div>
 
       {/* Navigation */}
-      <ScrollArea className="flex-1 px-3 py-4">
-        <nav className="space-y-4">
-          {menuCategories.map((category) => (
-            <div key={category.name} className="space-y-2">
-              {/* Category Label */}
-              {!collapsed && (
-                <div className="px-3 py-1">
-                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    {category.name}
-                  </h3>
-                </div>
-              )}
-              
-              {/* Category Items */}
-              <div className="space-y-1">
-                {category.items.map((item) => {
-                  const isActive = pathname === item.path;
-                  return (
-                    <Link
-                      key={item.path}
-                      href={item.path}
+      <ScrollArea className="flex-1  px-3 py-4">
+        <nav className="space-y-4 ">
+          {menuCategories.map((category) => {
+            const isOpen = openCategories[category.name];
+            return (
+              <div key={category.name} className="space-y-2 ">
+                {/* Category Label (con desplegable) */}
+                {!collapsed && (
+                  <button
+                    type="button"
+                    onClick={() => toggleCategory(category.name)}
+                    className="flex w-full items-center justify-between px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+                  >
+                    <span>{category.name}</span>
+                    <svg
                       className={cn(
-                        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                        "hover:bg-slate-100 hover:text-accent-foreground",
-                        isActive 
-                          ? "bg-slate-100 text-accent-foreground font-medium" 
-                          : "text-muted-foreground"
+                        "h-3 w-3 transition-transform",
+                        isOpen ? "rotate-90" : "rotate-0"
                       )}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
                     >
-                      <div className="flex h-4 w-4 items-center justify-center">
-                        {item.icon}
-                      </div>
-                      {!collapsed && (
-                        <span className="truncate">{item.name}</span>
-                      )}
-                    </Link>
-                  );
-                })}
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </button>
+                )}
+                
+                {/* Category Items */}
+                <div className="space-y-1 ">
+                  {category.items.map((item) => {
+                    const isActive = pathname === item.path;
+                    const shouldShow = collapsed || isOpen;
+                    if (!shouldShow) return null;
+                    
+                    return (
+                      <Link
+                        key={item.path}
+                        href={item.path}
+                        className={cn(
+                          "flex  items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors",
+                          "hover:bg-slate-100 hover:text-accent-foreground",
+                          isActive 
+                            ? "bg-slate-100 text-accent-foreground font-medium" 
+                            : "text-muted-foreground"
+                        )}
+                      >
+                        <div className="flex h-4 w-4 items-center justify-center">
+                          {item.icon}
+                        </div>
+                        {!collapsed && (
+                          <span className="truncate">{item.name}</span>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </nav>
       </ScrollArea>
 

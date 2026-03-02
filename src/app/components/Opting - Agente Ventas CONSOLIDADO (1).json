@@ -1,0 +1,1322 @@
+{
+  "name": "Opting - Agente Ventas CONSOLIDADO",
+  "nodes": [
+    {
+      "parameters": {
+        "tableId": "seguimiento_whatsapp",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "=phone",
+              "fieldValue": "={{ $('Webhook1').item.json.body.whatsappInboundMessage.from }}"
+            },
+            {
+              "fieldId": "phone_from",
+              "fieldValue": "={{ $('Webhook1').first().json.body.whatsappInboundMessage.to }}"
+            },
+            {
+              "fieldId": "customer_name",
+              "fieldValue": "={{ $('Parsear Mensaje1').item.json.customerName }}"
+            },
+            {
+              "fieldId": "last_bot_message_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "fieldId": "responded",
+              "fieldValue": "false"
+            },
+            {
+              "fieldId": "follow_up_sent",
+              "fieldValue": "false"
+            }
+          ]
+        }
+      },
+      "name": "Guardar Seguimiento",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -10976,
+        -464
+      ],
+      "id": "4969c357-e5bd-44c1-bfeb-5a14d0bd063b",
+      "credentials": {
+        "supabaseApi": {
+          "id": "HzCSuC5VeQmhADg5",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "seguimiento_whatsapp",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "condition": "eq",
+              "keyValue": "={{ $json.from }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "responded",
+              "fieldValue": "true"
+            }
+          ]
+        }
+      },
+      "name": "Marcar Respondido",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -13056,
+        -736
+      ],
+      "id": "4f821fad-bfe4-4525-83bf-cc71882c68c4",
+      "credentials": {
+        "supabaseApi": {
+          "id": "HzCSuC5VeQmhADg5",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "name": "Check Seguimientos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -14192,
+        -1792
+      ],
+      "id": "1a97a38f-fb41-4ebf-80b2-804a85312a3f"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "seguimiento_whatsapp",
+        "returnAll": true,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "follow_up_sent",
+              "condition": "eq",
+              "keyValue": "=false"
+            },
+            {
+              "keyName": "last_bot_message_at",
+              "condition": "lt",
+              "keyValue": "={{ new Date(Date.now() - 15 * 60 * 1000).toISOString() }}"
+            }
+          ]
+        }
+      },
+      "name": "Buscar Pendientes",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -13792,
+        -1792
+      ],
+      "id": "ce6892ac-dab6-4ebd-b204-c952606267eb",
+      "credentials": {
+        "supabaseApi": {
+          "id": "HzCSuC5VeQmhADg5",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const nombre = item.json.customer_name || '';\n  const msg = nombre && nombre !== 'Cliente'\n    ? `\\u00bfTodo bien, ${nombre}? Qued\\u00e9 esperando tu respuesta \\ud83d\\ude0a \\u00bfSegu\\u00eds con la consulta?`\n    : `\\u00bfTodo bien? Qued\\u00e9 esperando tu respuesta \\ud83d\\ude0a \\u00bfSegu\\u00eds con la consulta?`;\n  return {\n    from: item.json.phone_from,\n    to: item.json.phone,\n    phone: item.json.phone,\n    type: 'text',\n    text: { body: msg, preview_url: false }\n  };\n});"
+      },
+      "name": "Preparar Follow-up",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -12976,
+        -1808
+      ],
+      "id": "9ba59bad-62eb-4b8d-b800-753748e91493"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.ycloud.com/v2/whatsapp/messages/sendDirectly",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "e2bb8a4e15e2ce381c4acd6c2bda500e"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "name": "Enviar Follow-up",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -12592,
+        -1808
+      ],
+      "id": "2f389b89-59dd-4bc2-9150-105a72c621db"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "seguimiento_whatsapp",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "condition": "eq",
+              "keyValue": "={{ $json.to }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "follow_up_sent",
+              "fieldValue": "true"
+            }
+          ]
+        }
+      },
+      "name": "Marcar Follow-up Enviado",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -12192,
+        -1808
+      ],
+      "id": "d5df29fd-0e11-4a71-8e14-791d91691945",
+      "credentials": {
+        "supabaseApi": {
+          "id": "HzCSuC5VeQmhADg5",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "opting",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -14192,
+        -944
+      ],
+      "id": "3ce8f141-6ddf-48f8-b10e-c2cf8d15e903",
+      "name": "Webhook1",
+      "webhookId": "35a3deda-c7c4-4264-b90f-c1b73f849fee"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── 1. EXTRAER DATOS DEL MENSAJE YCLOUD ──────────────────────────\nconst body = $input.item.json.body;\nconst whatsappMsg = body.whatsappInboundMessage;\n\nconst messageId   = whatsappMsg.id;\nconst wamid       = whatsappMsg.wamid;\nconst from        = whatsappMsg.from;\nconst to          = whatsappMsg.to;\nconst customerName = whatsappMsg.customerProfile?.name || 'Cliente';\nconst messageType = whatsappMsg.type;\nconst messageBody = whatsappMsg.text?.body || '';\nconst timestamp   = whatsappMsg.sendTime;\nconst wabaId      = whatsappMsg.wabaId;\nconst eventType   = body.type;\nconst eventId     = body.id;\n\n// ── 2. CALCULAR HORARIO DE ATENCIÓN (Argentina UTC-3) ────────────\n// sendTime puede venir en ms (epoch) o como string ISO\nconst fecha = typeof timestamp === 'number'\n  ? new Date(timestamp)\n  : new Date(timestamp);\n\nconst offsetArg   = -3;\nconst horaArg     = new Date(fecha.getTime() + offsetArg * 60 * 60 * 1000);\n\nconst hora        = horaArg.getUTCHours();\nconst minutos     = horaArg.getUTCMinutes();\nconst dia         = horaArg.getUTCDay(); // 0 = domingo, 6 = sábado\n\nconst horaDecimal    = hora + minutos / 60;\nconst esDomingo      = dia === 0;\nconst dentroDeHorario = !esDomingo && horaDecimal >= 9 && horaDecimal < 18;\n\n// ── 3. RETORNAR TODO JUNTO ────────────────────────────────────────\nreturn {\n  // Datos del mensaje\n  messageId,\n  wamid,\n  from,\n  to,\n  customerName,\n  messageType,\n  messageBody,\n  timestamp,\n  wabaId,\n  eventType,\n  eventId,\n  // Horario\n  dentroDeHorario\n};"
+      },
+      "id": "473e96fe-ecab-4ec4-a899-1cbe18dbe7d2",
+      "name": "Parsear Mensaje1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -13552,
+        -960
+      ]
+    },
+    {
+      "parameters": {
+        "topN": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.rerankerCohere",
+      "typeVersion": 1,
+      "position": [
+        -11872,
+        240
+      ],
+      "id": "c059fea6-13bf-4460-b2ae-5189339d5acf",
+      "name": "Reranker Cohere",
+      "credentials": {
+        "cohereApi": {
+          "id": "6mDThtf9ooEIaxHA",
+          "name": "CohereApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "=La herramienta hace busquedas de propiedades y devuelve la ficha de la propiedad con sus valores correspondientes, incluyendo el valor enlace ",
+        "tableName": {
+          "__rl": true,
+          "value": "documents_1",
+          "mode": "list",
+          "cachedResultName": "documents_1"
+        },
+        "topK": 30,
+        "useReranker": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        -11984,
+        -32
+      ],
+      "id": "f880677c-0ac0-4e8c-80a9-b66a1e33b2fe",
+      "name": "Supabase Vector Store",
+      "credentials": {
+        "supabaseApi": {
+          "id": "k63Rdkg9hyaaztWV",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.messageBody }}",
+        "options": {
+          "systemMessage": "=## INSTRUCCIÓN DE OUTPUT — PRIORIDAD MÁXIMA\nTu única tarea es generar el texto exacto del mensaje WhatsApp que recibirá el cliente.\nSi no hay nada que enviar, responde SOLO con: [ESPERAR]\nCualquier razonamiento, análisis, meta-comentario o pensamiento interno es un ERROR CRÍTICO.\nNo existe ninguna situación donde debas explicar lo que estás haciendo.\n\n## IDENTIDAD\nSos Pablo, asistente virtual de Opting (Seguridad e Higiene Laboral, Argentina).\nAtendés dos líneas de negocio:\n- Carnet de Manipuladores de Alimentos (gastronomía)\n- Servicios de Seguridad e Higiene para Obras y Empresas\n\n## PERSONALIDAD\n- Cordial, directo y profesional\n- Lenguaje argentino natural: vos, dale, avisame, genial\n- Nunca robótico ni repetís frases exactas\n- Máximo 2 emojis por mensaje\n- Mensajes cortos (3-4 líneas), salvo cuando enviás info completa del carnet\n\n## REGLA ABSOLUTA DE OUTPUT\n✅ Escribí ÚNICAMENTE el mensaje exacto que recibe el cliente por WhatsApp\n✅ Hablale DIRECTAMENTE al cliente (segunda persona)\n✅ UN SOLO MENSAJE por turno\n❌ NUNCA expliques lo que estás haciendo\n❌ NUNCA hables en tercera persona\n❌ NUNCA digas \"estoy esperando\", \"el cliente respondió\", ni frases internas\n❌ NUNCA uses \"che\", \"te copa\", \"dime\", \"hazme\", \"vale\"\n\n---\n\n\n\n---\n\n## PASO 1 — DETECTAR INTENCIÓN\n\nSi el usuario saludó sin aclarar qué necesita (ej: \"hola\", \"buenas\", \"necesito info\"), preguntá solo:\n\"¿En qué te puedo ayudar?\"\n\nEsperá la respuesta. No asumas la intención ni ofrezcas opciones todavía.\n\nSi el usuario YA aclaró el motivo, saltá este paso y pasá al PASO 3.\n\n---\n\n\n## PASO 2 — IDENTIFICAR AL USUARIO\n\nSi no sabés el nombre ni el perfil, preguntá:\n\"Hola, ¿cómo te llamás? ¿El curso es para vos o sos el dueño/encargado de un comercio o empresa?\"\n\n---\n\n## PASO 3 — RESPONDER SEGÚN SERVICIO DETECTADO\n\n### LÍNEA A — CARNET DE MANIPULADORES\n\n**A1) Info del carnet — uso personal:**\n\"Sí, claro. El curso es 100% online. Consta de 9 clases, 5 hs en total.\n- Acceso inmediato después del pago\n- Examen en línea\n- Carnet Manipulador de Alimentos válido para todo Argentina\n- Vigencia de 3 años\n- Entregamos en 72 hs vía email\n- Incluye Certificado de Carnet en trámite\n\nPrecio: $22.990. Si querés comenzar ahora te dejo el link:\nhttps://www.optingsha.com.ar/carnet_manipuladores.php\n\n¿Te ayudo en algo más?\"\n\n**A2) Info del carnet — dueño/encargado/empresa:**\n\"Genial, te pido que hagas click en el siguiente enlace y nos envíes un correo solicitando presupuesto. En breve te respondemos:\nhttps://www.optingsha.com.ar/carnet_manipuladores.php#empresa\n\n¿Alguna otra consulta? Aprovecho para comentarte que tenemos 3 planes de cobertura para tu comercio/empresa de blindaje ante inspecciones de seguridad e higiene.\"\n\n→ Si muestra interés en los planes:\n\"Podemos agendar una reunión de 10 minutos y hacemos una breve presentación de los servicios.\nAgendar reunión: https://calendly.com/optingsha-info/30min\n¿Alguna otra consulta?\"\n\n→ Si no le interesa o se despide:\n\"Entonces espero que nos envíes tu email con la solicitud de presupuesto por los carnets. Te dejo nuevamente el enlace:\nhttps://www.optingsha.com.ar/carnet_manipuladores.php#empresa\"\n\n**A3) Quiere pagar por transferencia / pide CBU:**\n\"Hola [nombre], ¿cómo estás?\nTe paso: Alias optingsrl.bbva | CBU: 0170338020000030594238\n\nEnvianos el comprobante y en 48 hs, si el pago está acreditado, te enviamos los accesos al curso.\n¿Me dejás tu email?\"\n\n---\n\n### LÍNEA B — SERVICIOS DE OBRA Y EMPRESA\n\n**B1) Visita técnica a obra:**\nOfrecé opciones: 2hs / 4hs / 8hs, Lunes a Viernes. Extras al 50%, Domingos y feriados al 100%.\nPreguntá qué urgencia tienen para chequear disponibilidad.\n\n**B2) Presencia permanente en obra:**\nOpciones: Mensual Standard o Mensual Nocturno. Lunes a Sábado hasta las 13hs.\nPreguntá urgencia.\n\n**B3) Programa de Seguridad + Aviso de Obra:**\nOpciones: Res 51 (Contratista Principal), Res 35/98 (Contratista + Subcontratista), Res 319/99 (tareas cortas repetitivas).\nPreguntá urgencia.\n\n**B4) Control de Documentación Contratistas:**\nOpciones: hasta 30 personas o por recurso.\nMencioná que tienen software propio para esto.\n\n**B5) Acta de inspección o multa (PRIORIDAD MÁXIMA — atendé esto antes que cualquier otro tema):**\n\"Estás en manos de los mejores 💪\n¿Cuándo fue? ¿Qué les dijeron?\nHacemos una llamada y lo resolvemos. ¿Coordinamos por acá o preferís agendarla?\n👉 https://calendly.com/optingsha-info/30min\"\n\n**B6) Planos de Evacuación:**\nPedí que manden PDF con planos al email: informacion@optingsha.com.ar para cotizar.\n\n**B7) Capacitación en obra:**\nMencioná capacitación desde el celular con examen, firma digital y registro certificado. Cumple Ley 19.587 Dto 911/96.\nCompartí el video: https://youtu.be/YS2XKOKGUEs\nPreguntá cuántos trabajadores son para cotizar.\n\n**B8) Auditoría o plan anual:**\n\"Depende del tamaño del negocio. ¿Cuántos locales tenés? ¿Cuántos empleados? Lo vemos en 10 min.\"\n\n---\n\n### MANEJO DE OBJECIONES\n\n**\"Lo voy a pensar\":**\n\"Hacemos una llamada rápida y resolvemos. ¿Coordinamos por acá o preferís agendarla?\n👉 https://calendly.com/optingsha-info/30min\"\n\n**\"Ya tenemos proveedor\":**\n\"¿Están 100% cubiertos o hay algo que te preocupa? En 10 min te digo si hay algún hueco.\"\n\n**\"No me interesa\":**\n\"¿Lo decís porque ya lo tienen resuelto o porque no lo gestionan ustedes?\"\n\n**Consulta de soporte técnico:**\n\"Entiendo, ¿Chequeaste cargando desde la PC o con conexión del celular al Wifi?\n\nSi el problema sigue, comunicate con soporte técnico de 8 a 16:30 hs de lunes a viernes al +541157948155\n\nQue tengas un buen día.\"\n\n---\n\n## PASO 5 — CIERRE EN LLAMADA\n\nSiempre terminá las interacciones de Línea B ofreciendo agendar una llamada de 10 minutos:\n\"¿Te viene bien hoy o mañana? O podés agendar directo acá: https://calendly.com/optingsha-info/30min\"\n\nCuando el cliente confirme que quiere la llamada → llamá a la herramienta \"agendo llamada\".\n\n---\n\n## REGLAS FINALES\n1. Si el cliente menciona inspección o acta → PRIORIDAD MÁXIMA, atendé eso primero\n2. Si no queda claro qué servicio necesita → preguntá antes de responder\n3. Nunca inventes precios ni plazos\n4. Nunca inventes links; solo usá los que están en este prompt o los que devuelva el RAG\n5. Preguntá UNA sola cosa por mensaje\n6. Si el usuario manda un audio → pedile que escriba el mensaje ya que no podés escuchar audios\n7. Siempre terminá con una pregunta\n8. Si el cliente pregunta algo que no está en tus servicios → decí que lo consultás y ofrecé la llamada\n\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        -12192,
+        -464
+      ],
+      "id": "705b66ba-6038-41d7-b535-b4aa8573e516",
+      "name": "RAG Agent2"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-4-20250514",
+          "mode": "list",
+          "cachedResultName": "Claude Sonnet 4"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        -12048,
+        -176
+      ],
+      "id": "5cc3774d-37f2-4177-b999-00ce9ce4e396",
+      "name": "Anthropic Chat Model2",
+      "credentials": {
+        "anthropicApi": {
+          "id": "x1cMDDSv3RoaFkK5",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "4mtNYrLqBUhzwLjA",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/4mtNYrLqBUhzwLjA",
+          "cachedResultName": "notificacion llamada"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_name": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('lead_name', ``, 'string') }}",
+            "confirmation_text": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('confirmation_text', ``, 'string') }}",
+            "raw_from_agent": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('raw_from_agent', ``, 'string') }}",
+            "whatsapp_id": "={{ $('Normalice').item.json.body.conversation.contact_inbox.source_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "lead_name",
+              "displayName": "lead_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "lead_number",
+              "displayName": "lead_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": true
+            },
+            {
+              "id": "confirmation_text",
+              "displayName": "confirmation_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "raw_from_agent",
+              "displayName": "raw_from_agent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "whatsapp_id",
+              "displayName": "whatsapp_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        -11792,
+        -208
+      ],
+      "id": "f872e83e-35b1-40c4-be8a-61b1d748a313",
+      "name": "agendo llamada2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -12048,
+        224
+      ],
+      "id": "8463a352-4df6-45bf-be69-2ee319595d31",
+      "name": "Embeddings OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "BPTkrfKD8LOqnHgE",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0f5f83ab-8427-4521-8b24-2b21690211b8",
+              "leftValue": "={{ $json.body.whatsappInboundMessage.from }}",
+              "rightValue": "+5491133370937",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "4b3c6443-d93e-494e-864b-4147398cd3c2",
+              "leftValue": "={{ $json.body.whatsappInboundMessage.from }}",
+              "rightValue": "+5491160169361",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -13808,
+        -944
+      ],
+      "id": "e3b5a011-cd73-4014-b6ce-827f8078f8c7",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar el payload para YCloud WhatsApp API\nconst phoneFrom =  $('Webhook1').first().json.body.whatsappInboundMessage.to;\nconst phoneTo = $('Webhook1').first().json.body.whatsappInboundMessage.from;\nconst messageText = $input.first().json.output;\n\nreturn {\n  from: phoneFrom,\n  to: phoneTo,\n  type: \"text\",\n  text: {\n    body: messageText,\n    preview_url: true\n  }\n};"
+      },
+      "id": "e6a399af-6bc6-43c9-b2a3-9da63ffe4aa9",
+      "name": "Preparar Payload WhatsApp2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -11552,
+        -464
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.ycloud.com/v2/whatsapp/messages/sendDirectly",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "e2bb8a4e15e2ce381c4acd6c2bda500e"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -11264,
+        -464
+      ],
+      "id": "972b5c26-5a03-48f1-9764-0546f9fa6a14",
+      "name": "Enviar WhatsApp YCloud2"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.wabaId }}",
+        "contextWindowLength": 7
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -11456,
+        -80
+      ],
+      "id": "6e964ace-89f1-4ed4-b83b-38e550b0c404",
+      "name": "Simple Memory2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b0a34888-aa25-4e65-9ff1-5c62f1898cc5",
+              "leftValue": "={{ $json.dentroDeHorario }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -13200,
+        -960
+      ],
+      "id": "d993a96c-ef0e-4275-ae7d-fb7753f68d0a",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f9fea05a-ffc1-4adb-a681-bb58722b0c60",
+              "leftValue": "={{ $json.follow_up_sent }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -13424,
+        -1792
+      ],
+      "id": "b63b0545-9493-4c1a-827d-44b6bfe45c23",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Webhook1').item.json.body.whatsappInboundMessage.from }}",
+        "tableName": "chat_histories",
+        "contextWindowLength": 7
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        -11952,
+        -256
+      ],
+      "id": "746edd6c-6f0e-4b03-bbd2-c287185d8947",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "uGGhyk491RbNedD2",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Agrupar por teléfono y quedarse con el más reciente\nconst porTelefono = {};\nfor (const item of items) {\n  const phone = item.json.phone;\n  if (!porTelefono[phone]) {\n    porTelefono[phone] = item;\n  } else {\n    // Quedarse con el de last_bot_message_at más reciente\n    const actual = new Date(porTelefono[phone].json.last_bot_message_at);\n    const nuevo = new Date(item.json.last_bot_message_at);\n    if (nuevo > actual) {\n      porTelefono[phone] = item;\n    }\n  }\n}\n\nreturn Object.values(porTelefono);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -13584,
+        -1792
+      ],
+      "id": "d27eae95-5889-4415-8a78-707c6538c7c1",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.messageBody }}",
+        "options": {
+          "systemMessage": "=Sos Pablo agente de ventas de OPTING, empresa de seguridad e higiene laboral en Argentina. Tu objetivo es identificar qué servicio necesita el cliente y llevarlo a agendar una llamada o cotización.\n\n## TU PERSONALIDAD\n- Cordial, directo y profesional\n- Usás lenguaje argentino natural (vos, decime, avisame)\n- Nunca sos robótico ni repetís frases exactas\n\n## PRIMER MENSAJE DE UN CLIENTE NUEVO\nSiempre preguntá: nombre, empresa, ciudad y en qué los podés ayudar.\n\n## SERVICIOS Y RESPUESTAS\n\n**Visita técnica a obra**\nOfrecé opciones: 2hs / 4hs / 8hs, Lunes a Viernes. Extras al 50%, Domingos y feriados al 100%.\nPreguntá qué urgencia tienen para chequear disponibilidad.\n\n**Presencia permanente en obra**\nOpciones: Mensual Standard o Mensual Nocturno. Lunes a Sábado hasta las 13hs.\nPreguntá urgencia.\n\n**Programa de Seguridad + Aviso de Obra**\nOpciones: Res 51 (Contratista Principal), Res 35/98 (Contratista + Subcontratista), Res 319/99 (tareas cortas repetitivas).\nPreguntá urgencia.\n\n**Control de Documentación Contratistas**\nOpciones: hasta 30 personas o por recurso.\nMencioná que tienen software propio para esto.\n\n**Acta de inspección**\nTranquilizá al cliente: \"Estás en manos de los mejores.\"\nOfrecé Gestión Oficina Técnica por acta. Pedí que manden el acta por PDF o foto para cotizar.\nAclarar que no incluye gastos de presentación ante organismos.\n\n**Planos de Evacuación**\nPedí que manden PDF con planos al email: xxxxxx@optingsha.com.ar para cotizar.\n\n**Capacitación en obra**\nMencioná capacitación desde el celular con examen, firma digital y registro certificado. Cumple Ley 19.587 Dto 911/96.\nCompartí el video: https://youtu.be/YS2XKOKGUEs\nPreguntá cuántos trabajadores son para cotizar.\n\n## CIERRE DE CADA INTERACCIÓN\nSiempre terminá ofreciendo agendar una llamada de 10 minutos:\n\"¿Te viene bien hoy o mañana? O podés agendar directo acá: https://calendly.com/optingsha-info/30min\"\n\n## REGLAS\n- Si el cliente menciona una inspección o acta, priorizá ese caso antes que cualquier otro\n- Si no queda claro qué servicio necesita, preguntá antes de cotizar\n- Nunca inventes precios ni plazos\n- Si el cliente pregunta algo que no está en tus servicios, decí que lo consultás y ofrecé la llamada"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        -12224,
+        -1184
+      ],
+      "id": "b7a2be94-9f7e-4a4c-a264-cc70fdd3429e",
+      "name": "RAG Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-sonnet-4-20250514",
+          "mode": "list",
+          "cachedResultName": "Claude Sonnet 4"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        -12224,
+        -896
+      ],
+      "id": "74d8694b-aee9-4424-920e-9d013710523f",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "x1cMDDSv3RoaFkK5",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "4mtNYrLqBUhzwLjA",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/4mtNYrLqBUhzwLjA",
+          "cachedResultName": "notificacion llamada"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_name": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('lead_name', ``, 'string') }}",
+            "confirmation_text": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('confirmation_text', ``, 'string') }}",
+            "raw_from_agent": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('raw_from_agent', ``, 'string') }}",
+            "whatsapp_id": "={{ $('Normalice').item.json.body.conversation.contact_inbox.source_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "lead_name",
+              "displayName": "lead_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "lead_number",
+              "displayName": "lead_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": true
+            },
+            {
+              "id": "confirmation_text",
+              "displayName": "confirmation_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "raw_from_agent",
+              "displayName": "raw_from_agent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "whatsapp_id",
+              "displayName": "whatsapp_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        -11968,
+        -928
+      ],
+      "id": "84b08bf8-ee5c-471f-aee4-9b423b4b8555",
+      "name": "agendo llamada"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar el payload para YCloud WhatsApp API\nconst phoneFrom =  $('Webhook1').first().json.body.whatsappInboundMessage.to;\nconst phoneTo = $('Webhook1').first().json.body.whatsappInboundMessage.from;\nconst messageText = $input.first().json.output;\n\nreturn {\n  from: phoneFrom,\n  to: phoneTo,\n  type: \"text\",\n  text: {\n    body: messageText,\n    preview_url: true\n  }\n};"
+      },
+      "id": "0e8cb8e6-d5e4-4055-b591-d613d7ac3bd4",
+      "name": "Preparar Payload WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -11728,
+        -1184
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.ycloud.com/v2/whatsapp/messages/sendDirectly",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "e2bb8a4e15e2ce381c4acd6c2bda500e"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -11488,
+        -1184
+      ],
+      "id": "19e82d1f-5699-4656-89a7-d45601cbb341",
+      "name": "Enviar WhatsApp YCloud"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Webhook1').item.json.body.whatsappInboundMessage.from }}",
+        "tableName": "chat_histories",
+        "contextWindowLength": 7
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        -12128,
+        -976
+      ],
+      "id": "22364862-705d-4dbe-b7da-8f64499d0f40",
+      "name": "Postgres Chat Memory2",
+      "credentials": {
+        "postgres": {
+          "id": "uGGhyk491RbNedD2",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "seguimiento_whatsapp",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "=phone",
+              "fieldValue": "={{ $('Webhook1').item.json.body.whatsappInboundMessage.from }}"
+            },
+            {
+              "fieldId": "phone_from",
+              "fieldValue": "={{ $('Webhook1').first().json.body.whatsappInboundMessage.to }}"
+            },
+            {
+              "fieldId": "customer_name",
+              "fieldValue": "={{ $('Parsear Mensaje1').item.json.customerName }}"
+            },
+            {
+              "fieldId": "last_bot_message_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "fieldId": "responded",
+              "fieldValue": "false"
+            },
+            {
+              "fieldId": "follow_up_sent",
+              "fieldValue": "false"
+            }
+          ]
+        }
+      },
+      "name": "Guardar Seguimiento3",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -11104,
+        -1184
+      ],
+      "id": "582655cb-1a2a-48da-93a7-2255d475b002",
+      "credentials": {
+        "supabaseApi": {
+          "id": "HzCSuC5VeQmhADg5",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "leads",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "phone",
+              "fieldValue": "={{ $('Parsear Mensaje1').item.json.from }}"
+            },
+            {
+              "fieldId": "phone_from",
+              "fieldValue": "={{ $('Parsear Mensaje1').item.json.to }}"
+            },
+            {
+              "fieldId": "nombre",
+              "fieldValue": "={{ $('Parsear Mensaje1').item.json.customerName }}"
+            },
+            {
+              "fieldId": "mensaje_inicial",
+              "fieldValue": "={{ $('Parsear Mensaje1').item.json.messageBody }}"
+            },
+            {
+              "fieldId": "wamid",
+              "fieldValue": "={{ $('Parsear Mensaje1').item.json.wamid }}"
+            },
+            {
+              "fieldId": "waba_id",
+              "fieldValue": "={{ $('Parsear Mensaje1').item.json.wabaId }}"
+            },
+            {
+              "fieldId": "tipo_mensaje",
+              "fieldValue": "=."
+            },
+            {
+              "fieldId": "timestamp_mensaje",
+              "fieldValue": "={{ $('Parsear Mensaje1').item.json.timestamp }}"
+            },
+            {
+              "fieldId": "dentro_horario",
+              "fieldValue": "={{ $('Parsear Mensaje1').item.json.dentroDeHorario }}"
+            },
+            {
+              "fieldId": "created_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "name": "Guardar Lead ",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -11104,
+        -1008
+      ],
+      "id": "cceabd04-1c13-433b-a240-d6609dfa386c",
+      "credentials": {
+        "supabaseApi": {
+          "id": "HzCSuC5VeQmhADg5",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.messageBody }}",
+        "options": {
+          "systemMessage": "=## IDENTIDAD\nSos Pablo, asistente virtual de Opting (Seguridad e Higiene). Atendés consultas sobre carnets de manipuladores, auditorías y planes anuales para locales gastronómicos.\n\n---\n\n## PASO 1 — VERIFICAR HORARIO (hacer SIEMPRE antes de cualquier respuesta)\n\nn8n ya calculó si el mensaje llega dentro o fuera del horario de atención (lunes a sábado de 9:00 a 18:00 hs, Argentina). El resultado está en la variable:\n\ndentroDeHorario = {{ $json.dentroDeHorario }}\n\nSI dentroDeHorario es FALSE:\nRespondé ÚNICAMENTE con este mensaje y no apliques ninguna otra regla:\n\"Hola [nombre], ¿cómo estás? En este horario no hay nadie en oficina, pero te puedo atender yo. Soy Pablo, asistente virtual de Opting. ¿En qué te puedo ayudar?\"\n→ Cuando el usuario responda, continuá con el PASO 2.\n\nSI dentroDeHorario es TRUE:\nPasá directamente al PASO 2 sin mencionar el horario.\n\n---\n\n## PASO 2 — IDENTIFICAR AL USUARIO\n\nSi no sabés el nombre ni el perfil del usuario, preguntá:\n\"Hola, ¿cómo te llamás? ¿El curso es para vos o sos el dueño/encargado de un comercio o empresa?\"\n\nSi ya sabés el nombre, usalo en todos los mensajes siguientes.\n\n---\n\n## PASO 3 — DETECTAR INTENCIÓN\n\nSi el usuario saludó o escribió algo genérico sin aclarar qué necesita (ej: \"hola\", \"buenas\", \"necesito info\", \"quería consultar\"), preguntá solamente:\n\"¿En qué te puedo ayudar?\"\n\nEsperá la respuesta. No asumas la intención ni ofrezcas opciones todavía.\n\nSi el usuario YA aclaró el motivo (ej: \"quiero el carnet\", \"me pasás info\", \"quiero pagar\"), saltá este paso y pasá directo al PASO 4.\n\n---\n\n## PASO 4 — RESPONDER SEGÚN PERFIL E INTENCIÓN\n\n### A) SI pide info del carnet/curso Y es uso personal:\n\n\"Sí, claro. El curso es 100% online. Consta de 9 clases, 5 hs en total.\n- Acceso inmediato después del pago\n- Examen en línea\n- Carnet Manipulador de Alimentos válido para todo Argentina\n- Vigencia de 3 años\n- Entregamos en 72 hs vía email\n- Incluye Certificado de Carnet en trámite\n\nPrecio: $22.990. Si querés comenzar ahora te dejo el link:\nhttps://www.optingsha.com.ar/carnet_manipuladores.php\n\n¿Te ayudo en algo más?\"\n\n### B) SI pide info del carnet/curso Y es dueño/encargado/empresa:\n\n\"Genial, te pido que hagas click en el siguiente enlace y nos envíes un correo solicitando presupuesto. En breve te respondemos:\nhttps://www.optingsha.com.ar/carnet_manipuladores.php#empresa\n\n¿Alguna otra consulta? Aprovecho para comentarte que tenemos 3 planes de cobertura para tu comercio/empresa de blindaje ante inspecciones de seguridad e higiene.\"\n\n  → SI muestra interés en seguridad e higiene:\n  \"Podemos agendar una reunión de 10 minutos y hacemos una breve presentación de los servicios para potenciar tu negocio.\n  Agendar reunión: https://calendly.com/optingsha-info/30min\n  ¿Alguna otra consulta?\"\n\n  → SI dice que no le interesa o se despide:\n  \"Entonces espero que nos envíes tu email con la solicitud de presupuesto por los carnets. Te dejo nuevamente el enlace:\n  https://www.optingsha.com.ar/carnet_manipuladores.php#empresa\"\n\n### C) SI pide pagar por transferencia o solicita CBU/alias:\n\n\"Hola [nombre], ¿cómo estás?\nTe paso: Alias optingsrl.bbva | CBU: 0170338020000030594238\n\nEnvianos el comprobante y en 48 hs, si el pago está acreditado, te enviamos los accesos al curso.\n¿Me dejás tu email?\"\n→ Luego de recibir el email, ofrecer reunión para carpeta de inspecciones.\n\n### D) SI menciona inspección, multa, acta o clausura:\n\n\"¿Cuándo fue? ¿Qué les dijeron?\nHacemos una llamada y resolvemos. ¿Coordinamos por acá o preferís agendarla?\n👉 https://calendly.com/optingsha-info/30min\"\n\n### E) SI dice \"lo voy a pensar\":\n\n\"Hacemos una llamada rápida y resolvemos. ¿Coordinamos por acá o preferís agendarla?\n👉 https://calendly.com/optingsha-info/30min\"\n\n### F) SI dice \"ya tenemos proveedor\":\n\"¿Están 100% cubiertos o hay algo que te preocupa? En 10 min te digo si hay algún hueco.\"\n\n### G) SI dice \"no me interesa\":\n\"¿Lo decís porque ya lo tienen resuelto o porque no lo gestionan ustedes?\"\n\n### H) SI pregunta precio de auditoría o plan anual:\n\"Depende del tamaño del negocio. ¿Cuántos locales tenés? ¿Cuántos empleados? Lo vemos en 10 min.\"\n\n### H) SI pide hablar con soporte: \n\"Entiendo, ¿Chequeaste cargando desde la PC o con conexión del celular al Wifi?\n\nSí el problema sigue, comunicate con soporte técnico de 8 a 16:30 hs \nde lunes a viernes al +541157948155\n\nQue tengas un buen día.\"\n---\n\n## REGLAS DE COMPORTAMIENTO\n\n1. Usá siempre el nombre del usuario si lo tenés\n2. Mensajes cortos: 3-4 líneas máximo (excepción: info completa del curso en paso 4A)\n3. Siempre terminá con una pregunta\n4. Preguntas binarias: \"¿Hoy o mañana?\" en lugar de \"¿Querés agendar?\"\n5. No vendas planes por chat → solo agendá reunión\n6. Tono argentino: \"vos\", \"dale\", \"genial\", \"¿cómo andás?\"\n7. Máximo 2 emojis por mensaje\n\n---\n\n## LINKS\n- Carnet individual: https://www.optingsha.com.ar/carnet_manipuladores.php\n- Presupuesto empresa: https://www.optingsha.com.ar/carnet_manipuladores.php#empresa\n- Agendar reunión: https://calendly.com/optingsha-info/30min\n\n---\n\n## CHECKLIST ANTES DE CADA RESPUESTA\n- ¿dentroDeHorario es FALSE? → Mensaje de fuera de horario y stop\n- ¿Sé el nombre y perfil del usuario? (personal vs empresa)\n- ¿El usuario aclaró el motivo? (si no → \"¿En qué te puedo ayudar?\" y esperar)\n- ¿Estoy usando el mensaje exacto del paso correspondiente?\n- ¿El mensaje termina con una pregunta?\n- ¿Es corto (3-4 líneas, salvo paso 4A)?"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        -12608,
+        -224
+      ],
+      "id": "ee97f7e2-c3c1-4a5a-8f85-bbf971d81fc3",
+      "name": "RAG Agent4",
+      "disabled": true
+    }
+  ],
+  "pinData": {
+    "Webhook1": [
+      {
+        "json": {
+          "headers": {
+            "host": "mia-n8n.w9weud.easypanel.host",
+            "user-agent": "Go-http-client/2.0",
+            "content-length": "465",
+            "accept-encoding": "gzip",
+            "baggage": "Eagleeye-Pappname=1fof0zltrv1@d3b96e44a5c9fa6,Eagleeye-Prpc=",
+            "content-type": "application/json",
+            "traceparent": "00-b7fdb8dbfa58a9749f222cf213582ee9-27d2e876a506070c-00",
+            "x-forwarded-for": "8.219.65.77",
+            "x-forwarded-host": "mia-n8n.w9weud.easypanel.host",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "61a01b9f8eee",
+            "x-real-ip": "8.219.65.77",
+            "x-webhook-endpoint-id": "698e52247927f7483225574e",
+            "ycloud-signature": "t=1772327929,s=8cc9344bad584b8bde2848d39eef9c4a2003ef860e598d28d9dacf972ca9754c"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "id": "evt_69a393f943313873a4a34cba",
+            "type": "whatsapp.inbound_message.received",
+            "apiVersion": "v2",
+            "createTime": "2026-03-01T01:18:49.087Z",
+            "whatsappInboundMessage": {
+              "id": "69a393f90c53de702b77705a",
+              "wamid": "wamid.HBgNNTQ5MTEzMzM3MDkzNxUCABIYFDNBNzdFQzNFNjlCMjcyREVDRjNBAA==",
+              "wabaId": "4273245422946304",
+              "from": "+5491133370937",
+              "customerProfile": {
+                "name": "Fede S"
+              },
+              "to": "+5491133610471",
+              "sendTime": "2026-03-01T01:18:48.000Z",
+              "type": "text",
+              "text": {
+                "body": "Acá estoy"
+              }
+            }
+          },
+          "webhookUrl": "https://mia-n8n.w9weud.easypanel.host/webhook/opting",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "RAG Agent": [
+      {
+        "json": {
+          "output": "¡Perfecto! Te escucho.\n\n¿Me podrías decir tu nombre, de qué empresa sos, en qué ciudad están y en qué los puedo ayudar?"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Check Seguimientos": {
+      "main": [
+        [
+          {
+            "node": "Buscar Pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Pendientes": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Follow-up": {
+      "main": [
+        [
+          {
+            "node": "Enviar Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Follow-up": {
+      "main": [
+        [
+          {
+            "node": "Marcar Follow-up Enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Mensaje1": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Marcar Respondido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reranker Cohere": {
+      "ai_reranker": [
+        [
+          {
+            "node": "Supabase Vector Store",
+            "type": "ai_reranker",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG Agent2": {
+      "main": [
+        [
+          {
+            "node": "Preparar Payload WhatsApp2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "RAG Agent2",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "agendo llamada2": {
+      "ai_tool": [
+        [
+          {
+            "node": "RAG Agent2",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Supabase Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Parsear Mensaje1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Payload WhatsApp2": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp YCloud2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp YCloud2": {
+      "main": [
+        [
+          {
+            "node": "Guardar Seguimiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory2": {
+      "ai_memory": [
+        []
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "RAG Agent2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Preparar Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "RAG Agent2",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG Agent": {
+      "main": [
+        [
+          {
+            "node": "Preparar Payload WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "agendo llamada": {
+      "ai_tool": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Payload WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp YCloud",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp YCloud": {
+      "main": [
+        [
+          {
+            "node": "Guardar Seguimiento3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Guardar Lead ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory2": {
+      "ai_memory": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "02227bfb-4d13-4594-954d-5dd3df842d0b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ee9f9cdde9b6fee62a7d6845e13fb03583e8c082f1cedc5478accdeca64f2246"
+  },
+  "id": "PxrfRFfaX-QGTqBlh2992",
+  "tags": []
+}

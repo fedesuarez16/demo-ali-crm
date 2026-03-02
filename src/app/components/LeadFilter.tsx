@@ -8,7 +8,7 @@ interface LeadFilterProps {
   estados: string[];
   tiposPropiedad: string[];
   motivosInteres: string[];
-  propiedadesInteres?: string[]; // Propiedades de interés únicas (campañas)
+  propiedadesInteres?: string[]; // Productos de interés únicos
   onResetFilters: () => void;
 }
 
@@ -195,10 +195,10 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
             />
           </div>
           
-          {/* Tipo de Propiedad */}
+          {/* Categoría */}
           <div>
             <label htmlFor="tipoPropiedad" className="block text-xs font-medium text-gray-500 mb-1">
-              Tipo de Propiedad
+              Categoría
             </label>
             <select
               id="tipoPropiedad"
@@ -207,7 +207,7 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
               onChange={handleInputChange}
               className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1.5 px-2 text-xs text-gray-700"
             >
-              <option value="">Todos los tipos</option>
+              <option value="">Todas las categorías</option>
               {tiposPropiedad.map((tipo) => (
                 <option key={tipo} value={tipo}>
                   {tipo}
@@ -216,10 +216,10 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
             </select>
           </div>
           
-          {/* Cantidad de Ambientes Mínima */}
+          {/* Cantidad Mínima */}
           <div>
             <label htmlFor="cantidadAmbientesMinima" className="block text-xs font-medium text-gray-500 mb-1">
-              Ambientes Mínimos
+              Cantidad Mínima
             </label>
             <input
               type="number"
@@ -254,11 +254,11 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
             </select>
           </div>
           
-          {/* Propiedad de Interés (Campaña) */}
+          {/* Producto de Interés */}
           {propiedadesInteres.length > 0 && (
             <div>
               <label htmlFor="propiedadInteres" className="block text-xs font-medium text-gray-500 mb-1">
-                Propiedad de Interés (Campaña)
+                Producto de Interés
               </label>
               <select
                 id="propiedadInteres"
@@ -267,7 +267,7 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
                 onChange={handleInputChange}
                 className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1.5 px-2 text-xs text-gray-700"
               >
-                <option value="">Todas las campañas</option>
+                <option value="">Todos los productos</option>
                 {propiedadesInteres.map((propiedad) => (
                   <option key={propiedad} value={propiedad}>
                     {propiedad}

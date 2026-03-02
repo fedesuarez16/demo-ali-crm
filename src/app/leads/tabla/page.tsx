@@ -120,16 +120,16 @@ export default function LeadsTablePage() {
       setTiposPropiedad(getUniquePropertyTypes());
       setMotivosInteres(getUniqueInterestReasons());
       
-      // Obtener propiedades de interés directamente de los leads cargados
-      const propiedadesSet = new Set<string>();
+      // Obtener productos de interés directamente de los leads cargados
+      const productosSet = new Set<string>();
       allLeads.forEach(lead => {
-        const propiedadInteres = (lead as any).propiedad_interes;
-        if (propiedadInteres && typeof propiedadInteres === 'string' && propiedadInteres.trim() !== '') {
-          propiedadesSet.add(propiedadInteres.trim());
+        const productoInteres = (lead as any).propiedad_interes;
+        if (productoInteres && typeof productoInteres === 'string' && productoInteres.trim() !== '') {
+          productosSet.add(productoInteres.trim());
         }
       });
-      const propiedadesArray = Array.from(propiedadesSet).sort();
-      setPropiedadesInteres(propiedadesArray);
+      const productosArray = Array.from(productosSet).sort();
+      setPropiedadesInteres(productosArray);
       
       setIsLoading(false);
     };
@@ -220,7 +220,7 @@ export default function LeadsTablePage() {
   };
 
   const handleExportCSV = () => {
-    exportLeadsToCSV(filteredLeads, 'leads_inmobiliaria');
+    exportLeadsToCSV(filteredLeads, 'leads');
   };
 
   const toggleFilterVisibility = () => {
@@ -600,11 +600,11 @@ export default function LeadsTablePage() {
             </div>
           </div>
 
-          {/* Barra de campañas */}
+          {/* Barra de productos/servicios */}
           {propiedadesInteres.length > 0 && (
             <div className="px-4 py-3 border-t border-gray-100 bg-white/50">
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-                <span className="text-xs font-medium text-gray-600 mr-1 whitespace-nowrap">Campañas:</span>
+                <span className="text-xs font-medium text-gray-600 mr-1 whitespace-nowrap">Productos:</span>
                 <button
                   onClick={() => handleFilterChange({ ...filterOptions, propiedadInteres: undefined })}
                   className={`px-3 py-1 text-xs rounded-full border transition-colors whitespace-nowrap ${

@@ -404,30 +404,90 @@ const ChatConversation = ({ conversation, onBack }) => {
 
   const formatMessageTime = (timestamp) => {
     if (!timestamp) return '';
-    const date = new Date(timestamp > 1000000000000 ? timestamp : timestamp * 1000);
-    return new Intl.DateTimeFormat('es-AR', {
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date);
+    
+    try {
+      let date;
+      
+      // Si es un número, puede ser timestamp en segundos o milisegundos
+      if (typeof timestamp === 'number') {
+        date = new Date(timestamp > 1000000000000 ? timestamp : timestamp * 1000);
+      } 
+      // Si es un string, intentar parsearlo directamente
+      else if (typeof timestamp === 'string') {
+        date = new Date(timestamp);
+      } 
+      // Si es un objeto Date, usarlo directamente
+      else if (timestamp instanceof Date) {
+        date = timestamp;
+      }
+      // Si no, intentar convertirlo
+      else {
+        date = new Date(timestamp);
+      }
+      
+      // Validar que la fecha sea válida
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date value for time:', timestamp);
+        return '';
+      }
+      
+      return new Intl.DateTimeFormat('es-AR', {
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(date);
+    } catch (error) {
+      console.error('Error formatting time:', error, 'timestamp:', timestamp);
+      return '';
+    }
   };
 
   const formatMessageDate = (timestamp) => {
     if (!timestamp) return '';
-    const date = new Date(timestamp > 1000000000000 ? timestamp : timestamp * 1000);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
+    
+    try {
+      let date;
+      
+      // Si es un número, puede ser timestamp en segundos o milisegundos
+      if (typeof timestamp === 'number') {
+        date = new Date(timestamp > 1000000000000 ? timestamp : timestamp * 1000);
+      } 
+      // Si es un string, intentar parsearlo directamente
+      else if (typeof timestamp === 'string') {
+        date = new Date(timestamp);
+      } 
+      // Si es un objeto Date, usarlo directamente
+      else if (timestamp instanceof Date) {
+        date = timestamp;
+      }
+      // Si no, intentar convertirlo
+      else {
+        date = new Date(timestamp);
+      }
+      
+      // Validar que la fecha sea válida
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date value:', timestamp);
+        return '';
+      }
+      
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
 
-    if (date.toDateString() === today.toDateString()) {
-      return 'Hoy';
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return 'Ayer';
-    } else {
-      return new Intl.DateTimeFormat('es-AR', {
-        day: 'numeric',
-        month: 'short',
-        year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
-      }).format(date);
+      if (date.toDateString() === today.toDateString()) {
+        return 'Hoy';
+      } else if (date.toDateString() === yesterday.toDateString()) {
+        return 'Ayer';
+      } else {
+        return new Intl.DateTimeFormat('es-AR', {
+          day: 'numeric',
+          month: 'short',
+          year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
+        }).format(date);
+      }
+    } catch (error) {
+      console.error('Error formatting date:', error, 'timestamp:', timestamp);
+      return '';
     }
   };
 
@@ -484,7 +544,29 @@ const ChatConversation = ({ conversation, onBack }) => {
   };
 
   const isOutgoing = (message) => {
-    return message.sender_type === 'User' || message.message_type === 1;
+    // Verificar múltiples formas de determinar si es un mensaje saliente (del sistema/IA)
+    // 1. type === 'ai' | 'human' (formato n8n Postgres Chat Memory)
+    if (message.type === 'ai') return true;
+    if (message.type === 'human') return false;
+    
+    // 2. sender_type === 'User' / 'Contact'
+    if (message.sender_type === 'User') return true;
+    if (message.sender_type === 'Contact') return false;
+    
+    // 3. message_type === 1 (1 = outgoing/sistema, 0 = incoming/cliente)
+    if (message.message_type === 1) return true;
+    if (message.message_type === 0) return false;
+    
+    // 4. direction === 'outbound' o 'out' (saliente)
+    if (message.direction === 'outbound' || message.direction === 'out') return true;
+    if (message.direction === 'inbound' || message.direction === 'in') return false;
+    
+    // 5. role === 'assistant' o 'ai' (mensaje del agente/sistema)
+    if (message.role === 'assistant' || message.role === 'ai' || message.role === 'system') return true;
+    if (message.role === 'user' || message.role === 'human') return false;
+    
+    // 6. Sin información clara, asumir que es del cliente (entrante)
+    return false;
   };
 
   // Función para borrar un mensaje
@@ -531,14 +613,32 @@ const ChatConversation = ({ conversation, onBack }) => {
   };
 
   const groupMessagesByDate = (messages) => {
+    // Primero ordenar los mensajes por fecha ascendente (más antiguos primero)
+    const sortedMessages = [...messages].sort((a, b) => {
+      const dateA = new Date(a.created_at);
+      const dateB = new Date(b.created_at);
+      return dateA.getTime() - dateB.getTime();
+    });
+    
+    // Luego agrupar por fecha
     const grouped = {};
-    messages.forEach(message => {
+    sortedMessages.forEach(message => {
       const date = formatMessageDate(message.created_at);
       if (!grouped[date]) {
         grouped[date] = [];
       }
       grouped[date].push(message);
     });
+    
+    // Asegurar que los mensajes dentro de cada grupo también estén ordenados
+    Object.keys(grouped).forEach(date => {
+      grouped[date].sort((a, b) => {
+        const dateA = new Date(a.created_at);
+        const dateB = new Date(b.created_at);
+        return dateA.getTime() - dateB.getTime();
+      });
+    });
+    
     return grouped;
   };
 
@@ -775,10 +875,12 @@ const ChatConversation = ({ conversation, onBack }) => {
                   
                   const isDeleting = deletingMessageId === message.id;
                   
+                  const outgoing = isOutgoing(message);
+                  
                   return (
                   <div
                     key={message.id}
-                    className={`flex ${isOutgoing(message) ? 'justify-end' : 'justify-start'} mb-2`}
+                    className={`flex ${outgoing ? 'justify-end' : 'justify-start'} mb-2`}
                       onDoubleClick={() => {
                         // Solo permitir borrar con doble click
                         if (!isDeleting) {
@@ -792,9 +894,9 @@ const ChatConversation = ({ conversation, onBack }) => {
                         className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg transition-opacity ${
                           isDeleting ? 'opacity-50' : ''
                         } ${
-                        isOutgoing(message)
-                          ? 'bg-green-500 text-white'
-                          : 'bg-white border border-gray-200 text-gray-800'
+                        outgoing
+                          ? 'bg-green-500 text-white rounded-br-sm'
+                          : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
                       }`}
                     >
                         {/* Mostrar reproductor de audio si hay audio */}
@@ -846,14 +948,17 @@ const ChatConversation = ({ conversation, onBack }) => {
                           )
                         )}
                         
-                      <p className={`text-xs mt-1 ${
-                        isOutgoing(message) ? 'text-green-100' : 'text-gray-500'
+                      <p className={`text-xs mt-1 flex items-center gap-1 ${
+                        outgoing ? 'text-green-100' : 'text-gray-500'
                       }`}>
                         {formatMessageTime(message.created_at)}
-                        {isOutgoing(message) && (
-                          <svg className="inline ml-1 w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        {outgoing && (
+                          <svg className="inline w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
                           </svg>
+                        )}
+                        {!outgoing && (
+                          <span className="text-[10px] opacity-75 ml-1">(Cliente)</span>
                         )}
                       </p>
                     </div>

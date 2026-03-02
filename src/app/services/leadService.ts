@@ -885,13 +885,51 @@ export const findLeadByPhone = async (phone: string): Promise<Lead | null> => {
     
     console.log('🔍 Buscando lead en DB por teléfono, variantes:', variants);
     
-    const { data, error } = await (getSupabase() as any)
+    // Intentar buscar usando or() en lugar de in() para mayor compatibilidad
+    const supabase = getSupabase();
+    
+    // Primero intentar con la primera variante
+    let { data, error } = await (supabase as any)
       .from('leads')
       .select('*')
-      .in('whatsapp_id', variants);
+      .eq('whatsapp_id', digitsOnly)
+      .limit(1);
+    
+    // Si no se encuentra, intentar con la segunda variante
+    if ((!data || data.length === 0) && !error) {
+      const result2 = await (supabase as any)
+        .from('leads')
+        .select('*')
+        .eq('whatsapp_id', `+${digitsOnly}`)
+        .limit(1);
+      
+      if (result2.data && result2.data.length > 0) {
+        data = result2.data;
+        error = result2.error;
+      }
+    }
+    
+    // Si aún no se encuentra, intentar con ilike para búsqueda parcial
+    if ((!data || data.length === 0) && !error) {
+      const result3 = await (supabase as any)
+        .from('leads')
+        .select('*')
+        .ilike('whatsapp_id', `%${digitsOnly}%`)
+        .limit(1);
+      
+      if (result3.data && result3.data.length > 0) {
+        data = result3.data;
+        error = result3.error;
+      }
+    }
     
     if (error) {
       console.error('Error buscando lead por teléfono:', error.message);
+      // Si el error es que la columna no existe, retornar null silenciosamente
+      if (error.message && error.message.includes('does not exist')) {
+        console.warn('⚠️ La columna whatsapp_id no existe en la tabla leads. Verifica el schema de la base de datos.');
+        return null;
+      }
       return null;
     }
     
