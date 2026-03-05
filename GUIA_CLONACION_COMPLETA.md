@@ -607,6 +607,7 @@ rm -rf .next
 npm run dev
 ```
 
+<<<<<<< HEAD
 ### Error: "ERESOLVE could not resolve" con react-beautiful-dnd
 
 **Problema:** `react-beautiful-dnd` no es compatible con React 19.

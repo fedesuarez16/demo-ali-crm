@@ -74,13 +74,24 @@ export const useChatMessages = (conversationId) => {
             // Combinar mensajes antiguos con los existentes, evitando duplicados
             const existingIds = new Set(prevMessages.map(m => m.id));
             const newMessages = filteredMessages.filter(m => !existingIds.has(m.id));
-            return [...newMessages, ...prevMessages];
+            // Combinar y ordenar por fecha ascendente (más antiguos primero)
+            const combined = [...newMessages, ...prevMessages];
+            return combined.sort((a, b) => {
+              const dateA = new Date(a.created_at);
+              const dateB = new Date(b.created_at);
+              return dateA.getTime() - dateB.getTime();
+            });
           });
           console.log(`Successfully loaded ${filteredMessages.length} older messages`);
         } else {
-          // Si es la carga inicial, reemplazar todos los mensajes
-          setMessages(filteredMessages);
-          console.log(`Successfully loaded ${filteredMessages.length} messages (${allMessages.length - filteredMessages.length} deleted messages filtered)`);
+          // Si es la carga inicial, reemplazar todos los mensajes y ordenarlos
+          const sortedMessages = filteredMessages.sort((a, b) => {
+            const dateA = new Date(a.created_at);
+            const dateB = new Date(b.created_at);
+            return dateA.getTime() - dateB.getTime();
+          });
+          setMessages(sortedMessages);
+          console.log(`Successfully loaded ${sortedMessages.length} messages (${allMessages.length - filteredMessages.length} deleted messages filtered)`);
         }
         
         // Actualizar hasMore basado en si recibimos mensajes
