@@ -485,21 +485,34 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
 
   // Combinar columnas visibles con columnas que tienen leads (para mostrar estados personalizados)
   const allColumnsToShow = useMemo(() => {
-    const visibleSet = new Set(statusOrder);
+    // Crear un Set normalizado de las columnas ya visibles para evitar duplicados
+    const visibleSetLower = new Set(statusOrder.map(s => s.toLowerCase().trim()));
+    
     const columnsWithLeads = Object.keys(groupedLeads)
       .filter(status => groupedLeads[status].length > 0)
       .map(normalizeEstado) // Normalizar todas las columnas
-      .filter((status, index, self) => self.indexOf(status) === index); // Eliminar duplicados
+      .filter((status, index, self) => self.indexOf(status) === index); // Eliminar duplicados exactos
     
-    // Filtrar explícitamente "Fríos" y "fríos"
+    // Filtrar explícitamente variaciones de estados base
     const filteredColumns = columnsWithLeads.filter(status => 
       status !== 'fríos' && status !== 'frios' && status !== 'tibios' && status !== 'calientes' && status !== 'llamadas' && status !== 'visitas'
     );
     
-    const customColumns = filteredColumns.filter(status => !visibleSet.has(status));
+    // Solo agregar columnas personalizadas que NO estén ya en statusOrder (comparación case-insensitive)
+    const customColumns = filteredColumns.filter(status => !visibleSetLower.has(status.toLowerCase().trim()));
     
     // Primero las columnas visibles en orden, luego las personalizadas
-    return [...statusOrder, ...customColumns];
+    // Usar un Set final para garantizar unicidad absoluta
+    const result: string[] = [];
+    const seen = new Set<string>();
+    for (const col of [...statusOrder, ...customColumns]) {
+      const key = col.toLowerCase().trim();
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(col);
+      }
+    }
+    return result;
   }, [statusOrder, groupedLeads]);
 
   const handleToggleSelectionMode = () => {

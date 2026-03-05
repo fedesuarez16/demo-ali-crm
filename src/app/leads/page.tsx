@@ -14,11 +14,11 @@ import {
   getUniqueStatuses,
   getUniquePropertyTypes,
   getUniqueInterestReasons,
-  getUniquePropertyInterests,
   updateLeadStatus,
   createLead,
   updateLead
 } from '../services/leadService';
+import { getAllPropiedadDirecciones } from '../services/propiedadesService';
 import { exportLeadsToCSV } from '../utils/exportUtils';
 import { getKanbanColumns, saveKanbanColumns, migrateColumnsFromLocalStorage } from '../services/columnService';
 import { programarSeguimiento } from '../services/mensajeService';
@@ -121,7 +121,10 @@ export default function LeadsKanbanPage() {
       setEstados(getUniqueStatuses());
       setTiposPropiedad(getUniquePropertyTypes());
       setMotivosInteres(getUniqueInterestReasons());
-      setPropiedadesInteres(getUniquePropertyInterests());
+      
+      // Obtener direcciones de propiedades desde la tabla propiedades
+      const direcciones = await getAllPropiedadDirecciones();
+      setPropiedadesInteres(direcciones);
       
       setIsLoading(false);
     };
@@ -752,9 +755,9 @@ export default function LeadsKanbanPage() {
                 >
                   Todas
                 </button>
-                {(showAllCampaigns ? propiedadesInteres : propiedadesInteres.slice(0, 5)).map((propiedad) => (
+                {(showAllCampaigns ? propiedadesInteres : propiedadesInteres.slice(0, 5)).map((propiedad, index) => (
                   <button
-                    key={propiedad}
+                    key={`${propiedad}-${index}`}
                     onClick={() => handleFilterChange({ ...filterOptions, propiedadInteres: propiedad })}
                     className={`px-3 py-1 text-xs rounded-full border transition-colors whitespace-nowrap ${
                       filterOptions.propiedadInteres === propiedad

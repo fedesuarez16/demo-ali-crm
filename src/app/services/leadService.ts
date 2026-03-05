@@ -362,19 +362,56 @@ export const recalificarLead = async (leadId: string): Promise<boolean> => {
 
 /**
  * Obtiene todos los leads disponibles
+ * Implementa paginación para traer todos los leads, no solo los primeros 1000
  */
 export const getAllLeads = async (): Promise<Lead[]> => {
   try {
-    const { data, error } = await getSupabase()
-      .from('leads')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1000);
-    if (error) {
-      console.error('Error fetching leads from Supabase:', error.message);
-      return [];
+    const allLeads: any[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+    
+    console.log('📥 Cargando todos los leads con paginación...');
+    
+    // Paginar para obtener todos los leads
+    while (hasMore) {
+      const to = from + pageSize - 1;
+      
+      const { data, error, count } = await getSupabase()
+        .from('leads')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to);
+      
+      if (error) {
+        console.error('Error fetching leads from Supabase:', error.message);
+        // Si hay error, retornar lo que se haya cargado hasta ahora
+        break;
+      }
+      
+      if (data && data.length > 0) {
+        allLeads.push(...data);
+        console.log(`📥 Cargados ${allLeads.length} leads hasta ahora...`);
+        
+        // Si recibimos menos de pageSize, no hay más páginas
+        if (data.length < pageSize) {
+          hasMore = false;
+        } else {
+          from += pageSize;
+        }
+      } else {
+        hasMore = false;
+      }
+      
+      // Verificar si hay más datos usando el count
+      if (count !== null && allLeads.length >= count) {
+        hasMore = false;
+      }
     }
-    const normalized: Lead[] = ((data as any[]) || []).map(mapLeadRow);
+    
+    console.log(`✅ Total de leads cargados: ${allLeads.length}`);
+    
+    const normalized: Lead[] = allLeads.map(mapLeadRow);
     
     // Nota: La calificación automática de leads (frío/tibio/caliente) se maneja desde n8n,
     // no desde el frontend. El workflow de n8n cuenta los mensajes del historial de Chatwoot
@@ -394,7 +431,8 @@ export const getAllLeads = async (): Promise<Lead[]> => {
       ).catch(err => console.error('Error corrigiendo estados:', err));
     }
     
-    // Sort desc by fechaContacto
+    // Sort desc by fechaContacto (aunque ya vienen ordenados por created_at, 
+    // esto asegura que estén ordenados por fechaContacto también)
     normalized.sort((a, b) => new Date(b.fechaContacto).getTime() - new Date(a.fechaContacto).getTime());
     cachedLeads = normalized;
     return cachedLeads;
@@ -446,36 +484,27 @@ export const filterLeads = (options: FilterOptions): Lead[] => {
     }
     
     // Filtrar por propiedad de interés (campaña) si se especifica
-    // Incluye todas las variantes del grupo para manejar diferencias ortográficas
+    // Las opciones de filtro vienen de propiedades.direccion
+    // Se compara con leads.propiedad_interes
     if (options.propiedadInteres) {
       const leadPropiedadInteres = (lead as any).propiedad_interes || '';
       if (!leadPropiedadInteres) {
         return false;
       }
       
-      // Comparación directa primero (más rápida y precisa)
-      if (leadPropiedadInteres.trim() === options.propiedadInteres.trim()) {
-        return true;
-      }
+      const leadValue = leadPropiedadInteres.trim().toLowerCase();
+      const filterValue = options.propiedadInteres.trim().toLowerCase();
       
-      // Si no coincide exactamente, intentar con variantes agrupadas (para manejar diferencias ortográficas)
-      try {
-        const campaignVariants = getCampaignVariants(options.propiedadInteres);
-        const normalizedLeadCampaign = normalizeCampaignName(leadPropiedadInteres);
-        const matches = campaignVariants.some(variant => 
-          normalizeCampaignName(variant) === normalizedLeadCampaign
-        );
-        
-        if (!matches) {
-          return false;
-        }
-      } catch (e) {
-        // Si hay error con el agrupamiento, usar comparación directa normalizada
-        const normalizedLead = normalizeCampaignName(leadPropiedadInteres);
-        const normalizedFilter = normalizeCampaignName(options.propiedadInteres);
-        if (normalizedLead !== normalizedFilter) {
-          return false;
-        }
+      // Comparación exacta (case-insensitive)
+      if (leadValue === filterValue) {
+        // Match exacto, continuar con los demás filtros
+      }
+      // Si el valor del lead contiene la dirección de la propiedad o viceversa
+      else if (leadValue.includes(filterValue) || filterValue.includes(leadValue)) {
+        // Match parcial, continuar con los demás filtros
+      }
+      else {
+        return false;
       }
     }
     

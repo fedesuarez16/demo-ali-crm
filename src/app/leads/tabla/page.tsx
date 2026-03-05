@@ -12,9 +12,9 @@ import {
   getUniqueStatuses,
   getUniquePropertyTypes,
   getUniqueInterestReasons,
-  getUniquePropertyInterests,
   updateLead
 } from '../../services/leadService';
+import { getAllPropiedadDirecciones } from '../../services/propiedadesService';
 import { programarSeguimiento } from '../../services/mensajeService';
 import { exportLeadsToCSV } from '../../utils/exportUtils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -120,16 +120,9 @@ export default function LeadsTablePage() {
       setTiposPropiedad(getUniquePropertyTypes());
       setMotivosInteres(getUniqueInterestReasons());
       
-      // Obtener propiedades de interés directamente de los leads cargados
-      const propiedadesSet = new Set<string>();
-      allLeads.forEach(lead => {
-        const propiedadInteres = (lead as any).propiedad_interes;
-        if (propiedadInteres && typeof propiedadInteres === 'string' && propiedadInteres.trim() !== '') {
-          propiedadesSet.add(propiedadInteres.trim());
-        }
-      });
-      const propiedadesArray = Array.from(propiedadesSet).sort();
-      setPropiedadesInteres(propiedadesArray);
+      // Obtener direcciones de propiedades desde la tabla propiedades
+      const direcciones = await getAllPropiedadDirecciones();
+      setPropiedadesInteres(direcciones);
       
       setIsLoading(false);
     };
@@ -615,9 +608,9 @@ export default function LeadsTablePage() {
                 >
                   Todas
                 </button>
-                {(showAllCampaigns ? propiedadesInteres : propiedadesInteres.slice(0, 5)).map((propiedad) => (
+                {(showAllCampaigns ? propiedadesInteres : propiedadesInteres.slice(0, 5)).map((propiedad, index) => (
                   <button
-                    key={propiedad}
+                    key={`${propiedad}-${index}`}
                     onClick={() => handleFilterChange({ ...filterOptions, propiedadInteres: propiedad })}
                     className={`px-3 py-1 text-xs rounded-full border transition-colors whitespace-nowrap ${
                       filterOptions.propiedadInteres === propiedad

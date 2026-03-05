@@ -268,8 +268,8 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
                 className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1.5 px-2 text-xs text-gray-700"
               >
                 <option value="">Todas las campañas</option>
-                {propiedadesInteres.map((propiedad) => (
-                  <option key={propiedad} value={propiedad}>
+                {propiedadesInteres.map((propiedad, index) => (
+                  <option key={`${propiedad}-${index}`} value={propiedad}>
                     {propiedad}
                   </option>
                 ))}

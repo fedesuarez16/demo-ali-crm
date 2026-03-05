@@ -144,6 +144,43 @@ export const updatePropiedad = async (id: string, propiedad: Partial<SupabasePro
 };
 
 /**
+ * Obtiene todas las direcciones únicas de la tabla propiedades
+ * Se usa como opciones de campaña para filtrar leads
+ */
+export const getAllPropiedadDirecciones = async (): Promise<string[]> => {
+  try {
+    const { data, error } = await (getSupabase() as any)
+      .from('propiedades')
+      .select('direccion')
+      .order('direccion', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching propiedades direcciones from Supabase:', error.message);
+      return [];
+    }
+
+    // Extraer direcciones únicas no vacías
+    // Usar un Map con clave lowercase para deduplicar variaciones de mayúsculas/minúsculas
+    const seenLower = new Map<string, string>(); // lowercase -> original (primera aparición)
+    ((data as any[]) || []).forEach((row: any) => {
+      const dir = (row.direccion || '').trim();
+      if (dir.length > 0) {
+        const lowerDir = dir.toLowerCase();
+        if (!seenLower.has(lowerDir)) {
+          seenLower.set(lowerDir, dir);
+        }
+      }
+    });
+
+    // Devolver los valores originales (primera aparición de cada dirección), ordenados
+    return Array.from(seenLower.values()).sort((a, b) => a.localeCompare(b, 'es'));
+  } catch (e) {
+    console.error('Error fetching propiedades direcciones:', e);
+    return [];
+  }
+};
+
+/**
  * Elimina una propiedad
  */
 export const deletePropiedad = async (id: string): Promise<boolean> => {
