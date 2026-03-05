@@ -1,16 +1,4 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const getSupabase = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase env vars missing. Define NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
-  }
-  
-  return createClient(supabaseUrl, supabaseAnonKey);
-};
 
 const extractNumericPhone = (value) => {
   if (!value || typeof value !== 'string') return null;
@@ -33,6 +21,81 @@ const extractNumericPhone = (value) => {
   normalized = normalized.replace(/^\+/, '');
 
   return normalized.length >= 6 ? normalized : null;
+};
+
+// Función para obtener número de teléfono de un chat
+const getChatPhoneNumber = (chat) => {
+  // 1. PRIMERO: Usar campos enriquecidos de la API si existen
+  if (chat.enriched_phone_number) {
+    return chat.enriched_phone_number;
+  }
+
+  if (chat.enriched_identifier) {
+    return chat.enriched_identifier;
+  }
+
+  if (chat.enriched_phone_raw) {
+    return chat.enriched_phone_raw;
+  }
+
+  if (Array.isArray(chat.enriched_phone_candidates)) {
+    const candidate = chat.enriched_phone_candidates.find(Boolean);
+    if (candidate) return candidate;
+  }
+
+  // 2. Intentar múltiples fuentes de datos (fallback)
+  const sender = chat.last_non_activity_message?.sender;
+  const contact = chat.contact;
+  
+  // 3. Buscar en sender phone_number
+  if (sender?.phone_number) {
+    return sender.phone_number;
+  }
+  
+  // 4. Buscar en sender identifier (puede ser JID)
+  if (sender?.identifier) {
+    return sender.identifier;
+  }
+  
+  // 5. Buscar en contact phone_number
+  if (contact?.phone_number) {
+    return contact.phone_number;
+  }
+  
+  // 6. Buscar en contact identifier
+  if (contact?.identifier) {
+    return contact.identifier;
+  }
+  
+  // 7. Buscar en meta.sender (Chatwoot puede guardar info aquí)
+  if (chat.meta?.sender?.phone_number || chat.meta?.sender?.phone) {
+    return chat.meta.sender.phone_number || chat.meta.sender.phone;
+  }
+
+  if (chat.meta?.sender?.identifier) {
+    return chat.meta.sender.identifier;
+  }
+
+  // 8. Buscar en additional_attributes
+  if (chat.additional_attributes?.phone_number || chat.additional_attributes?.phone) {
+    return chat.additional_attributes.phone_number || chat.additional_attributes.phone;
+  }
+
+  if (chat.additional_attributes?.wa_id) {
+    return chat.additional_attributes.wa_id;
+  }
+
+  // 9. Buscar en source_id (formato WAID:numero)
+  if (chat.last_non_activity_message?.source_id) {
+    return chat.last_non_activity_message.source_id;
+  }
+
+  // 10. Buscar en contact_inbox
+  if (chat.contact_inbox?.source_id) {
+    return chat.contact_inbox.source_id;
+  }
+  
+  return null;
 };
 
 // Función para normalizar números de teléfono
@@ -66,6 +129,20 @@ export async function POST(request) {
       );
     }
 
+    // Validar variables de entorno
+    const chatwootUrl = process.env.CHATWOOT_URL;
+    const accountId = process.env.CHATWOOT_ACCOUNT_ID;
+    const apiToken = process.env.CHATWOOT_API_TOKEN;
+
+    if (!chatwootUrl || !accountId || !apiToken) {
+      return NextResponse.json(
+        { 
+          error: 'Variables de entorno de Chatwoot no configuradas',
+        }, 
+        { status: 500 }
+      );
+    }
+
     // Normalizar números buscados
     const normalizedSearchPhones = phoneNumbers
       .map(p => normalizePhoneNumber(p))
@@ -75,100 +152,202 @@ export async function POST(request) {
       return NextResponse.json({ success: true, data: [] });
     }
 
-    console.log('🔍 Búsqueda de chats para números:', normalizedSearchPhones);
+    console.log('🔍 Búsqueda exhaustiva de chats para números:', normalizedSearchPhones);
 
-    const supabase = getSupabase();
-    
-    // Obtener todos los mensajes de la base de datos
-    const { data: allMessages, error: messagesError } = await supabase
-      .from('chat_histories')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (messagesError) {
-      console.error('Error al obtener mensajes:', messagesError);
-      return NextResponse.json(
-        { 
-          error: 'Error al buscar chats en la base de datos',
-          message: messagesError.message
-        }, 
-        { status: 500 }
-      );
-    }
-
-    // Agrupar mensajes por session_id y obtener el último mensaje de cada sesión
-    const sessionsMap = new Map();
-    
-    (allMessages || []).forEach(msg => {
-      const sessionId = msg.session_id;
-      if (!sessionsMap.has(sessionId)) {
-        sessionsMap.set(sessionId, {
-          id: sessionId,
-          session_id: sessionId,
-          last_message: msg,
-          messages: []
-        });
-      }
-      sessionsMap.get(sessionId).messages.push(msg);
-    });
-
-    const phonesToFind = new Set(normalizedSearchPhones);
+    const baseUrl = chatwootUrl.endsWith('/') ? chatwootUrl.slice(0, -1) : chatwootUrl;
     const foundChats = [];
+    const maxPages = 50; // Buscar hasta 50 páginas (~1250 chats con page size 25 de Chatwoot)
+    const phonesToFind = new Set(normalizedSearchPhones);
 
-    // Buscar chats que coincidan con los números buscados
-    sessionsMap.forEach((session, sessionId) => {
-      const lastMsg = session.messages[0];
-      const messageData = lastMsg.message || {};
+    // Buscar en todas las páginas hasta encontrar todos los números o alcanzar el límite
+    for (let page = 1; page <= maxPages && phonesToFind.size > 0; page++) {
+      const apiUrl = `${baseUrl}/api/v1/accounts/${accountId}/conversations?include_contact=true&page=${page}&per_page=50`;
       
-      // Extraer número de teléfono del mensaje
-      const phoneNumber = messageData.phone_number || 
-                         messageData.from || 
-                         messageData.sender?.phone_number ||
-                         messageData.contact?.phone_number ||
-                         null;
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'api_access_token': apiToken,
+        },
+      });
+
+      if (!response.ok) {
+        console.warn(`⚠️ Error en página ${page}:`, response.status);
+        break;
+      }
+
+      const data = await response.json();
       
-      const normalizedPhone = extractNumericPhone(phoneNumber) || extractNumericPhone(sessionId);
+      // Manejar diferentes estructuras de respuesta de Chatwoot
+      let conversations = [];
+      if (Array.isArray(data)) {
+        conversations = data;
+      } else if (data.data && data.data.payload && Array.isArray(data.data.payload)) {
+        conversations = data.data.payload;
+      } else if (data.data && Array.isArray(data.data)) {
+        conversations = data.data;
+      } else if (data.payload && Array.isArray(data.payload)) {
+        conversations = data.payload;
+      }
       
-      if (normalizedPhone) {
-        // Verificar coincidencia exacta
-        if (phonesToFind.has(normalizedPhone)) {
-          if (!foundChats.find(c => c.id === sessionId)) {
-            console.log(`✅ Chat encontrado (exacto): ${sessionId} para número ${normalizedPhone}`);
-            foundChats.push(createChatObject(session, lastMsg, messageData, normalizedPhone, phoneNumber));
-            phonesToFind.delete(normalizedPhone);
+      if (conversations.length === 0) {
+        console.log(`📄 No hay más datos en página ${page}`);
+        break;
+      }
+
+      console.log(`📄 Página ${page}: ${conversations.length} conversaciones`);
+
+      // Enriquecer PRIMERO, filtrar DESPUÉS (misma lógica que /api/chats/route.js)
+      const enrichedChats = conversations.map(chat => {
+        try {
+          let phoneNumber = null;
+          let identifier = null;
+          const phoneCandidates = [];
+
+          // 1. Desde meta.sender
+          if (chat.meta?.sender?.phone_number || chat.meta?.sender?.phone) {
+            phoneNumber = chat.meta.sender.phone_number || chat.meta.sender.phone;
+            phoneCandidates.push(phoneNumber);
           }
-        } else {
-          // Verificar coincidencia parcial
-          const phonesArray = Array.from(phonesToFind);
-          for (const searchPhone of phonesArray) {
-            // Comparación por últimos dígitos
-            const minLength = Math.min(normalizedPhone.length, searchPhone.length);
-            if (minLength >= 8) {
-              const lastDigits1 = normalizedPhone.slice(-Math.min(10, normalizedPhone.length));
-              const lastDigits2 = searchPhone.slice(-Math.min(10, searchPhone.length));
-              if (lastDigits1 === lastDigits2) {
-                if (!foundChats.find(c => c.id === sessionId)) {
-                  console.log(`✅ Chat encontrado (últimos dígitos): ${sessionId} - Chat: ${normalizedPhone} vs Buscado: ${searchPhone}`);
-                  foundChats.push(createChatObject(session, lastMsg, messageData, normalizedPhone, phoneNumber));
+
+          if (chat.meta?.sender?.identifier) {
+            identifier = chat.meta.sender.identifier;
+            phoneCandidates.push(identifier);
+          }
+
+          // 2. Desde additional_attributes
+          if (chat.additional_attributes?.phone_number || chat.additional_attributes?.phone) {
+            phoneNumber = chat.additional_attributes.phone_number || chat.additional_attributes.phone || phoneNumber;
+            phoneCandidates.push(phoneNumber);
+          }
+
+          if (chat.additional_attributes?.wa_id) {
+            phoneCandidates.push(chat.additional_attributes.wa_id);
+          }
+
+          // 3. Desde last_non_activity_message.sender
+          if (chat.last_non_activity_message?.sender) {
+            if (chat.last_non_activity_message.sender.phone_number) {
+              phoneNumber = chat.last_non_activity_message.sender.phone_number || phoneNumber;
+              phoneCandidates.push(phoneNumber);
+            }
+            if (chat.last_non_activity_message.sender.identifier) {
+              identifier = chat.last_non_activity_message.sender.identifier || identifier;
+              phoneCandidates.push(identifier);
+            }
+          }
+
+          // 4. Desde source_id
+          if (chat.last_non_activity_message?.source_id) {
+            const sourceId = chat.last_non_activity_message.source_id;
+            if (typeof sourceId === 'string' && sourceId.startsWith('WAID:')) {
+              phoneNumber = sourceId.replace('WAID:', '').replace('+', '') || phoneNumber;
+            }
+            phoneCandidates.push(sourceId);
+          }
+
+          // 5. Desde contact_inbox
+          if (chat.contact_inbox?.source_id) {
+            identifier = chat.contact_inbox.source_id || identifier;
+            phoneCandidates.push(identifier);
+          }
+
+          // 6. Desde contact
+          if (chat.contact) {
+            if (chat.contact.phone_number) {
+              phoneNumber = chat.contact.phone_number || phoneNumber;
+              phoneCandidates.push(chat.contact.phone_number);
+            }
+            if (chat.contact.identifier) {
+              identifier = chat.contact.identifier || identifier;
+              phoneCandidates.push(chat.contact.identifier);
+            }
+          }
+
+          const normalizedPhone = extractNumericPhone(phoneNumber) || extractNumericPhone(identifier) || phoneCandidates.map(extractNumericPhone).find(Boolean) || null;
+
+          return {
+            ...chat,
+            enriched_phone_number: normalizedPhone,
+            enriched_identifier: identifier,
+            enriched_phone_raw: phoneNumber,
+            enriched_phone_candidates: phoneCandidates.filter(Boolean)
+          };
+        } catch (error) {
+          console.error('Error enriching chat:', chat.id, error);
+          return {
+            ...chat,
+            enriched_phone_number: null,
+            enriched_identifier: null,
+            enriched_phone_raw: null,
+            enriched_phone_candidates: []
+          };
+        }
+      });
+
+      const chatsWithPhone = enrichedChats.filter(c => c.enriched_phone_number);
+      if (page === 1) {
+        console.log(`📱 Página ${page}: ${enrichedChats.length} enriquecidos, ${chatsWithPhone.length} con teléfono`);
+        if (chatsWithPhone.length > 0) {
+          console.log(`📱 Ejemplo: ${chatsWithPhone[0].id} → ${chatsWithPhone[0].enriched_phone_number}`);
+        }
+      }
+
+      // Buscar chats que coincidan con los números buscados
+      enrichedChats.forEach(chat => {
+        const chatPhone = getChatPhoneNumber(chat);
+        if (chatPhone) {
+          const normalizedChatPhone = normalizePhoneNumber(chatPhone);
+          
+          // Verificar coincidencia exacta
+          if (phonesToFind.has(normalizedChatPhone)) {
+            if (!foundChats.find(c => c.id === chat.id)) {
+              console.log(`✅ Chat encontrado (exacto): ${chat.id} para número ${normalizedChatPhone}`);
+              foundChats.push(chat);
+              phonesToFind.delete(normalizedChatPhone);
+            }
+          } else {
+            // Verificar coincidencia parcial
+            const phonesArray = Array.from(phonesToFind);
+            for (const searchPhone of phonesArray) {
+              // Comparación por últimos dígitos
+              const minLength = Math.min(normalizedChatPhone.length, searchPhone.length);
+              if (minLength >= 8) {
+                const lastDigits1 = normalizedChatPhone.slice(-Math.min(10, normalizedChatPhone.length));
+                const lastDigits2 = searchPhone.slice(-Math.min(10, searchPhone.length));
+                if (lastDigits1 === lastDigits2) {
+                  if (!foundChats.find(c => c.id === chat.id)) {
+                    console.log(`✅ Chat encontrado (últimos dígitos): ${chat.id} - Chat: ${normalizedChatPhone} vs Buscado: ${searchPhone}`);
+                    foundChats.push(chat);
+                    phonesToFind.delete(searchPhone);
+                    break;
+                  }
+                }
+              }
+              
+              // Comparación por inclusión
+              if (normalizedChatPhone.includes(searchPhone) || searchPhone.includes(normalizedChatPhone)) {
+                if (!foundChats.find(c => c.id === chat.id)) {
+                  console.log(`✅ Chat encontrado (inclusión): ${chat.id} - Chat: ${normalizedChatPhone} vs Buscado: ${searchPhone}`);
+                  foundChats.push(chat);
                   phonesToFind.delete(searchPhone);
                   break;
                 }
               }
             }
-            
-            // Comparación por inclusión
-            if (normalizedPhone.includes(searchPhone) || searchPhone.includes(normalizedPhone)) {
-              if (!foundChats.find(c => c.id === sessionId)) {
-                console.log(`✅ Chat encontrado (inclusión): ${sessionId} - Chat: ${normalizedPhone} vs Buscado: ${searchPhone}`);
-                foundChats.push(createChatObject(session, lastMsg, messageData, normalizedPhone, phoneNumber));
-                phonesToFind.delete(searchPhone);
-                break;
-              }
-            }
           }
         }
+      });
+
+      // Si encontramos todos los números, salir
+      if (phonesToFind.size === 0) {
+        console.log('✅ Todos los números fueron encontrados');
+        break;
       }
-    });
+
+      // Nota: Chatwoot puede ignorar per_page=50 y devolver su propio page size (ej: 25).
+      // El break por 0 resultados ya está arriba. Seguimos paginando hasta encontrar o agotar.
+    }
 
     console.log(`🎯 Total de chats encontrados: ${foundChats.length}`);
     if (phonesToFind.size > 0) {
@@ -188,67 +367,4 @@ export async function POST(request) {
       { status: 500 }
     );
   }
-}
-
-// Función auxiliar para crear objeto de chat compatible con el frontend
-function createChatObject(session, lastMsg, messageData, normalizedPhone, phoneNumber) {
-  // DETECTAR SI ES MENSAJE DEL SISTEMA/AGENTE O DEL CLIENTE
-  const kind = messageData.type; // 'ai' | 'human' (formato n8n)
-  const role = messageData.role || messageData.role_type;
-  const direction = messageData.direction;
-  const messageType = messageData.message_type;
-  
-  let isOutgoing = false;
-  if (kind === 'ai') {
-    isOutgoing = true;
-  } else if (kind === 'human') {
-    isOutgoing = false;
-  } else if (messageType !== undefined && messageType !== null) {
-    isOutgoing = messageType === 1;
-  } else if (direction) {
-    isOutgoing = direction === 'outbound' || direction === 'out';
-  } else if (role) {
-    isOutgoing = role === 'assistant' || role === 'ai' || role === 'system';
-  } else {
-    isOutgoing = false; // Por defecto, asumir que es del cliente
-  }
-  
-  const finalMessageType = isOutgoing ? 1 : 0;
-  
-  return {
-    id: session.session_id,
-    session_id: session.session_id,
-    status: messageData.status || 'open',
-    last_non_activity_message: {
-      id: lastMsg.id,
-      content: messageData.content || messageData.text || '',
-      created_at: lastMsg.created_at,
-      message_type: finalMessageType,
-      sender: {
-        phone_number: phoneNumber,
-        identifier: messageData.from || phoneNumber
-      },
-      source_id: messageData.source_id || messageData.from
-    },
-    enriched_phone_number: normalizedPhone,
-    enriched_identifier: phoneNumber,
-    enriched_phone_raw: phoneNumber,
-    enriched_phone_candidates: phoneNumber ? [phoneNumber] : [],
-    created_at: session.messages[session.messages.length - 1]?.created_at,
-    updated_at: lastMsg.created_at,
-    meta: {
-      sender: {
-        phone_number: phoneNumber,
-        identifier: messageData.from || phoneNumber
-      }
-    },
-    additional_attributes: {
-      phone_number: phoneNumber,
-      phone: phoneNumber
-    },
-    contact: {
-      phone_number: phoneNumber,
-      identifier: messageData.from || phoneNumber
-    }
-  };
 }

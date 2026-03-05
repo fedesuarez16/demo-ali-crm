@@ -287,6 +287,7 @@ CREATE POLICY "Allow all operations on cola_seguimientos_dos" ON public.cola_seg
 -- UNION ALL
 -- SELECT 'cola_seguimientos', COUNT(*) FROM public.cola_seguimientos
 -- UNION ALL
--- SELECT 'cola_seguimientos_dos', COUNT(*) FROM public.cola_seguimientos_dos;
+-- SELECT 'cola_seguimientos_dos', COUNT(*) FROM public.cola_seguimientos_dos
+--
 --
 -- =====================================================

@@ -1,24 +1,31 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const getSupabase = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase env vars missing. Define NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
-  }
-  
-  return createClient(supabaseUrl, supabaseAnonKey);
-};
 
 export async function GET(request, { params }) {
   try {
-    const { id: sessionId } = await params;
+    // Validar variables de entorno
+    const chatwootUrl = process.env.CHATWOOT_URL;
+    const accountId = process.env.CHATWOOT_ACCOUNT_ID;
+    const apiToken = process.env.CHATWOOT_API_TOKEN;
 
-    if (!sessionId) {
+    if (!chatwootUrl || !accountId || !apiToken) {
       return NextResponse.json(
-        { error: 'ID de sesión requerido' }, 
+        { 
+          error: 'Variables de entorno de Chatwoot no configuradas',
+          missing: {
+            CHATWOOT_URL: !chatwootUrl,
+            CHATWOOT_ACCOUNT_ID: !accountId,
+            CHATWOOT_API_TOKEN: !apiToken
+          }
+        }, 
+        { status: 500 }
+      );
+    }
+
+    const { id: conversationId } = await params;
+
+    if (!conversationId) {
+      return NextResponse.json(
+        { error: 'ID de conversación requerido' }, 
         { status: 400 }
       );
     }
@@ -28,113 +35,89 @@ export async function GET(request, { params }) {
     const before = searchParams.get('before'); // ID del mensaje más antiguo que queremos obtener
     const after = searchParams.get('after'); // ID del mensaje más reciente que queremos obtener
 
-    const supabase = getSupabase();
+    // Construir URL de la API de Chatwoot para mensajes
+    const baseUrl = chatwootUrl.endsWith('/') ? chatwootUrl.slice(0, -1) : chatwootUrl;
+    let apiUrl = `${baseUrl}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`;
     
-    // Construir query base
-    // Ordenar por created_at ascendente (más antiguos primero) para que el frontend los muestre en orden cronológico
-    let query = supabase
-      .from('chat_histories')
-      .select('*')
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: true });
-
-    // Aplicar paginación si existe
+    // Agregar parámetros de paginación si existen
+    const queryParams = [];
     if (before) {
-      query = query.lt('id', parseInt(before));
+      queryParams.push(`before=${before}`);
     }
     if (after) {
-      query = query.gt('id', parseInt(after));
+      queryParams.push(`after=${after}`);
     }
+    if (queryParams.length > 0) {
+      apiUrl += `?${queryParams.join('&')}`;
+    }
+    
+    console.log('Fetching messages from:', apiUrl);
 
-    const { data: messages, error } = await query;
+    // Hacer petición a Chatwoot
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'api_access_token': apiToken,
+      },
+    });
 
-    if (error) {
-      console.error('Error al obtener mensajes:', error);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Chatwoot Messages API Error:', response.status, errorText);
+      
+      // Detectar si el error es por token expirado
+      if (errorText.includes('expired') || errorText.includes('Session has expired') || errorText.includes('Invalid OAuth access token')) {
+        return NextResponse.json(
+          { 
+            error: 'Token de acceso expirado',
+            message: 'El token de acceso de WhatsApp Business API ha expirado. Por favor, genera un nuevo token de larga duración siguiendo la guía FACEBOOK_TOKEN_SETUP.md',
+            details: 'El token de acceso de Facebook/WhatsApp se vence cada 1-2 horas. Necesitas generar un token de larga duración (60 días) o un Page Access Token permanente.',
+            solution: 'Consulta FACEBOOK_TOKEN_SETUP.md para instrucciones detalladas'
+          }, 
+          { status: 401 }
+        );
+      }
+      
       return NextResponse.json(
         { 
-          error: 'Error al obtener mensajes de la base de datos',
-          status: 500,
-          message: error.message
+          error: 'Error al obtener mensajes de Chatwoot',
+          status: response.status,
+          message: errorText
         }, 
-        { status: 500 }
+        { status: response.status }
       );
     }
 
-    // Transformar mensajes de la base de datos al formato esperado por el frontend
-    const formattedMessages = (messages || []).map(msg => {
-      const messageData = msg.message || {};
-      
-      // Asegurar que created_at sea válido
-      let createdAt = msg.created_at;
-      if (!createdAt) {
-        // Si no hay created_at en la base de datos, usar el del mensaje o la fecha actual
-        createdAt = messageData.created_at || new Date().toISOString();
-      }
-      
-      // Si created_at es un objeto Date, convertirlo a string ISO
-      if (createdAt instanceof Date) {
-        createdAt = createdAt.toISOString();
-      }
-      
-      // DETECTAR SI ES MENSAJE DEL SISTEMA/AGENTE O DEL CLIENTE
-      // Casos soportados:
-      // - Mensajes del workflow de n8n (Postgres Chat Memory) con campo type: 'ai' | 'human'
-      // - Campos estilo Chatwoot: message_type (0/1), direction ('inbound'/'outbound'), role ('assistant'/'user', etc.)
-      const kind = messageData.type; // 'ai' | 'human' u otros
-      const role = messageData.role || messageData.role_type;
-      const direction = messageData.direction;
-      const messageType = messageData.message_type;
-      
-      // Determinar si es mensaje del sistema (saliente)
-      let isOutgoing = false;
-      
-      // 1) Priorizar el campo type usado por n8n: 'ai' = respuesta de la IA, 'human' = cliente
-      if (kind === 'ai') {
-        isOutgoing = true;
-      } else if (kind === 'human') {
-        isOutgoing = false;
-      } else if (messageType !== undefined && messageType !== null) {
-        // 2) Si tiene message_type explícito, usarlo
-        isOutgoing = messageType === 1;
-      } else if (direction) {
-        // 3) Si tiene direction, usarlo
-        isOutgoing = direction === 'outbound' || direction === 'out';
-      } else if (role) {
-        // 4) Si tiene role, mensajes del agente son 'assistant' / 'ai' / 'system'
-        isOutgoing = role === 'assistant' || role === 'ai' || role === 'system';
-      } else {
-        // 5) Sin información, asumir que es mensaje entrante (del cliente)
-        isOutgoing = false;
-      }
-      
-      const finalMessageType = isOutgoing ? 1 : 0;
-      const finalDirection = isOutgoing ? 'outbound' : 'inbound';
-      const finalSenderType = isOutgoing ? 'User' : 'Contact';
-      
-      return {
-        id: msg.id,
-        content: messageData.content || messageData.text || '',
-        message_type: finalMessageType,
-        direction: finalDirection,
-        created_at: createdAt,
-        sender: {
-          phone_number: messageData.phone_number || messageData.from,
-          identifier: messageData.from || messageData.phone_number
-        },
-        source_id: messageData.source_id || messageData.from,
-        status: messageData.status || 'sent',
-        private: messageData.private || false,
-        content_attributes: messageData.content_attributes || {},
-        sender_type: finalSenderType,
-        role: role, // Preservar el role si existe para debugging
-        type: kind,
-        ...messageData
-      };
-    }).filter(msg => {
-      // Filtrar mensajes de actividad y mensajes borrados
+    const data = await response.json();
+    
+    console.log('Messages API Response keys:', Object.keys(data));
+    
+    // Manejar diferentes estructuras de respuesta
+    let messages = [];
+    
+    if (Array.isArray(data)) {
+      messages = data;
+    } else if (data.data && Array.isArray(data.data)) {
+      messages = data.data;
+    } else if (data.payload && Array.isArray(data.payload)) {
+      messages = data.payload;
+    } else {
+      console.warn('Unexpected messages API response structure:', data);
+      messages = [];
+    }
+
+    // Filtrar mensajes de actividad y mensajes borrados (solo mostrar mensajes reales)
+    const realMessages = messages.filter(msg => {
+      // No mostrar mensajes de actividad
       if (msg.message_type === 2) return false;
+      
+      // No mostrar mensajes sin contenido
       if (!msg.content || msg.content.trim() === '') return false;
       
+      // Filtrar mensajes borrados - no mostrar mensajes que contengan "deleted" o estén marcados como borrados
+      // NOTA: No filtramos mensajes privados (msg.private === true) porque pueden ser mensajes
+      // enviados por workflows de n8n que queremos mostrar
       const content = (msg.content || '').toLowerCase();
       const isDeleted = 
         content.includes('this message was deleted') ||
@@ -147,13 +130,13 @@ export async function GET(request, { params }) {
       return !isDeleted;
     });
 
-    console.log(`Found ${messages?.length || 0} total messages, ${formattedMessages.length} real messages`);
+    console.log(`Found ${messages.length} total messages, ${realMessages.length} real messages (${messages.length - realMessages.length} filtered)`);
 
     return NextResponse.json({
       success: true,
-      data: formattedMessages,
-      total: formattedMessages.length,
-      conversationId: sessionId
+      data: realMessages,
+      total: realMessages.length,
+      conversationId: conversationId
     });
 
   } catch (error) {
@@ -170,11 +153,39 @@ export async function GET(request, { params }) {
 
 export async function POST(request, { params }) {
   try {
-    const { id: sessionId } = await params;
+    // Validar variables de entorno
+    const chatwootUrl = process.env.CHATWOOT_URL;
+    const accountId = process.env.CHATWOOT_ACCOUNT_ID;
+    const apiToken = process.env.CHATWOOT_API_TOKEN;
 
-    if (!sessionId) {
+    // Log para depuración (sin mostrar el token completo por seguridad)
+    console.log('🔑 Token info (POST):', {
+      hasToken: !!apiToken,
+      tokenLength: apiToken ? apiToken.length : 0,
+      tokenPrefix: apiToken ? apiToken.substring(0, 10) + '...' : 'N/A',
+      chatwootUrl: chatwootUrl,
+      accountId: accountId
+    });
+
+    if (!chatwootUrl || !accountId || !apiToken) {
       return NextResponse.json(
-        { error: 'ID de sesión requerido' }, 
+        { 
+          error: 'Variables de entorno de Chatwoot no configuradas',
+          missing: {
+            CHATWOOT_URL: !chatwootUrl,
+            CHATWOOT_ACCOUNT_ID: !accountId,
+            CHATWOOT_API_TOKEN: !apiToken
+          }
+        }, 
+        { status: 500 }
+      );
+    }
+
+    const { id: conversationId } = await params;
+
+    if (!conversationId) {
+      return NextResponse.json(
+        { error: 'ID de conversación requerido' }, 
         { status: 400 }
       );
     }
@@ -190,79 +201,269 @@ export async function POST(request, { params }) {
       );
     }
 
-    const supabase = getSupabase();
+    // Construir URL de la API de Chatwoot para enviar mensajes
+    const baseUrl = chatwootUrl.endsWith('/') ? chatwootUrl.slice(0, -1) : chatwootUrl;
     
-    // Obtener información de la sesión para extraer el número de teléfono
-    const { data: existingMessages } = await supabase
-      .from('chat_histories')
-      .select('message')
-      .eq('session_id', sessionId)
-      .limit(1)
-      .single();
+    // Primero, verificar el estado de la conversación
+    const conversationUrl = `${baseUrl}/api/v1/accounts/${accountId}/conversations/${conversationId}`;
+    let conversationData = null;
+    
+    const conversationResponse = await fetch(conversationUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'api_access_token': apiToken,
+      },
+    });
 
-    // Extraer número de teléfono del mensaje existente o usar el session_id
-    const phoneNumber = existingMessages?.message?.phone_number || 
-                       existingMessages?.message?.from || 
-                       sessionId;
+    if (!conversationResponse.ok) {
+      const errorText = await conversationResponse.text();
+      console.error('Error al obtener conversación:', conversationResponse.status, errorText);
+      
+      // Detectar si el error es por token expirado
+      if (errorText.includes('expired') || errorText.includes('Session has expired') || errorText.includes('Invalid OAuth access token')) {
+        return NextResponse.json(
+          { 
+            error: 'Token de acceso expirado',
+            message: 'El token de acceso de WhatsApp Business API ha expirado. Por favor, genera un nuevo token de larga duración siguiendo la guía FACEBOOK_TOKEN_SETUP.md',
+            details: 'El token de acceso de Facebook/WhatsApp se vence cada 1-2 horas. Necesitas generar un token de larga duración (60 días) o un Page Access Token permanente.',
+            solution: 'Consulta FACEBOOK_TOKEN_SETUP.md para instrucciones detalladas'
+          }, 
+          { status: 401 }
+        );
+      }
+    } else {
+      conversationData = await conversationResponse.json();
+      console.log('Conversation status:', conversationData.status);
+      console.log('Conversation inbox_id:', conversationData.inbox_id);
+      
+      // Si la conversación está resuelta, reabrila para poder enviar mensajes
+      if (conversationData.status === 'resolved') {
+        console.log('Conversación resuelta, reabriendo...');
+        await fetch(conversationUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'api_access_token': apiToken,
+          },
+          body: JSON.stringify({
+            status: 'open'
+          }),
+        });
+        // Recargar datos de la conversación después de reabrir
+        const updatedResponse = await fetch(conversationUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'api_access_token': apiToken,
+          },
+        });
+        if (updatedResponse.ok) {
+          conversationData = await updatedResponse.json();
+        }
+      }
+    }
 
-    // Crear el mensaje en formato JSONB
-    const messageData = {
+    // Obtener información del inbox para verificar el tipo de canal
+    let inboxInfo = null;
+    if (conversationData && conversationData.inbox_id) {
+      try {
+        const inboxUrl = `${baseUrl}/api/v1/accounts/${accountId}/inboxes/${conversationData.inbox_id}`;
+        const inboxResponse = await fetch(inboxUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'api_access_token': apiToken,
+          },
+        });
+        if (inboxResponse.ok) {
+          inboxInfo = await inboxResponse.json();
+          console.log('Inbox type:', inboxInfo.channel_type);
+          console.log('Inbox name:', inboxInfo.name);
+          console.log('Inbox status:', inboxInfo.status);
+          console.log('Inbox channel details:', JSON.stringify(inboxInfo.channel || {}, null, 2));
+          
+          // Verificar si el inbox está conectado
+          if (inboxInfo.status !== 'connected' && inboxInfo.status !== 'active') {
+            console.warn('⚠️ El inbox de WhatsApp puede no estar conectado. Status:', inboxInfo.status);
+          }
+        } else {
+          const inboxErrorText = await inboxResponse.text();
+          console.warn('No se pudo obtener información del inbox:', inboxErrorText);
+        }
+      } catch (inboxError) {
+        console.warn('No se pudo obtener información del inbox:', inboxError);
+      }
+    }
+
+    const apiUrl = `${baseUrl}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`;
+    
+    console.log('Sending message to:', apiUrl);
+    console.log('Message content:', content);
+    console.log('Conversation inbox_id:', conversationData?.inbox_id);
+
+    // Obtener el agente asignado a la conversación para enviar como agente
+    let agentId = null;
+    if (conversationData && conversationData.assignee_id) {
+      agentId = conversationData.assignee_id;
+      console.log('Using assigned agent ID:', agentId);
+    } else {
+      // Si no hay agente asignado, obtener el primer agente disponible
+      try {
+        const agentsUrl = `${baseUrl}/api/v1/accounts/${accountId}/agents`;
+        const agentsResponse = await fetch(agentsUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'api_access_token': apiToken,
+          },
+        });
+        if (agentsResponse.ok) {
+          const agents = await agentsResponse.json();
+          if (agents && agents.length > 0) {
+            agentId = agents[0].id;
+            console.log('Using first available agent ID:', agentId);
+          }
+        }
+      } catch (agentError) {
+        console.warn('No se pudo obtener agentes:', agentError);
+      }
+    }
+
+    // Preparar el body del mensaje
+    // IMPORTANTE: Para mensajes salientes en Chatwoot, el mensaje debe venir de un User/Agent, no de un Contact
+    // El problema es que cuando usamos la API, a veces Chatwoot lo interpreta como mensaje del contacto
+    const messageBody = {
       content: content.trim(),
-      text: content.trim(),
       message_type: 1, // 1 = outgoing, 0 = incoming
-      direction: 'outbound',
-      phone_number: phoneNumber,
-      from: phoneNumber,
-      status: 'sent',
-      created_at: new Date().toISOString()
+      private: false
     };
 
-    // Insertar el mensaje en la base de datos
-    const { data: newMessage, error } = await supabase
-      .from('chat_histories')
-      .insert([
-        {
-          session_id: sessionId,
-          message: messageData
-        }
-      ])
-      .select()
-      .single();
+    // Intentar usar el endpoint de "send reply" si está disponible, o agregar parámetros adicionales
+    // Según la documentación de Chatwoot, el mensaje debería enviarse automáticamente como agente
+    // si la conversación tiene un agente asignado
+    let finalApiUrl = apiUrl;
+    
+    // Si hay un agente asignado, asegurarnos de que el mensaje se envíe como agente
+    if (agentId) {
+      console.log('Agent assigned, message should be sent as agent');
+      // El endpoint estándar debería funcionar, pero podemos intentar forzar el sender
+      // Nota: Chatwoot puede requerir que el token tenga permisos de usuario/agente
+    }
 
-    if (error) {
-      console.error('Error al guardar mensaje:', error);
+    console.log('Message body:', JSON.stringify(messageBody, null, 2));
+    console.log('Using API URL:', finalApiUrl);
+
+    // Hacer petición a Chatwoot para enviar el mensaje
+    const response = await fetch(finalApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api_access_token': apiToken,
+      },
+      body: JSON.stringify(messageBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Chatwoot Send Message API Error:', response.status);
+      console.error('Error details:', errorText);
+      
+      // Verificar si es un error de token expirado de WhatsApp Business API
+      if (errorText.includes('Error validating access token') || 
+          errorText.includes('Session has expired') || 
+          errorText.includes('expired') ||
+          errorText.includes('Invalid OAuth access token')) {
+        console.error('🚨 ERROR: El token de WhatsApp Business API ha expirado');
+        console.error('💡 SOLUCIÓN: El token de acceso de Facebook/WhatsApp se vence cada 1-2 horas');
+        console.error('   Necesitas generar un token de larga duración (60 días) o un Page Access Token permanente');
+        console.error('   Consulta el archivo FACEBOOK_TOKEN_SETUP.md para instrucciones detalladas');
+        console.error('   Pasos rápidos:');
+        console.error('   1. Ve a Facebook Developers → Graph API Explorer');
+        console.error('   2. Genera un Page Access Token (no expira)');
+        console.error('   3. Actualiza el token en Chatwoot → Settings → Inboxes → WhatsApp → Access Token');
+        
+        return NextResponse.json(
+          { 
+            error: 'Token de WhatsApp Business API expirado',
+            status: response.status,
+            message: 'El token de acceso de WhatsApp Business API ha expirado. Los tokens de corta duración se vencen cada 1-2 horas.',
+            solution: 'Genera un token de larga duración (60 días) o un Page Access Token permanente siguiendo la guía en FACEBOOK_TOKEN_SETUP.md',
+            details: errorText,
+            quickFix: {
+              step1: 'Ve a Facebook Developers → Graph API Explorer',
+              step2: 'Selecciona tu Página de WhatsApp Business',
+              step3: 'Genera un Page Access Token (no expira)',
+              step4: 'Actualiza el token en Chatwoot → Settings → Inboxes → WhatsApp'
+            }
+          }, 
+          { status: 401 }
+        );
+      }
+      
+      // Verificar si es un error del token de Chatwoot
+      if (errorText.includes('Unauthorized') || errorText.includes('Invalid API token')) {
+        console.error('🚨 ERROR: El token de Chatwoot API ha expirado o no es válido');
+        console.error('💡 SOLUCIÓN: Verifica que:');
+        console.error('   1. Has actualizado CHATWOOT_API_TOKEN en las variables de entorno');
+        console.error('   2. Has reiniciado el servidor después de actualizar el token');
+        console.error('   3. El token es válido y tiene los permisos correctos');
+        
+        return NextResponse.json(
+          { 
+            error: 'Token de Chatwoot API expirado o inválido',
+            status: response.status,
+            message: 'El token de Chatwoot ha expirado. Por favor, genera un nuevo token y actualiza la variable de entorno CHATWOOT_API_TOKEN, luego reinicia el servidor.',
+            details: errorText
+          }, 
+          { status: 401 }
+        );
+      }
+      
       return NextResponse.json(
         { 
-          error: 'Error al guardar mensaje en la base de datos',
-          message: error.message
+          error: 'Error al enviar mensaje a Chatwoot',
+          status: response.status,
+          message: errorText
         }, 
-        { status: 500 }
+        { status: response.status }
       );
     }
 
-    // Formatear la respuesta similar a Chatwoot para compatibilidad
-    const formattedMessage = {
-      id: newMessage.id,
-      content: content.trim(),
-      message_type: 1,
-      created_at: newMessage.created_at,
-      sender: {
-        phone_number: phoneNumber,
-        identifier: phoneNumber
-      },
-      source_id: phoneNumber,
-      status: 'sent',
-      private: false,
-      ...messageData
-    };
+    const data = await response.json();
+    
+    console.log('Message sent successfully:', JSON.stringify(data, null, 2));
+    console.log('Message status:', data.status);
+    console.log('Message id:', data.id);
+    console.log('Message type:', data.message_type);
+    console.log('Message source_id:', data.source_id);
+    console.log('Message inbox_id:', data.inbox_id);
+    
+    // Verificar si el mensaje se envió correctamente
+    if (data.status === 'sent' || data.status === 'delivered') {
+      console.log('✅ Mensaje enviado correctamente a Chatwoot');
+    } else {
+      console.warn('⚠️ Mensaje creado pero estado inesperado:', data.status);
+    }
 
-    console.log('✅ Mensaje guardado correctamente en la base de datos');
+    // IMPORTANTE: El mensaje puede estar en estado 'sent' en Chatwoot pero no haberse enviado realmente a WhatsApp
+    // Esto puede deberse a:
+    // 1. La ventana de 24 horas de WhatsApp (si el usuario no ha enviado un mensaje en 24h, solo se pueden enviar plantillas)
+    // 2. El número no está registrado en WhatsApp
+    // 3. Problemas de configuración del inbox de WhatsApp en Chatwoot
+    // 4. El proveedor de WhatsApp (360Dialog, etc.) no está configurado correctamente
+    
+    console.log('📝 NOTA: Si el mensaje no llega a WhatsApp, verifica:');
+    console.log('   1. Que el usuario haya enviado un mensaje en las últimas 24 horas');
+    console.log('   2. Que el número esté registrado en WhatsApp');
+    console.log('   3. Que el inbox de WhatsApp esté correctamente configurado en Chatwoot');
+    console.log('   4. Que el proveedor de WhatsApp (360Dialog, etc.) esté activo y funcionando');
 
     return NextResponse.json({
       success: true,
-      data: formattedMessage,
-      message: 'Mensaje guardado correctamente',
-      status: 'sent'
+      data: data,
+      message: 'Mensaje enviado correctamente',
+      status: data.status
     });
 
   } catch (error) {

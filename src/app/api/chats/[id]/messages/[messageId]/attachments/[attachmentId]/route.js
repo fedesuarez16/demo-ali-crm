@@ -1,93 +1,73 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const getSupabase = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase env vars missing. Define NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
-  }
-  
-  return createClient(supabaseUrl, supabaseAnonKey);
-};
 
 export async function GET(request, { params }) {
   try {
-    const { id: sessionId, messageId, attachmentId } = await params;
+    // Validar variables de entorno
+    const chatwootUrl = process.env.CHATWOOT_URL;
+    const accountId = process.env.CHATWOOT_ACCOUNT_ID;
+    const apiToken = process.env.CHATWOOT_API_TOKEN;
 
-    if (!sessionId || !messageId || !attachmentId) {
+    if (!chatwootUrl || !accountId || !apiToken) {
       return NextResponse.json(
-        { error: 'IDs requeridos: sessionId, messageId, attachmentId' }, 
+        { 
+          error: 'Variables de entorno de Chatwoot no configuradas'
+        }, 
+        { status: 500 }
+      );
+    }
+
+    const { id: conversationId, messageId, attachmentId } = await params;
+
+    if (!conversationId || !messageId || !attachmentId) {
+      return NextResponse.json(
+        { error: 'IDs requeridos: conversationId, messageId, attachmentId' }, 
         { status: 400 }
       );
     }
 
-    const supabase = getSupabase();
+    // Construir URL de la API de Chatwoot para obtener el attachment
+    const baseUrl = chatwootUrl.endsWith('/') ? chatwootUrl.slice(0, -1) : chatwootUrl;
+    const apiUrl = `${baseUrl}/api/v1/accounts/${accountId}/conversations/${conversationId}/messages/${messageId}/attachments/${attachmentId}`;
     
-    // Obtener el mensaje de la base de datos
-    const { data: message, error: fetchError } = await supabase
-      .from('chat_histories')
-      .select('*')
-      .eq('id', parseInt(messageId))
-      .eq('session_id', sessionId)
-      .single();
+    console.log('Fetching attachment from:', apiUrl);
 
-    if (fetchError || !message) {
+    // Hacer petición a Chatwoot para obtener el attachment
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'api_access_token': apiToken,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Chatwoot Attachment API Error:', response.status, errorText);
+      
       return NextResponse.json(
         { 
-          error: 'Mensaje no encontrado o no pertenece a esta sesión',
-          status: 404
+          error: 'Error al obtener attachment de Chatwoot',
+          status: response.status,
+          message: errorText
         }, 
-        { status: 404 }
+        { status: response.status }
       );
     }
 
-    // Buscar el attachment en el JSONB del mensaje
-    const messageData = message.message || {};
-    const attachments = messageData.attachments || [];
-    const attachment = attachments.find(att => att.id === attachmentId || att.id === parseInt(attachmentId));
-
-    if (!attachment) {
-      return NextResponse.json(
-        { 
-          error: 'Attachment no encontrado en el mensaje',
-          status: 404
-        }, 
-        { status: 404 }
-      );
-    }
-
-    // Si el attachment tiene una URL, redirigir o obtener el contenido
-    if (attachment.url) {
-      try {
-        const response = await fetch(attachment.url);
-        if (response.ok) {
-          const blob = await response.blob();
-          const contentType = attachment.content_type || response.headers.get('content-type') || 'application/octet-stream';
-          
-          return new NextResponse(blob, {
-            status: 200,
-            headers: {
-              'Content-Type': contentType,
-              'Content-Disposition': `inline; filename="${attachment.filename || 'attachment'}"`,
-              'Cache-Control': 'public, max-age=3600',
-            },
-          });
-        }
-      } catch (fetchError) {
-        console.error('Error fetching attachment from URL:', fetchError);
-      }
-    }
-
-    // Si no hay URL o falló la obtención, retornar error
-    return NextResponse.json(
-      { 
-        error: 'No se pudo obtener el attachment. El mensaje no contiene una URL válida para el attachment.',
-        status: 404
-      }, 
-      { status: 404 }
-    );
+    // Obtener el contenido del audio como blob
+    const blob = await response.blob();
+    
+    // Obtener el content-type del response o usar uno por defecto
+    const contentType = response.headers.get('content-type') || 'audio/ogg; codecs=opus';
+    
+    // Retornar el audio con los headers correctos
+    return new NextResponse(blob, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Disposition': `inline; filename="audio.${contentType.includes('ogg') ? 'ogg' : contentType.includes('mpeg') ? 'mp3' : 'audio'}")`,
+        'Cache-Control': 'public, max-age=3600', // Cache por 1 hora
+      },
+    });
   } catch (error) {
     console.error('Error fetching attachment:', error);
     return NextResponse.json(
