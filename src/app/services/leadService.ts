@@ -485,7 +485,7 @@ export const filterLeads = (options: FilterOptions): Lead[] => {
     
     // Filtrar por propiedad de interés (campaña) si se especifica
     // Las opciones de filtro vienen de propiedades.direccion
-    // Se compara con leads.propiedad_interes
+    // Se compara con leads.propiedad_interes usando fuzzy matching
     if (options.propiedadInteres) {
       const leadPropiedadInteres = (lead as any).propiedad_interes || '';
       if (!leadPropiedadInteres) {
@@ -495,16 +495,22 @@ export const filterLeads = (options: FilterOptions): Lead[] => {
       const leadValue = leadPropiedadInteres.trim().toLowerCase();
       const filterValue = options.propiedadInteres.trim().toLowerCase();
       
-      // Comparación exacta (case-insensitive)
+      // 1. Comparación exacta (case-insensitive)
       if (leadValue === filterValue) {
         // Match exacto, continuar con los demás filtros
       }
-      // Si el valor del lead contiene la dirección de la propiedad o viceversa
+      // 2. Si uno contiene al otro
       else if (leadValue.includes(filterValue) || filterValue.includes(leadValue)) {
         // Match parcial, continuar con los demás filtros
       }
+      // 3. Fuzzy matching: comparar similitud de strings normalizada
       else {
-        return false;
+        const similarity = stringSimilarity(leadPropiedadInteres, options.propiedadInteres);
+        if (similarity < 0.6) {
+          // Si la similitud es menor al 60%, no es match
+          return false;
+        }
+        // Si similitud >= 60%, lo consideramos match suficiente
       }
     }
     
