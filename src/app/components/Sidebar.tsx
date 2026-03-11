@@ -228,9 +228,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
         {!collapsed && (
           <div className="flex items-center  gap-3">
             <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
-              O
+              A
             </div>
-            <div className="font-semibold text-smtext-foreground">Opting</div>
+            <div className="font-semibold text-smtext-foreground">Team Ali</div>
           </div>
         )}
         <Button 
