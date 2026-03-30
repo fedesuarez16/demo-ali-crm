@@ -95,8 +95,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
           ),
         },
         {
-          name: 'Analytics',
-          path: '/analytics-inbound',
+          name: 'Campanas Activas',
+          path: '/campanas-activas',
           icon: (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3v18M6 8l5-5 5 5M5 13h4m6 0h4m-9 4h6m-3-4v7" />

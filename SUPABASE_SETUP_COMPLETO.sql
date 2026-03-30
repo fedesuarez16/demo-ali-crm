@@ -149,12 +149,14 @@ ON CONFLICT (id) DO NOTHING;
 CREATE TABLE IF NOT EXISTS public.pautas (
   id SERIAL PRIMARY KEY,
   texto TEXT NOT NULL,
+  activo BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Índice para pautas
+-- Índices para pautas
 CREATE INDEX IF NOT EXISTS idx_pautas_created_at ON public.pautas(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pautas_activo ON public.pautas(activo);
 
 -- Trigger para actualizar updated_at
 CREATE OR REPLACE FUNCTION update_pautas_updated_at()

@@ -23,6 +23,75 @@ export interface MensajeProgramado {
   enviado_at?: string | null;
 }
 
+/** Estados que cuentan como enviado en la UI */
+const ESTADO_ENVIADO_ALIASES = new Set(['enviado', 'sent', 'enviada']);
+/** Filas que no deben listarse en mensajes programados */
+const ESTADO_EXCLUIR_LISTADO = new Set(['cancelado', 'cancelada', 'eliminado']);
+
+/**
+ * Normaliza estado desde Supabase/n8n para la UI (pendiente | enviado).
+ * Valores vacíos o desconocidos se tratan como pendiente salvo exclusiones.
+ */
+export const normalizeColaEstado = (raw: unknown): 'pendiente' | 'enviado' => {
+  if (raw == null || String(raw).trim() === '') return 'pendiente';
+  const s = String(raw).trim().toLowerCase();
+  if (ESTADO_ENVIADO_ALIASES.has(s)) return 'enviado';
+  return 'pendiente';
+};
+
+const mapColaRow = (row: ColaSeguimiento, tabla_origen: string): ColaSeguimiento | null => {
+  const raw = row.estado;
+  if (raw != null && String(raw).trim() !== '') {
+    const s = String(raw).trim().toLowerCase();
+    if (ESTADO_EXCLUIR_LISTADO.has(s)) return null;
+  }
+  return {
+    ...row,
+    tabla_origen,
+    estado: normalizeColaEstado(raw),
+  };
+};
+
+async function fetchAllColaSeguimientosTable(
+  table: 'cola_seguimientos' | 'cola_seguimientos_dos',
+  tabla_origen: string
+): Promise<ColaSeguimiento[]> {
+  const collected: ColaSeguimiento[] = [];
+  const pageSize = 1000;
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const to = from + pageSize - 1;
+    const { data, error } = await (getSupabase() as any)
+      .from(table)
+      .select('*')
+      .order('fecha_programada', { ascending: true, nullsFirst: false })
+      .range(from, to);
+
+    if (error) {
+      console.error(`Error obteniendo ${table} (rango ${from}-${to}):`, error.message);
+      break;
+    }
+
+    if (!data?.length) {
+      hasMore = false;
+    } else {
+      for (const row of data as ColaSeguimiento[]) {
+        const mapped = mapColaRow(row, tabla_origen);
+        if (mapped) collected.push(mapped);
+      }
+      if (data.length < pageSize) {
+        hasMore = false;
+      } else {
+        from += pageSize;
+      }
+    }
+  }
+
+  return collected;
+}
+
 // Interfaz para cola_seguimientos
 export interface ColaSeguimiento {
   id?: number;
@@ -72,56 +141,25 @@ export const programarMensaje = async (mensajeData: Omit<MensajeProgramado, 'id'
 };
 
 /**
- * Obtiene todos los mensajes programados de las tablas cola_seguimientos y cola_seguimientos_dos
- * Incluye mensajes con estado pendiente y enviado
+ * Obtiene todos los mensajes programados de las tablas cola_seguimientos y cola_seguimientos_dos.
+ * Usa paginación (Supabase devuelve como máximo ~1000 filas por request) y no filtra por estado en SQL
+ * para no perder filas con variantes (null, mayúsculas, "pending", etc.).
  */
 export const getMensajesProgramados = async (): Promise<ColaSeguimiento[]> => {
   try {
-    const allMensajes: ColaSeguimiento[] = [];
-    
-    // Obtener mensajes de cola_seguimientos (pendientes y enviados)
-    const { data: dataCola1, error: errorCola1 } = await (getSupabase() as any)
-      .from('cola_seguimientos')
-      .select('*')
-      .in('estado', ['pendiente', 'enviado'])
-      .order('fecha_programada', { ascending: true });
-    
-    if (errorCola1) {
-      console.error('Error obteniendo mensajes programados de cola_seguimientos:', errorCola1.message);
-    } else if (dataCola1) {
-      // Agregar identificador de tabla origen
-      const mensajesCola1 = dataCola1.map((m: ColaSeguimiento) => ({
-        ...m,
-        tabla_origen: 'cola_seguimientos'
-      }));
-      allMensajes.push(...mensajesCola1);
-    }
-    
-    // Obtener mensajes de cola_seguimientos_dos (pendientes y enviados)
-    const { data: dataCola2, error: errorCola2 } = await (getSupabase() as any)
-      .from('cola_seguimientos_dos')
-      .select('*')
-      .in('estado', ['pendiente', 'enviado'])
-      .order('fecha_programada', { ascending: true });
-    
-    if (errorCola2) {
-      console.error('Error obteniendo mensajes programados de cola_seguimientos_dos:', errorCola2.message);
-    } else if (dataCola2) {
-      // Agregar identificador de tabla origen
-      const mensajesCola2 = dataCola2.map((m: ColaSeguimiento) => ({
-        ...m,
-        tabla_origen: 'cola_seguimientos_dos'
-      }));
-      allMensajes.push(...mensajesCola2);
-    }
-    
-    // Ordenar todos los mensajes por fecha programada
+    const [cola1, cola2] = await Promise.all([
+      fetchAllColaSeguimientosTable('cola_seguimientos', 'cola_seguimientos'),
+      fetchAllColaSeguimientosTable('cola_seguimientos_dos', 'cola_seguimientos_dos'),
+    ]);
+
+    const allMensajes = [...cola1, ...cola2];
+
     const sorted = allMensajes.sort((a: ColaSeguimiento, b: ColaSeguimiento) => {
       const dateA = new Date(a.fecha_programada || a.scheduled_at || a.created_at || 0).getTime();
       const dateB = new Date(b.fecha_programada || b.scheduled_at || b.created_at || 0).getTime();
       return dateA - dateB;
     });
-    
+
     return sorted;
   } catch (e) {
     console.error('Supabase not configured or failed to initialize:', e);
