@@ -159,21 +159,29 @@ export const getAllPropiedadDirecciones = async (): Promise<string[]> => {
       return [];
     }
 
-    // Extraer direcciones únicas no vacías
-    // Usar un Map con clave lowercase para deduplicar variaciones de mayúsculas/minúsculas
-    const seenLower = new Map<string, string>(); // lowercase -> original (primera aparición)
+    // Clave canónica: evita duplicados "vender" vs "vender\u200b", NBSP, etc.
+    const canonicalKey = (s: string): string =>
+      s
+        .normalize('NFKC')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .replace(/\u00A0/g, ' ')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ');
+
+    const seenCanon = new Map<string, string>(); // clave canónica -> texto mostrado (primera aparición)
     ((data as any[]) || []).forEach((row: any) => {
       const dir = (row.direccion || '').trim();
       if (dir.length > 0) {
-        const lowerDir = dir.toLowerCase();
-        if (!seenLower.has(lowerDir)) {
-          seenLower.set(lowerDir, dir);
+        const key = canonicalKey(dir);
+        if (!seenCanon.has(key)) {
+          seenCanon.set(key, dir);
         }
       }
     });
 
     // Devolver los valores originales (primera aparición de cada dirección), ordenados
-    return Array.from(seenLower.values()).sort((a, b) => a.localeCompare(b, 'es'));
+    return Array.from(seenCanon.values()).sort((a, b) => a.localeCompare(b, 'es'));
   } catch (e) {
     console.error('Error fetching propiedades direcciones:', e);
     return [];

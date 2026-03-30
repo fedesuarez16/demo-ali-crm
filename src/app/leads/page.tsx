@@ -825,8 +825,8 @@ export default function LeadsKanbanPage() {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
                 {/* Filtrar "frío" de las columnas mostradas en el selector */}
-                {allColumns.filter(col => col !== 'frío' && col !== 'fríos' && col !== 'frios').map((column) => (
-                  <div key={column} className="flex items-center justify-between">
+                {allColumns.filter(col => col !== 'frío' && col !== 'fríos' && col !== 'frios').map((column, colIdx) => (
+                  <div key={`kanban-opt-${colIdx}-${column}`} className="flex items-center justify-between">
                     <label className="flex items-center space-x-2 cursor-pointer flex-1">
                       <input
                         type="checkbox"

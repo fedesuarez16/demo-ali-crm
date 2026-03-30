@@ -137,6 +137,48 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
     loadMatchingProperties();
   }, [leads]);
 
+  // Debe ejecutarse en todo render (antes de cualquier return): si no, al pasar de leads a 0 hooks React rompe
+  const allColumnsToShow = useMemo(() => {
+    const colKey = (s: string) =>
+      s
+        .normalize('NFKC')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .replace(/\u00A0/g, ' ')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ');
+
+    const visibleSetLower = new Set(statusOrder.map(s => colKey(s)));
+
+    const columnsWithLeads = Object.keys(groupedLeads)
+      .filter(status => groupedLeads[status].length > 0)
+      .map(normalizeEstado)
+      .filter((status, index, self) => self.indexOf(status) === index);
+
+    const filteredColumns = columnsWithLeads.filter(
+      status =>
+        status !== 'fríos' &&
+        status !== 'frios' &&
+        status !== 'tibios' &&
+        status !== 'calientes' &&
+        status !== 'llamadas' &&
+        status !== 'visitas'
+    );
+
+    const customColumns = filteredColumns.filter(status => !visibleSetLower.has(colKey(status)));
+
+    const result: string[] = [];
+    const seen = new Set<string>();
+    for (const col of [...statusOrder, ...customColumns]) {
+      const key = colKey(col);
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(col);
+      }
+    }
+    return result;
+  }, [statusOrder, groupedLeads]);
+
   if (leads.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-42 px bg-white ">
@@ -483,38 +525,6 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
     }
   };
 
-  // Combinar columnas visibles con columnas que tienen leads (para mostrar estados personalizados)
-  const allColumnsToShow = useMemo(() => {
-    // Crear un Set normalizado de las columnas ya visibles para evitar duplicados
-    const visibleSetLower = new Set(statusOrder.map(s => s.toLowerCase().trim()));
-    
-    const columnsWithLeads = Object.keys(groupedLeads)
-      .filter(status => groupedLeads[status].length > 0)
-      .map(normalizeEstado) // Normalizar todas las columnas
-      .filter((status, index, self) => self.indexOf(status) === index); // Eliminar duplicados exactos
-    
-    // Filtrar explícitamente variaciones de estados base
-    const filteredColumns = columnsWithLeads.filter(status => 
-      status !== 'fríos' && status !== 'frios' && status !== 'tibios' && status !== 'calientes' && status !== 'llamadas' && status !== 'visitas'
-    );
-    
-    // Solo agregar columnas personalizadas que NO estén ya en statusOrder (comparación case-insensitive)
-    const customColumns = filteredColumns.filter(status => !visibleSetLower.has(status.toLowerCase().trim()));
-    
-    // Primero las columnas visibles en orden, luego las personalizadas
-    // Usar un Set final para garantizar unicidad absoluta
-    const result: string[] = [];
-    const seen = new Set<string>();
-    for (const col of [...statusOrder, ...customColumns]) {
-      const key = col.toLowerCase().trim();
-      if (!seen.has(key)) {
-        seen.add(key);
-        result.push(col);
-      }
-    }
-    return result;
-  }, [statusOrder, groupedLeads]);
-
   const handleToggleSelectionMode = () => {
     const newMode = !isSelectionMode;
     if (externalIsSelectionMode === undefined) {
@@ -580,9 +590,9 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
       
       <div className="w-full  overflow-x-auto pb-1">
         <div className="flex gap-2 min-w-max pr-2">
-          {allColumnsToShow.map((status) => (
+          {allColumnsToShow.map((status, statusIdx) => (
             <div 
-              key={status} 
+              key={`kanban-col-${statusIdx}-${status}`} 
               className="min-w-[240px] bg-slate-100 border-gray-400 rounded-xl flex flex-col"
               onDragOver={(e) => handleDragOver(e, status)}
               onDragLeave={(e) => handleDragLeave(e, status)}

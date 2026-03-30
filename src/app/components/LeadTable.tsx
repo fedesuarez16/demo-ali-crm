@@ -14,23 +14,22 @@ const LeadTable: React.FC<LeadTableProps> = ({ leads, visibleColumns, onSelectio
   // Usar selectedLeadIds si viene como prop, sino usar el estado interno
   const isControlled = !!externalSelectedIds;
   const selectedIds = externalSelectedIds || internalSelectedIds;
-  if (leads.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 px-44 bg-white">
-        <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        <p className="text-gray-500 text-lg font-medium">No se encontraron leads</p>
-        <p className="text-gray-400 text-sm mt-1">Prueba modificando los filtros de búsqueda</p>
-      </div>
-    );
-  }
 
   const defaultStatuses = ['frío', 'tibio', 'caliente', 'llamada', 'visita'] as const;
-  
+
+  /** Base común para columnas y estados: evita duplicados por ZWSP, NBSP, etc. */
+  const canonicalizeLabel = (s: string): string =>
+    s
+      .normalize('NFKC')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/\u00A0/g, ' ')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+
   // Función para normalizar nombres de columnas (eliminar "Fríos", "Tibios", etc.)
   const normalizeColumnName = (col: string): string => {
-    const colLower = col.toLowerCase().trim();
+    const colLower = canonicalizeLabel(col);
     if (colLower === 'fríos' || colLower === 'frios') return 'frío';
     if (colLower === 'tibios') return 'tibio';
     if (colLower === 'calientes') return 'caliente';
@@ -38,9 +37,9 @@ const LeadTable: React.FC<LeadTableProps> = ({ leads, visibleColumns, onSelectio
     if (colLower === 'visitas') return 'visita';
     return colLower;
   };
-  
+
   // FORZAR normalización agresiva - NUNCA permitir "Fríos"
-  const statusOrder = (visibleColumns && visibleColumns.length > 0 
+  const statusOrderRaw = (visibleColumns && visibleColumns.length > 0 
     ? visibleColumns
         .map(col => {
           const normalized = normalizeColumnName(col);
@@ -58,10 +57,19 @@ const LeadTable: React.FC<LeadTableProps> = ({ leads, visibleColumns, onSelectio
     .filter((col, index, self) => self.indexOf(col) === index) // Eliminar duplicados después de normalizar
     .filter(col => col !== 'fríos' && col !== 'frios'); // FILTRO FINAL AGRESIVO - eliminar cualquier rastro de "Fríos"
 
+  const seenStatusKeys = new Set<string>();
+  const statusOrder: string[] = [];
+  for (const col of statusOrderRaw) {
+    const k = normalizeColumnName(col);
+    if (seenStatusKeys.has(k)) continue;
+    seenStatusKeys.add(k);
+    statusOrder.push(k);
+  }
+
   // Función para normalizar estados (convertir "Fríos" a "frío", etc.)
   const normalizeEstado = (estado: string | undefined): string => {
     if (!estado) return '';
-    const estadoLower = estado.toLowerCase().trim();
+    const estadoLower = canonicalizeLabel(estado);
     // Normalizar variaciones comunes
     if (estadoLower === 'fríos' || estadoLower === 'frios') return 'frío';
     if (estadoLower === 'tibios') return 'tibio';
@@ -270,6 +278,18 @@ const LeadTable: React.FC<LeadTableProps> = ({ leads, visibleColumns, onSelectio
     }
   };
 
+  if (leads.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 px-44 bg-white">
+        <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <p className="text-gray-500 text-lg font-medium">No se encontraron leads</p>
+        <p className="text-gray-400 text-sm mt-1">Prueba modificando los filtros de búsqueda</p>
+      </div>
+    );
+  }
+
   return (
     <div className="overflow-x-auto">
       {/* Barra de selección múltiple - SIEMPRE VISIBLE */}
@@ -312,7 +332,7 @@ const LeadTable: React.FC<LeadTableProps> = ({ leads, visibleColumns, onSelectio
       
       <div className={`min-w-max grid gap-1 ${statusOrder.length <= 3 ? 'grid-cols-3' : statusOrder.length === 4 ? 'grid-cols-4' : statusOrder.length === 5 ? 'grid-cols-5' : 'grid-cols-1'}`}>
         {statusOrder.map((col, idx) => (
-          <div key={col} className="min-w-[160px] bg-white">
+          <div key={`lead-table-col-${idx}-${col}`} className="min-w-[160px] bg-white">
             <div className="mb-1 px-1 py-0.5 text-xs font-semibold uppercase tracking-wide text-slate-600">{col}</div>
             <div className="space-y-0.5">
               {grouped[idx].length === 0 ? (

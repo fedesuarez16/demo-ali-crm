@@ -144,9 +144,9 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
         <div>
           <p className="text-xs font-medium text-gray-500 mb-1.5">Estado del lead</p>
           <div className="flex flex-wrap gap-1">
-            {estados.map((estado) => (
+            {estados.map((estado, estadoIdx) => (
               <button
-                key={estado}
+                key={`estado-${estadoIdx}-${estado}`}
                 className={renderStatusBadge(estado, filterOptions.estado === estado)}
                 onClick={() => handleStatusClick(estado as LeadStatus)}
               >
@@ -171,8 +171,8 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
               className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1.5 px-2 text-xs text-gray-700"
             >
               <option value="">Todas las zonas</option>
-              {zonas.map((zona) => (
-                <option key={zona} value={zona}>
+              {zonas.map((zona, zonaIdx) => (
+                <option key={`zona-${zonaIdx}-${zona}`} value={zona}>
                   {zona}
                 </option>
               ))}
@@ -208,8 +208,8 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
               className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1.5 px-2 text-xs text-gray-700"
             >
               <option value="">Todas las categorías</option>
-              {tiposPropiedad.map((tipo) => (
-                <option key={tipo} value={tipo}>
+              {tiposPropiedad.map((tipo, tipoIdx) => (
+                <option key={`tipo-${tipoIdx}-${tipo}`} value={tipo}>
                   {tipo}
                 </option>
               ))}
@@ -246,8 +246,8 @@ const LeadFilter: React.FC<LeadFilterProps> = ({
               className="block w-full rounded-lg border-slate-200 bg-white/70 shadow-sm focus:border-indigo-500 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1.5 px-2 text-xs text-gray-700"
             >
               <option value="">Todos los motivos</option>
-              {motivosInteres.map((motivo) => (
-                <option key={motivo} value={motivo as InterestReason}>
+              {motivosInteres.map((motivo, motivoIdx) => (
+                <option key={`motivo-${motivoIdx}-${motivo}`} value={motivo as InterestReason}>
                   {motivo}
                 </option>
               ))}

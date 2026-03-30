@@ -669,8 +669,8 @@ export default function LeadsTablePage() {
                 </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-                {allColumns.map((column) => (
-                  <div key={column} className="flex items-center justify-between">
+                {allColumns.map((column, colIdx) => (
+                  <div key={`vis-col-${colIdx}-${column}`} className="flex items-center justify-between">
                     <label className="flex items-center space-x-2 cursor-pointer flex-1">
                       <input
                         type="checkbox"
