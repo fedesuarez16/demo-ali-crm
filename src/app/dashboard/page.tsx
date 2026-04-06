@@ -9,10 +9,63 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ChartConfig } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+
+/** YYYY-MM-DD en calendario local (evita desfase UTC de toISOString) */
+function toDateInputValue(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function parseDateInput(s: string): Date {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
+/** Días consecutivos inclusive, ordenados; si inicio > fin se intercambian */
+function eachDayInclusive(startStr: string, endStr: string): string[] {
+  let start = parseDateInput(startStr);
+  let end = parseDateInput(endStr);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
+  if (start > end) [start, end] = [end, start];
+  const out: string[] = [];
+  const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  while (cur <= endDay) {
+    out.push(toDateInputValue(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out;
+}
+
+function leadCalendarDate(lead: Lead): string {
+  const raw = lead.fechaContacto || lead.created_at;
+  if (!raw) return toDateInputValue(new Date());
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return toDateInputValue(new Date());
+  return toDateInputValue(d);
+}
+
+function defaultPeriodEnd(): string {
+  return toDateInputValue(new Date());
+}
+
+function defaultPeriodStart(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 29);
+  return toDateInputValue(d);
+}
+
+const MAX_CHART_DAYS = 731;
 
 export default function Page() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [chartPeriodStart, setChartPeriodStart] = useState(defaultPeriodStart);
+  const [chartPeriodEnd, setChartPeriodEnd] = useState(defaultPeriodEnd);
 
   useEffect(() => {
     const loadLeads = async () => {
@@ -29,138 +82,103 @@ export default function Page() {
     loadLeads();
   }, []);
 
-  // Agrupar leads por fecha
+  const { periodDates, periodRangeClipped } = useMemo(() => {
+    const days = eachDayInclusive(chartPeriodStart, chartPeriodEnd);
+    if (days.length === 0) {
+      const fallback = eachDayInclusive(defaultPeriodStart(), defaultPeriodEnd());
+      return { periodDates: fallback, periodRangeClipped: false };
+    }
+    if (days.length <= MAX_CHART_DAYS) {
+      return { periodDates: days, periodRangeClipped: false };
+    }
+    return {
+      periodDates: days.slice(days.length - MAX_CHART_DAYS),
+      periodRangeClipped: true,
+    };
+  }, [chartPeriodStart, chartPeriodEnd]);
+
+  // Agrupar leads por fecha (rango seleccionado en "Leads por Período")
   const leadsByDate = useMemo(() => {
     const grouped: Record<string, { total: number; tibios: number; frios: number; calientes: number }> = {};
-    
-    // Obtener los últimos 30 días
-    const today = new Date();
-    const dates: string[] = [];
-    
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      dates.push(dateStr);
+    periodDates.forEach((dateStr) => {
       grouped[dateStr] = { total: 0, tibios: 0, frios: 0, calientes: 0 };
-    }
-
-    // Contar leads por fecha
-    leads.forEach(lead => {
-      const leadDate = new Date(lead.fechaContacto || lead.created_at || new Date());
-      const dateStr = leadDate.toISOString().split('T')[0];
-      
-      if (grouped[dateStr] !== undefined) {
-        grouped[dateStr].total++;
-        if (lead.estado === 'tibio') {
-          grouped[dateStr].tibios++;
-        } else if (lead.estado === 'frío') {
-          grouped[dateStr].frios++;
-        } else if (lead.estado === 'caliente') {
-          grouped[dateStr].calientes++;
-        }
-      }
     });
 
-    // Convertir a array para el gráfico
-    return dates.map(date => ({
+    leads.forEach((lead) => {
+      const dateStr = leadCalendarDate(lead);
+      if (grouped[dateStr] === undefined) return;
+      grouped[dateStr].total++;
+      const est = (lead.estado || '').toLowerCase().trim();
+      if (est === 'tibio' || est === 'tibios') grouped[dateStr].tibios++;
+      else if (est === 'frío' || est === 'frio' || est === 'fríos' || est === 'frios') grouped[dateStr].frios++;
+      else if (est === 'caliente' || est === 'calientes') grouped[dateStr].calientes++;
+    });
+
+    return periodDates.map((date) => ({
       date,
       leads: grouped[date].total,
       tibios: grouped[date].tibios,
       frios: grouped[date].frios,
       calientes: grouped[date].calientes,
     }));
-  }, [leads]);
+  }, [leads, periodDates]);
 
-  // Agrupar leads por fecha para llamadas
   const llamadasByDate = useMemo(() => {
     const grouped: Record<string, number> = {};
-    const today = new Date();
-    const dates: string[] = [];
-    
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      dates.push(dateStr);
+    periodDates.forEach((dateStr) => {
       grouped[dateStr] = 0;
-    }
-
-    leads.forEach(lead => {
-      if (lead.estado?.toLowerCase() === 'llamada') {
-        const leadDate = new Date(lead.fechaContacto || lead.created_at || new Date());
-        const dateStr = leadDate.toISOString().split('T')[0];
-        if (grouped[dateStr] !== undefined) {
-          grouped[dateStr]++;
-        }
-      }
     });
 
-    return dates.map(date => ({
+    leads.forEach((lead) => {
+      const est = (lead.estado || '').toLowerCase().trim();
+      if (est !== 'llamada' && est !== 'llamadas') return;
+      const dateStr = leadCalendarDate(lead);
+      if (grouped[dateStr] !== undefined) grouped[dateStr]++;
+    });
+
+    return periodDates.map((date) => ({
       date,
       leads: grouped[date],
     }));
-  }, [leads]);
+  }, [leads, periodDates]);
 
-  // Agrupar leads por fecha para visitas
   const visitasByDate = useMemo(() => {
     const grouped: Record<string, number> = {};
-    const today = new Date();
-    const dates: string[] = [];
-    
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      dates.push(dateStr);
+    periodDates.forEach((dateStr) => {
       grouped[dateStr] = 0;
-    }
-
-    leads.forEach(lead => {
-      if (lead.estado?.toLowerCase() === 'visita') {
-        const leadDate = new Date(lead.fechaContacto || lead.created_at || new Date());
-        const dateStr = leadDate.toISOString().split('T')[0];
-        if (grouped[dateStr] !== undefined) {
-          grouped[dateStr]++;
-        }
-      }
     });
 
-    return dates.map(date => ({
+    leads.forEach((lead) => {
+      const est = (lead.estado || '').toLowerCase().trim();
+      if (est !== 'visita' && est !== 'visitas') return;
+      const dateStr = leadCalendarDate(lead);
+      if (grouped[dateStr] !== undefined) grouped[dateStr]++;
+    });
+
+    return periodDates.map((date) => ({
       date,
       leads: grouped[date],
     }));
-  }, [leads]);
+  }, [leads, periodDates]);
 
-  // Agrupar leads por fecha para vender
   const venderByDate = useMemo(() => {
     const grouped: Record<string, number> = {};
-    const today = new Date();
-    const dates: string[] = [];
-    
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      dates.push(dateStr);
+    periodDates.forEach((dateStr) => {
       grouped[dateStr] = 0;
-    }
-
-    leads.forEach(lead => {
-      if (lead.estado?.toLowerCase() === 'vender') {
-        const leadDate = new Date(lead.fechaContacto || lead.created_at || new Date());
-        const dateStr = leadDate.toISOString().split('T')[0];
-        if (grouped[dateStr] !== undefined) {
-          grouped[dateStr]++;
-        }
-      }
     });
 
-    return dates.map(date => ({
+    leads.forEach((lead) => {
+      const est = (lead.estado || '').toLowerCase().trim();
+      if (est !== 'vender') return;
+      const dateStr = leadCalendarDate(lead);
+      if (grouped[dateStr] !== undefined) grouped[dateStr]++;
+    });
+
+    return periodDates.map((date) => ({
       date,
       leads: grouped[date],
     }));
-  }, [leads]);
+  }, [leads, periodDates]);
 
   // Obtener todas las campañas únicas de propiedad_interes
   const uniqueCampaigns = useMemo(() => {
@@ -173,48 +191,29 @@ export default function Page() {
     return Array.from(campaigns).sort();
   }, [leads]);
 
-  // Agrupar leads por campaña y fecha
   const leadsByCampaign = useMemo(() => {
-    const today = new Date();
-    const dates: string[] = [];
-    
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      dates.push(dateStr);
-    }
-
-    // Crear estructura para cada campaña
+    const dates = periodDates;
     const campaignData: Record<string, Record<string, number>> = {};
-    
-    // Inicializar todas las campañas con 0 para todas las fechas
-    uniqueCampaigns.forEach(campaign => {
+
+    uniqueCampaigns.forEach((campaign) => {
       campaignData[campaign] = {};
-      dates.forEach(date => {
+      dates.forEach((date) => {
         campaignData[campaign][date] = 0;
       });
     });
 
-    // Contar leads por campaña y fecha
-    leads.forEach(lead => {
-      if (lead.propiedad_interes && lead.propiedad_interes.trim() !== '') {
-        const campaign = lead.propiedad_interes.trim();
-        const leadDate = new Date(lead.fechaContacto || lead.created_at || new Date());
-        const dateStr = leadDate.toISOString().split('T')[0];
-        
-        if (campaignData[campaign] && campaignData[campaign][dateStr] !== undefined) {
-          campaignData[campaign][dateStr]++;
-        }
+    leads.forEach((lead) => {
+      if (!lead.propiedad_interes || lead.propiedad_interes.trim() === '') return;
+      const campaign = lead.propiedad_interes.trim();
+      const dateStr = leadCalendarDate(lead);
+      if (campaignData[campaign] && campaignData[campaign][dateStr] !== undefined) {
+        campaignData[campaign][dateStr]++;
       }
     });
 
-    // Convertir a formato para el gráfico
-    // Crear un objeto con todas las campañas como series
-    const result = dates.map(date => {
-      const dataPoint: any = { date };
-      uniqueCampaigns.forEach(campaign => {
-        // Usar un nombre de clave seguro para la campaña (reemplazar caracteres especiales)
+    const result = dates.map((date) => {
+      const dataPoint: Record<string, string | number> = { date };
+      uniqueCampaigns.forEach((campaign) => {
         const safeKey = campaign.replace(/[^a-zA-Z0-9]/g, '_');
         dataPoint[safeKey] = campaignData[campaign][date] || 0;
       });
@@ -222,7 +221,7 @@ export default function Page() {
     });
 
     return { data: result, campaigns: uniqueCampaigns };
-  }, [leads, uniqueCampaigns]);
+  }, [leads, uniqueCampaigns, periodDates]);
 
   // Configuración del gráfico de campañas (generar colores dinámicamente)
   const campaignsChartConfig = useMemo(() => {
@@ -252,43 +251,25 @@ export default function Page() {
     return config;
   }, [uniqueCampaigns]);
 
-  // Datos individuales por campaña para gráficos separados
   const individualCampaignsData = useMemo(() => {
-    const today = new Date();
-    const dates: string[] = [];
-    
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      dates.push(dateStr);
-    }
-
+    const dates = periodDates;
     const campaignsData: Record<string, Array<{ date: string; leads: number }>> = {};
-    
-    // Inicializar todas las campañas
-    uniqueCampaigns.forEach(campaign => {
-      campaignsData[campaign] = dates.map(date => ({ date, leads: 0 }));
+
+    uniqueCampaigns.forEach((campaign) => {
+      campaignsData[campaign] = dates.map((date) => ({ date, leads: 0 }));
     });
 
-    // Contar leads por campaña y fecha
-    leads.forEach(lead => {
-      if (lead.propiedad_interes && lead.propiedad_interes.trim() !== '') {
-        const campaign = lead.propiedad_interes.trim();
-        const leadDate = new Date(lead.fechaContacto || lead.created_at || new Date());
-        const dateStr = leadDate.toISOString().split('T')[0];
-        
-        if (campaignsData[campaign]) {
-          const dateIndex = campaignsData[campaign].findIndex(d => d.date === dateStr);
-          if (dateIndex !== -1) {
-            campaignsData[campaign][dateIndex].leads++;
-          }
-        }
-      }
+    leads.forEach((lead) => {
+      if (!lead.propiedad_interes || lead.propiedad_interes.trim() === '') return;
+      const campaign = lead.propiedad_interes.trim();
+      const dateStr = leadCalendarDate(lead);
+      if (!campaignsData[campaign]) return;
+      const dateIndex = campaignsData[campaign].findIndex((d) => d.date === dateStr);
+      if (dateIndex !== -1) campaignsData[campaign][dateIndex].leads++;
     });
 
     return campaignsData;
-  }, [leads, uniqueCampaigns]);
+  }, [leads, uniqueCampaigns, periodDates]);
 
   // Configuración del gráfico
   const chartConfig: ChartConfig = {
@@ -331,6 +312,16 @@ export default function Page() {
       color: "#F59E0B", // Amarillo/Naranja
     },
   };
+
+  const applyPresetDays = (days: number) => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - (days - 1));
+    setChartPeriodStart(toDateInputValue(start));
+    setChartPeriodEnd(toDateInputValue(end));
+  };
+
+  const periodDayCount = periodDates.length;
 
   // Calcular totales
   const totalLeads = leads.length;
@@ -535,11 +526,76 @@ export default function Page() {
 
         {/* Gráfico de leads por período */}
         <Card>
-          <CardHeader>
-            <CardTitle>Leads por Período</CardTitle>
-            <CardDescription>
-              Cantidad de leads ingresados en los últimos 30 días (total, tibios, fríos y calientes)
-            </CardDescription>
+          <CardHeader className="space-y-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle>Leads por Período</CardTitle>
+                <CardDescription>
+                  Total, tibios, fríos y calientes según fecha de ingreso (
+                  <span className="font-medium text-foreground">{chartPeriodStart}</span>
+                  {' → '}
+                  <span className="font-medium text-foreground">{chartPeriodEnd}</span>
+                  {periodDayCount > 0 ? ` · ${periodDayCount} días` : ''})
+                </CardDescription>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50/80 p-3 sm:p-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="dash-period-start" className="text-xs text-muted-foreground">
+                    Desde
+                  </Label>
+                  <input
+                    id="dash-period-start"
+                    type="date"
+                    value={chartPeriodStart}
+                    onChange={(e) => setChartPeriodStart(e.target.value)}
+                    className="h-9 rounded-md border border-input bg-background px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="dash-period-end" className="text-xs text-muted-foreground">
+                    Hasta
+                  </Label>
+                  <input
+                    id="dash-period-end"
+                    type="date"
+                    value={chartPeriodEnd}
+                    onChange={(e) => setChartPeriodEnd(e.target.value)}
+                    className="h-9 rounded-md border border-input bg-background px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="mr-1 self-center text-xs text-muted-foreground">Atajos:</span>
+                <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => applyPresetDays(7)}>
+                  7 días
+                </Button>
+                <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => applyPresetDays(30)}>
+                  30 días
+                </Button>
+                <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => applyPresetDays(90)}>
+                  90 días
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => {
+                    setChartPeriodStart(defaultPeriodStart());
+                    setChartPeriodEnd(defaultPeriodEnd());
+                  }}
+                >
+                  Por defecto (30 días)
+                </Button>
+              </div>
+              {periodRangeClipped && (
+                <p className="text-xs text-amber-700">
+                  El rango supera {MAX_CHART_DAYS} días; el gráfico muestra solo los últimos {MAX_CHART_DAYS} días hasta la fecha &quot;Hasta&quot;.
+                </p>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <ChartAreaInteractive
@@ -557,7 +613,7 @@ export default function Page() {
             <CardHeader>
               <CardTitle>Llamadas</CardTitle>
               <CardDescription>
-                Leads con categoría "llamada" en los últimos 30 días
+                Misma ventana de fechas que &quot;Leads por Período&quot; ({chartPeriodStart} → {chartPeriodEnd})
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -574,7 +630,7 @@ export default function Page() {
             <CardHeader>
               <CardTitle>Visitas</CardTitle>
               <CardDescription>
-                Leads con categoría "visita" en los últimos 30 días
+                Misma ventana de fechas que &quot;Leads por Período&quot;
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -591,7 +647,7 @@ export default function Page() {
             <CardHeader>
               <CardTitle>Vender</CardTitle>
               <CardDescription>
-                Leads con categoría "vender" en los últimos 30 días
+                Misma ventana de fechas que &quot;Leads por Período&quot;
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -611,7 +667,7 @@ export default function Page() {
             <CardHeader>
               <CardTitle>Leads por Campaña</CardTitle>
               <CardDescription>
-                Cantidad de leads ingresados por campaña (propiedad_interes) en los últimos 30 días
+                Por campaña (propiedad_interes) en el rango seleccionado arriba
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -645,7 +701,7 @@ export default function Page() {
                     <CardHeader>
                       <CardTitle className="text-sm">{campaign}</CardTitle>
                       <CardDescription className="text-xs">
-                        Leads de esta campaña en los últimos 30 días
+                        En el rango de fechas del dashboard
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
