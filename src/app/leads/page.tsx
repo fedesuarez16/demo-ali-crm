@@ -646,7 +646,7 @@ export default function LeadsKanbanPage() {
                             onChange={(e) => setSelectedToque(Number(e.target.value))}
                             className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-black"
                           >
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                            {[100, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
                               <option key={num} value={num}>
                                 {num}
                               </option>
