@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import AppLayout from "../components/AppLayout";
 import { Lead } from "../types";
-import { getAllLeads } from "../services/leadService";
+import { getAllLeads, campaignNumericFingerprint } from "../services/leadService";
 import { ChartAreaInteractive } from "@/components/ui/chart-area-interactive";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartConfig } from "@/components/ui/chart";
@@ -12,12 +12,31 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 
+interface Pauta {
+  id: number;
+  texto: string;
+  activo?: boolean;
+  created_at?: string;
+}
+
+function isPautaActiva(p: Pauta): boolean {
+  return p.activo !== false;
+}
+
 /** YYYY-MM-DD en calendario local (evita desfase UTC de toISOString) */
 function toDateInputValue(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+function normalizeCampaignText(name: string): string {
+  if (!name) return '';
+  let normalized = name.toLowerCase().trim();
+  normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  normalized = normalized.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  return normalized;
 }
 
 function parseDateInput(s: string): Date {
@@ -66,6 +85,9 @@ export default function Page() {
   const [isLoading, setIsLoading] = useState(true);
   const [chartPeriodStart, setChartPeriodStart] = useState(defaultPeriodStart);
   const [chartPeriodEnd, setChartPeriodEnd] = useState(defaultPeriodEnd);
+  /** '' = todas las campañas en el gráfico combinado; si no, fríos/tibios/calientes de esa campaña */
+  const [campaignChartFilter, setCampaignChartFilter] = useState<string>('');
+  const [pautas, setPautas] = useState<Pauta[]>([]);
 
   useEffect(() => {
     const loadLeads = async () => {
@@ -80,6 +102,25 @@ export default function Page() {
       }
     };
     loadLeads();
+  }, []);
+
+  useEffect(() => {
+    const loadPautas = async () => {
+      try {
+        const response = await fetch('/api/pautas');
+        if (!response.ok) {
+          console.error('Error loading pautas');
+          setPautas([]);
+          return;
+        }
+        const data = await response.json();
+        setPautas(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Error loading pautas:', error);
+        setPautas([]);
+      }
+    };
+    loadPautas();
   }, []);
 
   const { periodDates, periodRangeClipped } = useMemo(() => {
@@ -180,16 +221,52 @@ export default function Page() {
     }));
   }, [leads, periodDates]);
 
-  // Obtener todas las campañas únicas de propiedad_interes
+  // Campañas oficiales: salen de la tabla pautas (idealmente activas)
   const uniqueCampaigns = useMemo(() => {
-    const campaigns = new Set<string>();
-    leads.forEach(lead => {
-      if (lead.propiedad_interes && lead.propiedad_interes.trim() !== '') {
-        campaigns.add(lead.propiedad_interes.trim());
+    const texts = pautas
+      .filter(isPautaActiva)
+      .map((p) => String(p.texto || '').trim())
+      .filter(Boolean);
+    return [...new Set(texts)].sort((a, b) => a.localeCompare(b, 'es'));
+  }, [pautas]);
+
+  // Mapeo lead.propiedad_interes → campaña oficial (pauta.texto)
+  const leadRawToPautaCampaign = useMemo(() => {
+    const pautaByNormalized = new Map<string, string>();
+    const pautaByFingerprint = new Map<string, string>();
+
+    for (const campaign of uniqueCampaigns) {
+      const norm = normalizeCampaignText(campaign);
+      if (norm) pautaByNormalized.set(norm, campaign);
+      const fp = campaignNumericFingerprint(campaign);
+      if (fp) pautaByFingerprint.set(fp, campaign);
+    }
+
+    const map = new Map<string, string>();
+    for (const lead of leads) {
+      const raw = String((lead as any).propiedad_interes || '').trim();
+      if (!raw) continue;
+
+      // 1) match exacto (case-insensitive / normalizado)
+      const normLead = normalizeCampaignText(raw);
+      const byNorm = pautaByNormalized.get(normLead);
+      if (byNorm) {
+        map.set(raw, byNorm);
+        continue;
       }
-    });
-    return Array.from(campaigns).sort();
-  }, [leads]);
+
+      // 2) match por huella numérica (une variantes como "466 e/ 24 y 25" con "466 ENTRE 24 Y 25")
+      const fpLead = campaignNumericFingerprint(raw);
+      if (fpLead) {
+        const byFp = pautaByFingerprint.get(fpLead);
+        if (byFp) {
+          map.set(raw, byFp);
+          continue;
+        }
+      }
+    }
+    return map;
+  }, [leads, uniqueCampaigns]);
 
   const leadsByCampaign = useMemo(() => {
     const dates = periodDates;
@@ -203,8 +280,10 @@ export default function Page() {
     });
 
     leads.forEach((lead) => {
-      if (!lead.propiedad_interes || lead.propiedad_interes.trim() === '') return;
-      const campaign = lead.propiedad_interes.trim();
+      const raw = (lead.propiedad_interes || '').trim();
+      if (!raw) return;
+      const campaign = leadRawToPautaCampaign.get(raw);
+      if (!campaign) return; // si no está en pautas, no se grafica
       const dateStr = leadCalendarDate(lead);
       if (campaignData[campaign] && campaignData[campaign][dateStr] !== undefined) {
         campaignData[campaign][dateStr]++;
@@ -221,7 +300,51 @@ export default function Page() {
     });
 
     return { data: result, campaigns: uniqueCampaigns };
-  }, [leads, uniqueCampaigns, periodDates]);
+  }, [leads, uniqueCampaigns, periodDates, leadRawToPautaCampaign]);
+
+  const effectiveCampaignChartFilter = useMemo(() => {
+    if (!campaignChartFilter) return '';
+    return uniqueCampaigns.includes(campaignChartFilter) ? campaignChartFilter : '';
+  }, [campaignChartFilter, uniqueCampaigns]);
+
+  useEffect(() => {
+    if (campaignChartFilter && !uniqueCampaigns.includes(campaignChartFilter)) {
+      setCampaignChartFilter('');
+    }
+  }, [campaignChartFilter, uniqueCampaigns]);
+
+  /** Gráfico principal por campaña: todas las series de campaña, o frío/tibio/caliente de una sola */
+  const campaignMainChartData = useMemo(() => {
+    if (!effectiveCampaignChartFilter) {
+      return leadsByCampaign.data;
+    }
+    const grouped: Record<string, { total: number; tibios: number; frios: number; calientes: number }> = {};
+    periodDates.forEach((dateStr) => {
+      grouped[dateStr] = { total: 0, tibios: 0, frios: 0, calientes: 0 };
+    });
+
+    leads.forEach((lead) => {
+      const raw = (lead.propiedad_interes || '').trim();
+      const camp = leadRawToPautaCampaign.get(raw);
+      if (!camp) return;
+      if (camp !== effectiveCampaignChartFilter) return;
+      const dateStr = leadCalendarDate(lead);
+      if (grouped[dateStr] === undefined) return;
+      grouped[dateStr].total++;
+      const est = (lead.estado || '').toLowerCase().trim();
+      if (est === 'tibio' || est === 'tibios') grouped[dateStr].tibios++;
+      else if (est === 'frío' || est === 'frio' || est === 'fríos' || est === 'frios') grouped[dateStr].frios++;
+      else if (est === 'caliente' || est === 'calientes') grouped[dateStr].calientes++;
+    });
+
+    return periodDates.map((date) => ({
+      date,
+      leads: grouped[date].total,
+      tibios: grouped[date].tibios,
+      frios: grouped[date].frios,
+      calientes: grouped[date].calientes,
+    }));
+  }, [effectiveCampaignChartFilter, leadsByCampaign.data, leads, periodDates, leadRawToPautaCampaign]);
 
   // Configuración del gráfico de campañas (generar colores dinámicamente)
   const campaignsChartConfig = useMemo(() => {
@@ -260,8 +383,10 @@ export default function Page() {
     });
 
     leads.forEach((lead) => {
-      if (!lead.propiedad_interes || lead.propiedad_interes.trim() === '') return;
-      const campaign = lead.propiedad_interes.trim();
+      const raw = (lead.propiedad_interes || '').trim();
+      if (!raw) return;
+      const campaign = leadRawToPautaCampaign.get(raw);
+      if (!campaign) return;
       const dateStr = leadCalendarDate(lead);
       if (!campaignsData[campaign]) return;
       const dateIndex = campaignsData[campaign].findIndex((d) => d.date === dateStr);
@@ -269,7 +394,7 @@ export default function Page() {
     });
 
     return campaignsData;
-  }, [leads, uniqueCampaigns, periodDates]);
+  }, [leads, uniqueCampaigns, periodDates, leadRawToPautaCampaign]);
 
   // Configuración del gráfico
   const chartConfig: ChartConfig = {
@@ -290,6 +415,8 @@ export default function Page() {
       color: "#FF4500", // Rojo/Naranja oscuro
     },
   };
+
+  const campaignMainChartConfig: ChartConfig = effectiveCampaignChartFilter ? chartConfig : campaignsChartConfig;
 
   // Configuración para gráficos de categorías
   const llamadasChartConfig: ChartConfig = {
@@ -664,16 +791,52 @@ export default function Page() {
         {/* Gráfico de leads por campaña */}
         {uniqueCampaigns.length > 0 && (
           <Card>
-            <CardHeader>
-              <CardTitle>Leads por Campaña</CardTitle>
-              <CardDescription>
-                Por campaña (propiedad_interes) en el rango seleccionado arriba
-              </CardDescription>
+            <CardHeader className="space-y-4">
+              <div>
+                <CardTitle>Leads por Campaña</CardTitle>
+                <CardDescription>
+                  {effectiveCampaignChartFilter ? (
+                    <>
+                      Fríos, tibios y calientes para la campaña{' '}
+                      <span className="font-medium text-foreground">{effectiveCampaignChartFilter}</span>
+                      {' '}(fecha de ingreso en el rango del dashboard)
+                    </>
+                  ) : (
+                    <>
+                      Comparativa por campaña en el rango seleccionado. Las campañas se toman de{' '}
+                      <span className="font-medium text-foreground">pautas</span> y solo se grafican leads que matchean alguna pauta (por nombre o por números).
+                    </>
+                  )}
+                </CardDescription>
+              </div>
+              <div className="flex flex-col gap-2 sm:max-w-md">
+                <Label htmlFor="campaign-chart-filter" className="text-xs text-muted-foreground">
+                  Filtrar gráfico por campaña
+                </Label>
+                <select
+                  id="campaign-chart-filter"
+                  value={campaignChartFilter}
+                  onChange={(e) => setCampaignChartFilter(e.target.value)}
+                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">Todas las campañas (comparar campañas)</option>
+                  {uniqueCampaigns.map((c, idx) => (
+                    <option key={`camp-filter-${idx}-${c}`} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                {effectiveCampaignChartFilter && (
+                  <p className="text-xs text-muted-foreground">
+                    Séries: total del día y desglose frío / tibio / caliente (otros estados no se apilan en estas curvas).
+                  </p>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <ChartAreaInteractive
-                data={leadsByCampaign.data}
-                config={campaignsChartConfig}
+                data={campaignMainChartData}
+                config={campaignMainChartConfig}
                 dateKey="date"
                 valueKey="leads"
               />

@@ -200,6 +200,79 @@ const groupSimilarCampaigns = (campaigns: string[]): { groups: Map<string, strin
   return { groups, map };
 };
 
+/**
+ * Huella estable por números en el texto: une "466 ENTRE 24 Y 25" con "466 e/ 24 y 25".
+ * Sin dígitos devuelve null (se usa texto normalizado como bucket).
+ */
+export const campaignNumericFingerprint = (raw: string): string | null => {
+  const matches = String(raw).match(/\d+/g);
+  if (!matches || matches.length === 0) return null;
+  const nums = matches.map((n) => parseInt(n, 10)).sort((a, b) => a - b);
+  return nums.join('|');
+};
+
+export type CampaignGrouping = {
+  /** Una etiqueta por grupo (la variante más frecuente en los leads) */
+  representatives: string[];
+  /** Cada texto exacto de BD → representante elegido */
+  rawToRep: Map<string, string>;
+  /** Representante → todas las variantes vistas */
+  groupsByRep: Map<string, string[]>;
+};
+
+/**
+ * Agrupa campañas (propiedad_interes) con el mismo conjunto de números y elige etiqueta canónica.
+ */
+export const buildCampaignRepresentatives = (leads: Lead[]): CampaignGrouping => {
+  const rawCounts = new Map<string, number>();
+  for (const lead of leads) {
+    const raw = String((lead as any).propiedad_interes || '').trim();
+    if (!raw) continue;
+    rawCounts.set(raw, (rawCounts.get(raw) || 0) + 1);
+  }
+
+  const uniques = [...rawCounts.keys()];
+  if (uniques.length === 0) {
+    return {
+      representatives: [],
+      rawToRep: new Map(),
+      groupsByRep: new Map(),
+    };
+  }
+
+  const buckets = new Map<string, string[]>();
+  for (const raw of uniques) {
+    const fp =
+      campaignNumericFingerprint(raw) ??
+      `__t__${normalizeCampaignName(raw) || raw.toLowerCase().replace(/\s+/g, ' ').trim()}`;
+    if (!buckets.has(fp)) buckets.set(fp, []);
+    buckets.get(fp)!.push(raw);
+  }
+
+  const rawToRep = new Map<string, string>();
+  const groupsByRep = new Map<string, string[]>();
+
+  for (const variants of buckets.values()) {
+    let best = variants[0];
+    let bestCount = rawCounts.get(best) || 0;
+    for (const raw of variants) {
+      const c = rawCounts.get(raw) || 0;
+      if (c > bestCount || (c === bestCount && raw.localeCompare(best, 'es') < 0)) {
+        bestCount = c;
+        best = raw;
+      }
+    }
+    const sortedVariants = [...variants].sort((a, b) => a.localeCompare(b, 'es'));
+    groupsByRep.set(best, sortedVariants);
+    for (const raw of variants) {
+      rawToRep.set(raw, best);
+    }
+  }
+
+  const representatives = [...groupsByRep.keys()].sort((a, b) => a.localeCompare(b, 'es'));
+  return { representatives, rawToRep, groupsByRep };
+};
+
 // Función para normalizar estados de la base de datos
 const normalizeEstadoFromDB = (estado: string | null | undefined): string => {
   if (!estado) return '';
@@ -435,6 +508,9 @@ export const getAllLeads = async (): Promise<Lead[]> => {
     // esto asegura que estén ordenados por fechaContacto también)
     normalized.sort((a, b) => new Date(b.fechaContacto).getTime() - new Date(a.fechaContacto).getTime());
     cachedLeads = normalized;
+    const grouping = buildCampaignRepresentatives(normalized);
+    campaignGroupMap = grouping.rawToRep;
+    campaignGroups = grouping.groupsByRep;
     return cachedLeads;
   } catch (e) {
     console.error('Supabase not configured or failed to initialize:', e);
@@ -492,25 +568,33 @@ export const filterLeads = (options: FilterOptions): Lead[] => {
         return false;
       }
       
-      const leadValue = leadPropiedadInteres.trim().toLowerCase();
-      const filterValue = options.propiedadInteres.trim().toLowerCase();
-      
-      // 1. Comparación exacta (case-insensitive)
-      if (leadValue === filterValue) {
-        // Match exacto, continuar con los demás filtros
-      }
-      // 2. Si uno contiene al otro
-      else if (leadValue.includes(filterValue) || filterValue.includes(leadValue)) {
-        // Match parcial, continuar con los demás filtros
-      }
-      // 3. Fuzzy matching: comparar similitud de strings normalizada
-      else {
-        const similarity = stringSimilarity(leadPropiedadInteres, options.propiedadInteres);
-        if (similarity < 0.6) {
-          // Si la similitud es menor al 60%, no es match
-          return false;
+      const rawLead = leadPropiedadInteres.trim();
+      const rawFilter = options.propiedadInteres.trim();
+      const leadValue = rawLead.toLowerCase();
+      const filterValue = rawFilter.toLowerCase();
+
+      let campaignMatch = false;
+      if (campaignGroupMap.size > 0) {
+        const repLead = campaignGroupMap.get(rawLead) || rawLead;
+        const repFilter = campaignGroupMap.get(rawFilter) || rawFilter;
+        if (repLead === repFilter) {
+          campaignMatch = true;
         }
-        // Si similitud >= 60%, lo consideramos match suficiente
+      }
+      if (!campaignMatch) {
+        if (leadValue === filterValue) {
+          campaignMatch = true;
+        } else if (leadValue.includes(filterValue) || filterValue.includes(leadValue)) {
+          campaignMatch = true;
+        } else {
+          const similarity = stringSimilarity(leadPropiedadInteres, options.propiedadInteres);
+          if (similarity >= 0.6) {
+            campaignMatch = true;
+          }
+        }
+      }
+      if (!campaignMatch) {
+        return false;
       }
     }
     
@@ -586,34 +670,17 @@ export const getUniqueInterestReasons = (): string[] => {
  * Agrupa campañas similares para evitar duplicados por errores ortográficos
  */
 export const getUniquePropertyInterests = (): string[] => {
-  const allProperties: string[] = [];
-  cachedLeads.forEach(lead => {
-    const propiedadInteres = (lead as any).propiedad_interes;
-    if (propiedadInteres && propiedadInteres.trim() !== '') {
-      allProperties.push(propiedadInteres.trim());
-    }
-  });
-  
-  // Si no hay propiedades, retornar vacío
-  if (allProperties.length === 0) return [];
-  
-  // Primero, eliminar duplicados exactos antes de agrupar
-  const uniqueProperties = [...new Set(allProperties)];
-  
-  // Agrupar campañas similares
-  const { groups, map } = groupSimilarCampaigns(uniqueProperties);
-  
-  // Guardar el mapa para usar en el filtrado
-  campaignGroupMap = map;
-  campaignGroups = groups;
-  
-  // Retornar solo los nombres representativos de cada grupo (sin duplicados, ordenados)
-  const representatives = Array.from(groups.keys());
-  
-  // Asegurarse de que no haya duplicados en los representantes (por si acaso)
-  const uniqueRepresentatives = [...new Set(representatives)];
-  
-  return uniqueRepresentatives.sort();
+  if (cachedLeads.length === 0) {
+    campaignGroupMap = new Map();
+    campaignGroups = new Map();
+    return [];
+  }
+
+  const { representatives, rawToRep, groupsByRep } = buildCampaignRepresentatives(cachedLeads);
+  campaignGroupMap = rawToRep;
+  campaignGroups = groupsByRep;
+
+  return representatives;
 };
 
 /**
