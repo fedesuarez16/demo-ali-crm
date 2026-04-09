@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback, useDeferredValue } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, useDeferredValue, useRef } from 'react';
 import AppLayout from '../components/AppLayout';
 import LeadCards from '../components/LeadCards';
 import LeadFilter from '../components/LeadFilter';
@@ -62,6 +62,70 @@ export default function LeadsKanbanPage() {
   // Siempre excluir "frío" de las columnas visibles
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['tibio', 'caliente', 'llamada', 'visita']);
   const [columnColors, setColumnColors] = useState<Record<string, string>>({});
+
+  // Scroll horizontal Kanban: barra superior sincronizada con el board
+  const kanbanScrollRef = useRef<HTMLDivElement | null>(null);
+  const topKanbanScrollRef = useRef<HTMLDivElement | null>(null);
+  const kanbanContentMeasureRef = useRef<HTMLDivElement | null>(null);
+  const isSyncingKanbanScrollRef = useRef<'top' | 'kanban' | null>(null);
+  const [kanbanScrollWidth, setKanbanScrollWidth] = useState(0);
+  const [kanbanClientWidth, setKanbanClientWidth] = useState(0);
+
+  const shouldShowTopKanbanScrollbar = useMemo(() => {
+    if (!kanbanScrollWidth || !kanbanClientWidth) return false;
+    return kanbanScrollWidth > kanbanClientWidth + 2;
+  }, [kanbanScrollWidth, kanbanClientWidth]);
+
+  useLayoutEffect(() => {
+    const scrollEl = kanbanScrollRef.current;
+    const topEl = topKanbanScrollRef.current;
+    const measureEl = kanbanContentMeasureRef.current;
+    if (!scrollEl || !topEl || !measureEl) return;
+
+    const updateSizes = () => {
+      setKanbanClientWidth(scrollEl.clientWidth || 0);
+      setKanbanScrollWidth(measureEl.scrollWidth || 0);
+    };
+
+    updateSizes();
+
+    const ro = new ResizeObserver(() => updateSizes());
+    ro.observe(scrollEl);
+    ro.observe(measureEl);
+
+    return () => ro.disconnect();
+  }, [visibleColumns, filteredLeads.length, customColumns.length]);
+
+  useEffect(() => {
+    const scrollEl = kanbanScrollRef.current;
+    const topEl = topKanbanScrollRef.current;
+    if (!scrollEl || !topEl) return;
+
+    const onKanbanScroll = () => {
+      if (isSyncingKanbanScrollRef.current === 'top') return;
+      isSyncingKanbanScrollRef.current = 'kanban';
+      topEl.scrollLeft = scrollEl.scrollLeft;
+      queueMicrotask(() => {
+        if (isSyncingKanbanScrollRef.current === 'kanban') isSyncingKanbanScrollRef.current = null;
+      });
+    };
+
+    const onTopScroll = () => {
+      if (isSyncingKanbanScrollRef.current === 'kanban') return;
+      isSyncingKanbanScrollRef.current = 'top';
+      scrollEl.scrollLeft = topEl.scrollLeft;
+      queueMicrotask(() => {
+        if (isSyncingKanbanScrollRef.current === 'top') isSyncingKanbanScrollRef.current = null;
+      });
+    };
+
+    scrollEl.addEventListener('scroll', onKanbanScroll, { passive: true });
+    topEl.addEventListener('scroll', onTopScroll, { passive: true });
+    return () => {
+      scrollEl.removeEventListener('scroll', onKanbanScroll as EventListener);
+      topEl.removeEventListener('scroll', onTopScroll as EventListener);
+    };
+  }, [filteredLeads.length, visibleColumns.join('|')]);
 
   // Función para normalizar nombres de columnas
   const normalizeColumnName = (col: string): string => {
@@ -929,9 +993,23 @@ export default function LeadsKanbanPage() {
         </div>
         
         {/* Panel principal */}
-        <div className="bg-white px-2 mb-8 overflow-hidden ">
+        <div className="bg-white px-2 mb-8 overflow-hidden">
+          {shouldShowTopKanbanScrollbar && (
+            <div className="border-b border-gray-200 bg-white">
+              <div
+                ref={topKanbanScrollRef}
+                className="overflow-x-auto overflow-y-hidden"
+                style={{ height: 14 }}
+                aria-label="Scroll horizontal del tablero"
+              >
+                <div style={{ width: kanbanScrollWidth || 0, height: 1 }} />
+              </div>
+            </div>
+          )}
           <div className="">
             <LeadCards 
+              scrollContainerRef={kanbanScrollRef}
+              contentMeasureRef={kanbanContentMeasureRef}
               leads={filteredLeads} 
               onLeadStatusChange={handleLeadStatusChange}
               onEditLead={handleOpenEditLead}

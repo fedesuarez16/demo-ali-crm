@@ -13,9 +13,13 @@ interface LeadCardsProps {
   selectedLeadIds?: Set<string>;
   isSelectionMode?: boolean;
   onSelectionModeChange?: (enabled: boolean) => void;
+  /** Contenedor con scroll horizontal (sincronizar barra superior en /leads) */
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
+  /** Nodo interno con ancho real del contenido (min-w-max) */
+  contentMeasureRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEditLead, visibleColumns, columnColors = {}, onSelectionChange, selectedLeadIds: externalSelectedIds, isSelectionMode: externalIsSelectionMode, onSelectionModeChange }) => {
+const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEditLead, visibleColumns, columnColors = {}, onSelectionChange, selectedLeadIds: externalSelectedIds, isSelectionMode: externalIsSelectionMode, onSelectionModeChange, scrollContainerRef, contentMeasureRef }) => {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [matchingProperties, setMatchingProperties] = useState<Map<string, Property[]>>(new Map());
@@ -588,8 +592,8 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
         </div>
       )}
       
-      <div className="w-full  overflow-x-auto pb-1">
-        <div className="flex gap-2 min-w-max pr-2">
+      <div ref={scrollContainerRef} className="w-full  overflow-x-auto pb-1">
+        <div ref={contentMeasureRef} className="flex gap-2 min-w-max pr-2">
           {allColumnsToShow.map((status, statusIdx) => (
             <div 
               key={`kanban-col-${statusIdx}-${status}`} 
