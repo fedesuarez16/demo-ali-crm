@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import AppLayout from '../../components/AppLayout';
 import LeadTable from '../../components/LeadTable';
 import LeadFilter from '../../components/LeadFilter';
@@ -57,12 +57,76 @@ export default function LeadsTablePage() {
   // Estado para selección múltiple
   const [selectedLeads, setSelectedLeads] = useState<Lead[]>([]);
   const [isAddingToSeguimientos, setIsAddingToSeguimientos] = useState(false);
+
+  // Scroll horizontal: barra superior sincronizada con la tabla
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const topScrollRef = useRef<HTMLDivElement | null>(null);
+  const tableContentMeasureRef = useRef<HTMLDivElement | null>(null);
+  const isSyncingScrollRef = useRef<'top' | 'table' | null>(null);
+  const [tableScrollWidth, setTableScrollWidth] = useState<number>(0);
+  const [tableClientWidth, setTableClientWidth] = useState<number>(0);
   
   // Normalizar todas las columnas para evitar "Fríos"
   const allColumns = ['frío', 'tibio', 'caliente', 'llamada', 'visita', ...customColumns]
     .map(normalizeColumnName)
     .filter((col, index, self) => self.indexOf(col) === index)
     .filter(col => col !== 'fríos' && col !== 'frios');
+
+  const shouldShowTopScrollbar = useMemo(() => {
+    if (!tableScrollWidth || !tableClientWidth) return false;
+    return tableScrollWidth > tableClientWidth + 2;
+  }, [tableScrollWidth, tableClientWidth]);
+
+  useLayoutEffect(() => {
+    const tableEl = tableScrollRef.current;
+    const topEl = topScrollRef.current;
+    const measureEl = tableContentMeasureRef.current;
+    if (!tableEl || !topEl || !measureEl) return;
+
+    const updateSizes = () => {
+      setTableClientWidth(tableEl.clientWidth || 0);
+      setTableScrollWidth(measureEl.scrollWidth || 0);
+    };
+
+    updateSizes();
+
+    const ro = new ResizeObserver(() => updateSizes());
+    ro.observe(tableEl);
+    ro.observe(measureEl);
+
+    return () => ro.disconnect();
+  }, [visibleColumns, filteredLeads.length]);
+
+  useEffect(() => {
+    const tableEl = tableScrollRef.current;
+    const topEl = topScrollRef.current;
+    if (!tableEl || !topEl) return;
+
+    const onTableScroll = () => {
+      if (isSyncingScrollRef.current === 'top') return;
+      isSyncingScrollRef.current = 'table';
+      topEl.scrollLeft = tableEl.scrollLeft;
+      queueMicrotask(() => {
+        if (isSyncingScrollRef.current === 'table') isSyncingScrollRef.current = null;
+      });
+    };
+
+    const onTopScroll = () => {
+      if (isSyncingScrollRef.current === 'table') return;
+      isSyncingScrollRef.current = 'top';
+      tableEl.scrollLeft = topEl.scrollLeft;
+      queueMicrotask(() => {
+        if (isSyncingScrollRef.current === 'top') isSyncingScrollRef.current = null;
+      });
+    };
+
+    tableEl.addEventListener('scroll', onTableScroll, { passive: true });
+    topEl.addEventListener('scroll', onTopScroll, { passive: true });
+    return () => {
+      tableEl.removeEventListener('scroll', onTableScroll as any);
+      topEl.removeEventListener('scroll', onTopScroll as any);
+    };
+  }, []);
   
   // Normalizar visibleColumns al cargar para eliminar "Fríos" si existe
   useEffect(() => {
@@ -222,6 +286,30 @@ export default function LeadsTablePage() {
 
   const toggleColumnSelector = () => {
     setIsColumnSelectorVisible(!isColumnSelectorVisible);
+  };
+
+  const moveVisibleColumn = (column: string, direction: 'left' | 'right') => {
+    const normalizedColumn = normalizeColumnName(column);
+    setVisibleColumns(prev => {
+      const next = prev.map(normalizeColumnName);
+      const fromIndex = next.indexOf(normalizedColumn);
+      if (fromIndex === -1) return prev;
+
+      const toIndex = direction === 'left' ? fromIndex - 1 : fromIndex + 1;
+      if (toIndex < 0 || toIndex >= next.length) return prev;
+
+      const copy = [...next];
+      const [moved] = copy.splice(fromIndex, 1);
+      copy.splice(toIndex, 0, moved);
+
+      // Deduplicar por seguridad, preservando orden
+      const seen = new Set<string>();
+      return copy.filter(c => {
+        if (seen.has(c)) return false;
+        seen.add(c);
+        return true;
+      });
+    });
   };
 
   const handleColumnToggle = (column: string) => {
@@ -668,6 +756,44 @@ export default function LeadsTablePage() {
                   </button>
                 </div>
               </div>
+
+              {/* Orden de columnas (izq/der) */}
+              {visibleColumns.length > 1 && (
+                <div className="mb-3">
+                  <div className="text-xs font-medium text-gray-600 mb-2">Orden de columnas</div>
+                  <div className="flex flex-wrap gap-2">
+                    {visibleColumns.map((col, idx) => (
+                      <div
+                        key={`order-col-${col}-${idx}`}
+                        className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2 py-1 shadow-sm"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => moveVisibleColumn(col, 'left')}
+                          disabled={idx === 0}
+                          className="h-6 w-6 rounded-full text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent"
+                          title="Mover a la izquierda"
+                          aria-label="Mover a la izquierda"
+                        >
+                          ←
+                        </button>
+                        <span className="text-xs font-semibold text-gray-800 capitalize">{col}</span>
+                        <button
+                          type="button"
+                          onClick={() => moveVisibleColumn(col, 'right')}
+                          disabled={idx === visibleColumns.length - 1}
+                          className="h-6 w-6 rounded-full text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent"
+                          title="Mover a la derecha"
+                          aria-label="Mover a la derecha"
+                        >
+                          →
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
                 {allColumns.map((column, colIdx) => (
                   <div key={`vis-col-${colIdx}-${column}`} className="flex items-center justify-between">
@@ -708,7 +834,23 @@ export default function LeadsTablePage() {
         
         {/* Panel principal */}
         <div className="bg-white rounded-lg shadow-md mb-6 overflow-hidden border border-gray-100">
+          {shouldShowTopScrollbar && (
+            <div className="border-b border-gray-200 bg-white">
+              <div
+                ref={topScrollRef}
+                className="overflow-x-auto overflow-y-hidden"
+                style={{ height: 14 }}
+                aria-label="Scroll horizontal de la tabla"
+              >
+                {/* Spacer: define el ancho del scrollbar superior */}
+                <div style={{ width: tableScrollWidth || 0, height: 1 }} />
+              </div>
+            </div>
+          )}
+
           <LeadTable 
+            scrollContainerRef={tableScrollRef}
+            contentMeasureRef={tableContentMeasureRef}
             leads={filteredLeads.map(lead => {
               // NORMALIZAR ESTADOS DE LEADS ANTES DE PASARLOS A LeadTable
               const estado = lead.estado as string;

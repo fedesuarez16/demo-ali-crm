@@ -447,6 +447,43 @@ export default function LeadsKanbanPage() {
     await saveKanbanColumns(customColumns, filteredColumns, columnColors);
   };
 
+  const moveVisibleColumn = useCallback(
+    async (column: string, direction: 'left' | 'right') => {
+      const normalizedColumn = normalizeColumnName(column);
+
+      // Nunca permitir mover/insertar "frío"
+      if (normalizedColumn === 'frío' || normalizedColumn === 'fríos' || normalizedColumn === 'frios') {
+        return;
+      }
+
+      const current = visibleColumns
+        .map(normalizeColumnName)
+        .filter(c => c !== 'frío' && c !== 'fríos' && c !== 'frios');
+
+      const fromIndex = current.indexOf(normalizedColumn);
+      if (fromIndex === -1) return;
+
+      const toIndex = direction === 'left' ? fromIndex - 1 : fromIndex + 1;
+      if (toIndex < 0 || toIndex >= current.length) return;
+
+      const copy = [...current];
+      const [moved] = copy.splice(fromIndex, 1);
+      copy.splice(toIndex, 0, moved);
+
+      // Deduplicar por seguridad, preservando orden
+      const seen = new Set<string>();
+      const next = copy.filter(c => {
+        if (seen.has(c)) return false;
+        seen.add(c);
+        return true;
+      });
+
+      setVisibleColumns(next);
+      await saveKanbanColumns(customColumns, next, columnColors);
+    },
+    [visibleColumns, customColumns, columnColors]
+  );
+
   const toggleColumnSelector = () => {
     setIsColumnSelectorVisible(!isColumnSelectorVisible);
   };
@@ -823,6 +860,46 @@ export default function LeadsKanbanPage() {
                   </button>
                 </div>
               </div>
+
+              {/* Orden de columnas (izq/der) */}
+              {visibleColumns.filter(col => col !== 'frío' && col !== 'fríos' && col !== 'frios').length > 1 && (
+                <div className="mb-3">
+                  <div className="text-xs font-medium text-gray-600 mb-2">Orden de columnas</div>
+                  <div className="flex flex-wrap gap-2">
+                    {visibleColumns
+                      .filter(col => col !== 'frío' && col !== 'fríos' && col !== 'frios')
+                      .map((col, idx, arr) => (
+                        <div
+                          key={`order-col-${col}-${idx}`}
+                          className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2 py-1 shadow-sm"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => moveVisibleColumn(col, 'left')}
+                            disabled={idx === 0}
+                            className="h-6 w-6 rounded-full text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent"
+                            title="Mover a la izquierda"
+                            aria-label="Mover a la izquierda"
+                          >
+                            ←
+                          </button>
+                          <span className="text-xs font-semibold text-gray-800 capitalize">{col}</span>
+                          <button
+                            type="button"
+                            onClick={() => moveVisibleColumn(col, 'right')}
+                            disabled={idx === arr.length - 1}
+                            className="h-6 w-6 rounded-full text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent"
+                            title="Mover a la derecha"
+                            aria-label="Mover a la derecha"
+                          >
+                            →
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
                 {/* Filtrar "frío" de las columnas mostradas en el selector */}
                 {allColumns.filter(col => col !== 'frío' && col !== 'fríos' && col !== 'frios').map((column, colIdx) => (

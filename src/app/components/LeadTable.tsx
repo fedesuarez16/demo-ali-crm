@@ -6,9 +6,20 @@ interface LeadTableProps {
   visibleColumns?: string[];
   onSelectionChange?: (selectedLeads: Lead[]) => void;
   selectedLeadIds?: Set<string>;
+  /** Permite al padre sincronizar scroll horizontal */
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
+  /** Permite al padre medir el ancho real del contenido */
+  contentMeasureRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-const LeadTable: React.FC<LeadTableProps> = ({ leads, visibleColumns, onSelectionChange, selectedLeadIds: externalSelectedIds }) => {
+const LeadTable: React.FC<LeadTableProps> = ({
+  leads,
+  visibleColumns,
+  onSelectionChange,
+  selectedLeadIds: externalSelectedIds,
+  scrollContainerRef,
+  contentMeasureRef,
+}) => {
   const [internalSelectedIds, setInternalSelectedIds] = useState<Set<string>>(new Set());
   
   // Usar selectedLeadIds si viene como prop, sino usar el estado interno
@@ -291,7 +302,7 @@ const LeadTable: React.FC<LeadTableProps> = ({ leads, visibleColumns, onSelectio
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div ref={scrollContainerRef} className="overflow-x-auto">
       {/* Barra de selección múltiple - SIEMPRE VISIBLE */}
       <div className="mb-3 px-4 py-2.5 bg-gradient-to-r from-indigo-50 to-blue-50 border-2 border-indigo-400 rounded-lg flex items-center justify-between shadow-md">
         <div className="flex items-center gap-3">
@@ -330,7 +341,10 @@ const LeadTable: React.FC<LeadTableProps> = ({ leads, visibleColumns, onSelectio
         )}
       </div>
       
-      <div className={`min-w-max grid gap-1 ${statusOrder.length <= 3 ? 'grid-cols-3' : statusOrder.length === 4 ? 'grid-cols-4' : statusOrder.length === 5 ? 'grid-cols-5' : 'grid-cols-1'}`}>
+      <div
+        ref={contentMeasureRef}
+        className={`min-w-max grid gap-1 ${statusOrder.length <= 3 ? 'grid-cols-3' : statusOrder.length === 4 ? 'grid-cols-4' : statusOrder.length === 5 ? 'grid-cols-5' : 'grid-cols-1'}`}
+      >
         {statusOrder.map((col, idx) => (
           <div key={`lead-table-col-${idx}-${col}`} className="min-w-[160px] bg-white">
             <div className="mb-1 px-1 py-0.5 text-xs font-semibold uppercase tracking-wide text-slate-600">{col}</div>
