@@ -159,7 +159,7 @@ export default function PropiedadBusquedasImportPage() {
     <AppLayout>
       <div className="mb-8">
         <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
-          <div className="px-4 py-[13.5px] md:px-6">
+          <div className="px-4 py-[13.5px] bg-slate-100 border-b border-slate-200 md:px-6">
             <nav className="flex" aria-label="Breadcrumb">
               <ol className="inline-flex items-center space-x-1 md:space-x-3 text-sm">
                 <li>
@@ -196,7 +196,7 @@ export default function PropiedadBusquedasImportPage() {
                   setManualForm(emptyForm());
                   setIsModalOpen(true);
                 }}
-                className="inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm"
+                className="inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium text-white bg-gray-700 hover:bg-indigo-700 shadow-sm"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -217,7 +217,7 @@ export default function PropiedadBusquedasImportPage() {
           </div>
         </div>
 
-        <div className="px-4 md:px-6 py-6 max-w-[1600px] mx-auto">
+        <div className="px-4 md:px-4 py-6 max-w-[1800px] mx-auto">
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden mb-6">
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
