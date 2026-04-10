@@ -203,3 +203,17 @@ export interface SupabasePropiedad {
   alternativa_mayor_5: string;
   notas?: string;
 }
+
+/** Fila de public.propiedad_busquedas */
+export interface PropiedadBusqueda {
+  id: string;
+  valor: string;
+  zona: string;
+  patio: string;
+  piscina: string;
+  habitaciones: string;
+  banos: string;
+  mts2: string;
+  archivo_origen?: string | null;
+  created_at?: string | null;
+}

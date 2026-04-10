@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import type { PropiedadBusqueda } from '../types';
 import type { PropiedadBusquedaDbColumn } from '../utils/propiedadBusquedaCsvMap';
 import { PROPIEDAD_BUSQUEDA_DB_COLUMNS } from '../utils/propiedadBusquedaCsvMap';
 
@@ -25,6 +26,37 @@ const toPayload = (r: Record<PropiedadBusquedaDbColumn, string>, archivoOrigen: 
 };
 
 const CHUNK = 250;
+
+const mapBusquedaRow = (row: any): PropiedadBusqueda => ({
+  id: String(row.id ?? ''),
+  valor: row.valor ?? '',
+  zona: row.zona ?? '',
+  patio: row.patio ?? '',
+  piscina: row.piscina ?? '',
+  habitaciones: row.habitaciones ?? '',
+  banos: row.banos ?? '',
+  mts2: row.mts2 ?? '',
+  archivo_origen: row.archivo_origen ?? null,
+  created_at: row.created_at ?? null,
+});
+
+export async function getAllPropiedadBusquedas(): Promise<PropiedadBusqueda[]> {
+  try {
+    const { data, error } = await (getSupabase() as any)
+      .from('propiedad_busquedas')
+      .select('*')
+      .order('id', { ascending: false });
+
+    if (error) {
+      console.error('getAllPropiedadBusquedas:', error.message);
+      return [];
+    }
+    return ((data as any[]) || []).map(mapBusquedaRow);
+  } catch (e) {
+    console.error('getAllPropiedadBusquedas:', e);
+    return [];
+  }
+}
 
 export async function insertPropiedadBusquedas(
   rows: Record<PropiedadBusquedaDbColumn, string>[],
