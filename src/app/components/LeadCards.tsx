@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Lead, Property, LeadStatus } from '../types';
 import { findMatchingPropertiesForLead } from '../services/matchingService';
 import LeadDetailSidebar from './LeadDetailSidebar';
@@ -13,13 +13,12 @@ interface LeadCardsProps {
   selectedLeadIds?: Set<string>;
   isSelectionMode?: boolean;
   onSelectionModeChange?: (enabled: boolean) => void;
-  /** Contenedor con scroll horizontal (sincronizar barra superior en /leads) */
-  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
-  /** Nodo interno con ancho real del contenido (min-w-max) */
-  contentMeasureRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEditLead, visibleColumns, columnColors = {}, onSelectionChange, selectedLeadIds: externalSelectedIds, isSelectionMode: externalIsSelectionMode, onSelectionModeChange, scrollContainerRef, contentMeasureRef }) => {
+/** min-w-[240px] + gap-2 (8px) en el flex del tablero */
+const KANBAN_COLUMN_SCROLL_STEP = 248;
+
+const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEditLead, visibleColumns, columnColors = {}, onSelectionChange, selectedLeadIds: externalSelectedIds, isSelectionMode: externalIsSelectionMode, onSelectionModeChange }) => {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [matchingProperties, setMatchingProperties] = useState<Map<string, Property[]>>(new Map());
@@ -182,6 +181,44 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
     }
     return result;
   }, [statusOrder, groupedLeads]);
+
+  const boardScrollRef = useRef<HTMLDivElement | null>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScrollArrows = useCallback(() => {
+    const el = boardScrollRef.current;
+    if (!el) {
+      setCanScrollLeft(false);
+      setCanScrollRight(false);
+      return;
+    }
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 2);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 2);
+  }, []);
+
+  useEffect(() => {
+    if (leads.length === 0) return;
+    const el = boardScrollRef.current;
+    if (!el) return;
+    updateScrollArrows();
+    const onScroll = () => updateScrollArrows();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    const ro = new ResizeObserver(() => updateScrollArrows());
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      ro.disconnect();
+    };
+  }, [leads.length, statusOrder.join('|'), updateScrollArrows]);
+
+  const scrollBoardByColumns = (direction: -1 | 1) => {
+    const el = boardScrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: direction * KANBAN_COLUMN_SCROLL_STEP, behavior: 'smooth' });
+    window.setTimeout(updateScrollArrows, 350);
+  };
 
   if (leads.length === 0) {
     return (
@@ -592,8 +629,24 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
         </div>
       )}
       
-      <div ref={scrollContainerRef} className="w-full  overflow-x-auto pb-1">
-        <div ref={contentMeasureRef} className="flex gap-2 min-w-max pr-2">
+      <div className="flex w-full min-w-0 max-w-full items-stretch gap-0.5">
+        <button
+          type="button"
+          aria-label="Desplazar una columna a la izquierda (también podés usar scroll horizontal en el tablero)"
+          disabled={!canScrollLeft}
+          onClick={() => scrollBoardByColumns(-1)}
+          className="mt-1 flex h-7 w-5 shrink-0 items-center justify-center self-start rounded border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-20"
+        >
+          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div className="min-w-0 flex-1 overflow-x-hidden">
+          <div
+            ref={boardScrollRef}
+            className="w-full min-w-0 max-w-full overflow-x-auto overflow-y-visible pb-2"
+          >
+          <div className="flex w-max min-w-max gap-2 pr-2">
           {allColumnsToShow.map((status, statusIdx) => (
             <div 
               key={`kanban-col-${statusIdx}-${status}`} 
@@ -820,6 +873,19 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
             </div>
           ))}
         </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          aria-label="Desplazar una columna a la derecha (también podés usar scroll horizontal en el tablero)"
+          disabled={!canScrollRight}
+          onClick={() => scrollBoardByColumns(1)}
+          className="flex h-7 w-5 shrink-0 items-center justify-center self-start rounded border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-20"
+        >
+          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
       </div>
 
       {/* Sidebar de detalles usando el componente LeadDetailSidebar */}
