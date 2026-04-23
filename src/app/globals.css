@@ -98,4 +98,55 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Barra horizontal superior del Kanban: siempre reserva track y muestra thumb (macOS overlay off) */
+  .kanban-top-scroll {
+    overflow-x: scroll;
+    overflow-y: hidden;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+  }
+
+  .kanban-top-scroll::-webkit-scrollbar {
+    height: 12px;
+  }
+
+  .kanban-top-scroll::-webkit-scrollbar-track {
+    background: rgb(226 232 240);
+    border-radius: 6px;
+  }
+
+  .kanban-top-scroll::-webkit-scrollbar-thumb {
+    background: rgb(148 163 184);
+    border-radius: 6px;
+  }
+
+  .kanban-top-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgb(100 116 139);
+  }
+
+  .kanban-board-scroll {
+    overflow-x: scroll;
+    overflow-y: visible;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+  }
+
+  .kanban-board-scroll::-webkit-scrollbar {
+    height: 12px;
+  }
+
+  .kanban-board-scroll::-webkit-scrollbar-track {
+    background: rgb(241 245 249);
+    border-radius: 6px;
+  }
+
+  .kanban-board-scroll::-webkit-scrollbar-thumb {
+    background: rgb(148 163 184);
+    border-radius: 6px;
+  }
+
+  .kanban-board-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgb(100 116 139);
+  }
 }

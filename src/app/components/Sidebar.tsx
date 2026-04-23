@@ -61,8 +61,87 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
             </svg>
           ),
         },
+
+        {
+          name: 'Leads',
+          path: '/leads',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          ),
+        },
+
       ],
     },
+
+    {
+      name: 'Mensajería',
+      items: [
+
+        {
+          name: 'Chats',
+          path: '/chat',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+          ),
+        },
+        
+       
+        {
+          name: 'Mensajes Programados',
+          path: '/mensajes-programados',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          ),
+        },
+        
+       
+      ],
+    },
+
+
+   
+    {
+      name: 'Cartera',
+      items: [
+       
+       
+        {
+          name: 'Propiedades',
+          path: '/propiedades',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8a4 4 0 014-4h10a4 4 0 014 4v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 12h.01M11 12h.01M15 12h.01" />
+            </svg>
+          ),
+        },
+        {
+          name: 'Búsquedas',
+          path: '/propiedades/busquedas',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+          ),
+        },
+        {
+          name: 'Campanas Activas',
+          path: '/campanas-activas',
+          icon: (
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3v18M6 8l5-5 5 5M5 13h4m6 0h4m-9 4h6m-3-4v7" />
+            </svg>
+          ),
+        },
+      ],
+    },
+
     {
       name: 'Asistentes',
       items: [
@@ -86,118 +165,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
         },
       ],
     },
-    {
-      name: 'Inbound',
-      items: [
-        {
-          name: 'Chats',
-          path: '/chat',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-            </svg>
-          ),
-        },
-        {
-          name: 'Leads',
-          path: '/leads',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-          ),
-        },
-        {
-          name: 'Propiedades',
-          path: '/propiedades',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8a4 4 0 014-4h10a4 4 0 014 4v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 12h.01M11 12h.01M15 12h.01" />
-            </svg>
-          ),
-        },
-        {
-          name: 'Búsquedas (CSV)',
-          path: '/propiedades/busquedas',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-          ),
-        },
-        {
-          name: 'Campanas Activas',
-          path: '/campanas-activas',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3v18M6 8l5-5 5 5M5 13h4m6 0h4m-9 4h6m-3-4v7" />
-            </svg>
-          ),
-        },
-      ],
-    },
-    {
-      name: 'Outbound',
-      items: [
-        {
-          name: 'Leads',
-          path: '/leads',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-          ),
-        },
-        {
-          name: 'Mensajes Programados',
-          path: '/mensajes-programados',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          ),
-        },
-        {
-          name: 'Bases de datos',
-          path: '/bases-datos',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <ellipse cx="12" cy="5" rx="7" ry="3" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5v6c0 1.657 3.134 3 7 3s7-1.343 7-3V5M5 11v6c0 1.657 3.134 3 7 3s7-1.343 7-3v-6" />
-            </svg>
-          ),
-        },
-        {
-          name: 'Propiedades',
-          path: '/propiedades',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-          ),
-        },
-        {
-          name: 'Mails',
-          path: '/mails',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h16v16H4V4z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7l8 6 8-6" />
-            </svg>
-          ),
-        },
-        {
-          name: 'Analytics',
-          path: '/analytics-outbound',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 19h16M5 17l3-7 4 5 4-9 3 8" />
-            </svg>
-          ),
-        },
-      ],
-    },
+    
   ];
 
   // Estado para expandir/colapsar categorías (Inbound / Outbound / General)

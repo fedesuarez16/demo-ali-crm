@@ -30,6 +30,7 @@ const PLANTILLAS = [
   { value: 'toque_6_tibio', label: 'Toque 6 Tibio' },
   { value: 'toque_7_tibio', label: 'Toque 7 Tibio' },
   { value: 'toque_8_tibio', label: 'Toque 8 Tibio' },
+  { value: 'generico_01', label: 'Generico 01' },
 ];
 
 export default function MensajesProgramadosPage() {
@@ -40,6 +41,7 @@ export default function MensajesProgramadosPage() {
   const [editingFecha, setEditingFecha] = useState<number | null>(null);
   const [tempFecha, setTempFecha] = useState<string>('');
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const [genericosExpanded, setGenericosExpanded] = useState(false);
 
   useEffect(() => {
     loadMensajes();
@@ -278,6 +280,20 @@ export default function MensajesProgramadosPage() {
     return 1;
   };
 
+  const SEGUIMIENTOS_COUNT_PLANTILLA_GENERICO_DEFAULT = new Set([100, 101, 102]);
+
+  /** Valor del Select: para count 100–102 sin plantilla en BD, mostrar Generico 01 por defecto. */
+  const plantillaSelectValue = (mensaje: ColaSeguimiento): string => {
+    const c = mensaje.seguimientos_count;
+    const p = mensaje.plantilla;
+    if (c !== undefined && c !== null && SEGUIMIENTOS_COUNT_PLANTILLA_GENERICO_DEFAULT.has(c)) {
+      if (p === null || p === undefined || p === '') {
+        return 'generico_01';
+      }
+    }
+    return p || 'none';
+  };
+
   // Función para toggle del acordeón
   const toggleDay = (dayKey: string) => {
     setExpandedDays(prev => {
@@ -291,11 +307,26 @@ export default function MensajesProgramadosPage() {
     });
   };
 
+  const esSeguimientoGenericoCola = (m: ColaSeguimiento) =>
+    m.seguimientos_count === 100 ||
+    m.seguimientos_count === 101 ||
+    m.seguimientos_count === 102;
+
+  const mensajesPrioridadCola = mensajes.filter(esSeguimientoGenericoCola);
+  const mensajesPrioridadColaOrdenados = [...mensajesPrioridadCola].sort((a, b) => {
+    const fechaA = a.fecha_programada || a.scheduled_at || a.enviado_at;
+    const fechaB = b.fecha_programada || b.scheduled_at || b.enviado_at;
+    if (!fechaA) return 1;
+    if (!fechaB) return -1;
+    return new Date(fechaA).getTime() - new Date(fechaB).getTime();
+  });
+
   // Pendientes: solo desde hoy en adelante (misma lógica que antes del fix de carga)
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
 
   const mensajesPendientes = mensajes.filter(m => {
+    if (esSeguimientoGenericoCola(m)) return false;
     if (m.estado !== 'pendiente') return false;
 
     const fechaProgramada = m.fecha_programada || m.scheduled_at;
@@ -306,7 +337,9 @@ export default function MensajesProgramadosPage() {
     return fechaMensaje >= hoy;
   });
   
-  const mensajesEnviados = mensajes.filter(m => m.estado === 'enviado');
+  const mensajesEnviados = mensajes.filter(
+    m => m.estado === 'enviado' && !esSeguimientoGenericoCola(m)
+  );
 
   // Agrupar mensajes pendientes por día
   const mensajesPendientesPorDia = mensajesPendientes.reduce((acc, mensaje) => {
@@ -388,7 +421,8 @@ export default function MensajesProgramadosPage() {
             <div>
               <h1 className="text-lg font-semibold text-slate-800 tracking-tight">Mensajes Programados</h1>
               <p className="text-sm text-gray-500 mt-1">
-                {mensajesPendientes.length} pendiente(s) · {mensajesEnviados.length} enviado(s)
+                {mensajes.filter(m => m.estado === 'pendiente').length} pendiente(s) ·{' '}
+                {mensajes.filter(m => m.estado === 'enviado').length} enviado(s)
               </p>
             </div>
             <Button onClick={loadMensajes} variant="outline" size="sm">
@@ -401,12 +435,238 @@ export default function MensajesProgramadosPage() {
         </div>
 
         <div className="space-y-6 p-6">
+          {mensajesPrioridadCola.length > 0 && (
+            <Card className="border-2 border-amber-200 shadow-md ring-1 ring-amber-100/10 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setGenericosExpanded((v) => !v)}
+                className="w-full flex items-center justify-between gap-3 px-6 py-4 bg-amber-50/90 border-b border-amber-200 hover:bg-amber-100/60 transition-colors text-left"
+                aria-expanded={genericosExpanded}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <svg
+                    className={`h-5 w-5 text-amber-800/70 flex-shrink-0 transition-transform ${genericosExpanded ? 'rotate-90' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    aria-hidden
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-amber-950 font-semibold">
+                      <span className="h-2.5 w-2.5 bg-amber-500 rounded-full flex-shrink-0" aria-hidden />
+                      Seguimientos genéricos
+                    </div>
+                    <p className="text-xs text-amber-900/75 mt-0.5">
+                      {mensajesPrioridadCola.length} ítem{mensajesPrioridadCola.length !== 1 ? 's' : ''} · sin agrupar por fecha
+                    </p>
+                  </div>
+                </div>
+                <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-amber-200/80 text-amber-950 border border-amber-300 flex-shrink-0">
+                  {mensajesPrioridadCola.length}
+                </span>
+              </button>
+              {genericosExpanded && (
+              <CardContent className="pt-4 border-t border-amber-100">
+                <div className="space-y-3 max-h-[min(70vh,520px)] overflow-y-auto pr-1">
+                  {mensajesPrioridadColaOrdenados.map((mensaje) => {
+                    const isEnviado = mensaje.estado === 'enviado';
+                    const fechaProgramada = mensaje.fecha_programada || mensaje.scheduled_at;
+                    const fechaEnviado = mensaje.enviado_at;
+                    const telefono = normalizePhoneNumber(mensaje.remote_jid || String(mensaje.lead_id || ''));
+                    const toqueNumber = getToqueNumber(mensaje);
+
+                    return (
+                      <div
+                        key={mensaje.id}
+                        className="border border-amber-200 rounded-md p-3 bg-white shadow-sm"
+                      >
+                        <div className="flex justify-between items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <svg className="h-4 w-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                </svg>
+                                <span className="text-sm font-medium text-gray-900 truncate">{telefono}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                  Toque {toqueNumber}
+                                </span>
+                                <span
+                                  className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium border ${
+                                    isEnviado
+                                      ? 'bg-green-100 text-green-800 border-green-200'
+                                      : 'bg-orange-100 text-orange-800 border-orange-200'
+                                  }`}
+                                >
+                                  {isEnviado ? 'Enviado' : 'Pendiente'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className={isEnviado ? 'mb-2' : 'mb-1.5'}>
+                              {isEnviado ? (
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Plantilla</label>
+                              ) : null}
+                              <Select
+                                value={plantillaSelectValue(mensaje)}
+                                onValueChange={(value) => mensaje.id && handleUpdatePlantilla(mensaje.id, value, mensaje.tabla_origen)}
+                                disabled={updatingPlantilla === mensaje.id}
+                              >
+                                <SelectTrigger className={isEnviado ? 'h-8 text-xs' : 'h-7 text-xs'}>
+                                  <SelectValue placeholder="Sin plantilla" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">Sin plantilla</SelectItem>
+                                  {PLANTILLAS.map((plantilla) => (
+                                    <SelectItem key={plantilla.value} value={plantilla.value}>
+                                      {plantilla.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {isEnviado ? (
+                              <div className="space-y-2">
+                                {fechaProgramada && (
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">Fecha programada</label>
+                                    {editingFecha === mensaje.id ? (
+                                      <div className="space-y-2">
+                                        <input
+                                          type="datetime-local"
+                                          value={tempFecha}
+                                          onChange={(e) => setTempFecha(e.target.value)}
+                                          className="w-full px-2 py-1.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                          autoFocus
+                                        />
+                                        <div className="flex gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => mensaje.id && handleSaveFecha(mensaje.id, mensaje.tabla_origen)}
+                                            className="flex-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                                          >
+                                            Guardar
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={handleCancelEditFecha}
+                                            className="flex-1 px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                                          >
+                                            Cancelar
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div
+                                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded text-blue-900 cursor-pointer hover:bg-blue-100 transition-colors"
+                                        onClick={() => handleStartEditFecha(mensaje)}
+                                        title="Click para editar fecha y hora"
+                                      >
+                                        <svg className="h-4 w-4 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span className="text-xs font-semibold">{formatTimeOnly(fechaProgramada)}</span>
+                                        <svg className="h-4 w-4 text-blue-600 flex-shrink-0 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                {fechaEnviado && (
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">Fecha enviado</label>
+                                    <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded text-green-900">
+                                      <svg className="h-4 w-4 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                      </svg>
+                                      <span className="text-xs font-semibold">{formatTimeOnly(fechaEnviado)}</span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ) : editingFecha === mensaje.id ? (
+                              <div className="space-y-1">
+                                <input
+                                  type="datetime-local"
+                                  value={tempFecha}
+                                  onChange={(e) => setTempFecha(e.target.value)}
+                                  className="w-full px-2 py-1 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  autoFocus
+                                />
+                                <div className="flex gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => mensaje.id && handleSaveFecha(mensaje.id, mensaje.tabla_origen)}
+                                    className="flex-1 px-2 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                                  >
+                                    Guardar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleCancelEditFecha}
+                                    className="flex-1 px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div
+                                className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded text-blue-900 cursor-pointer hover:bg-blue-100 transition-colors w-fit"
+                                onClick={() => handleStartEditFecha(mensaje)}
+                                title="Click para editar fecha y hora"
+                              >
+                                <svg className="h-3 w-3 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span className="text-xs font-semibold">
+                                  {fechaProgramada ? formatTimeOnly(fechaProgramada) : 'Sin fecha'}
+                                </span>
+                                <svg className="h-3 w-3 text-blue-600 flex-shrink-0 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </div>
+                            )}
+                          </div>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => mensaje.id && handleDelete(mensaje.id, mensaje.tabla_origen)}
+                            disabled={isDeleting === mensaje.id}
+                            className={`text-red-600 hover:text-red-700 hover:bg-red-50 p-0 flex-shrink-0 ${isEnviado ? 'h-8 w-8' : 'h-6 w-6'}`}
+                            title="Eliminar mensaje programado"
+                          >
+                            {isDeleting === mensaje.id ? (
+                              <div className={`animate-spin rounded-full border-b-2 border-red-600 ${isEnviado ? 'h-4 w-4' : 'h-3 w-3'}`} />
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" className={isEnviado ? 'h-4 w-4' : 'h-3 w-3'} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+              )}
+            </Card>
+          )}
+
           {/* Mensajes Pendientes */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <span className="h-2 w-2 bg-orange-500 rounded-full"></span>
-                Pendientes ({mensajesPendientes.length})
+                Seguimiento organico  ({mensajesPendientes.length})
               </CardTitle>
               <CardDescription>
                 Mensajes programados que aún no se han enviado
@@ -502,7 +762,7 @@ export default function MensajesProgramadosPage() {
                                         {/* Selector de Plantilla */}
                                         <div className="mb-1.5">
                                           <Select
-                                            value={mensaje.plantilla || 'none'}
+                                            value={plantillaSelectValue(mensaje)}
                                             onValueChange={(value) => mensaje.id && handleUpdatePlantilla(mensaje.id, value, mensaje.tabla_origen)}
                                             disabled={updatingPlantilla === mensaje.id}
                                           >
@@ -700,7 +960,7 @@ export default function MensajesProgramadosPage() {
                                               Plantilla
                                             </label>
                                             <Select
-                                              value={mensaje.plantilla || 'none'}
+                                              value={plantillaSelectValue(mensaje)}
                                               onValueChange={(value) => mensaje.id && handleUpdatePlantilla(mensaje.id, value, mensaje.tabla_origen)}
                                               disabled={updatingPlantilla === mensaje.id}
                                             >
