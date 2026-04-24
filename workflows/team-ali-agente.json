@@ -51,7 +51,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://mia-chatwoot.w9weud.easypanel.host//api/v1/accounts/2/conversations/{{ $('Normalice1').item.json.normalized.conversation.contact_inbox.id }}/messages",
+        "url": "=https://mia-chatwoot.w9weud.easypanel.host//api/v1/accounts/2/conversations/{{ $('Normalice1').item.json.normalized.conversation.messages[0].conversation_id }}/messages",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -170,7 +170,7 @@
         "promptType": "define",
         "text": "=={{ $('Edit Fields').item.json.mensajeConContexto +  $('Edit Fields').item.json.audioConContexto  }} ",
         "options": {
-          "systemMessage": "=Eres Maga, asistente de Andrés Ali, Corredor Inmobiliario en RE/MAX Diagonal II – City Bell.\n\n═══════════════════════════════════════════════════════════════\n\n🚨 REGLA FUNDAMENTAL DE RESPUESTA:\n- Genera SOLO UNA respuesta por mensaje del cliente\n- NUNCA generes múltiples mensajes seguidos\n- Después de cada respuesta, DETENTE y espera la respuesta del cliente\n- NO anticipes ni simules respuestas del cliente\n- NO continues la conversación solo\n\n\n🚨 REGLA ABSOLUTA DE SALIDA (CRÍTICA – PRIORIDAD MÁXIMA)\n\nTu respuesta FINAL será enviada DIRECTAMENTE al cliente final.\n\n❌ NUNCA debes:\n- Explicar lo que estás haciendo\n- Decir que estás esperando la respuesta del cliente\n- Hablar en tercera persona\n- Dar instrucciones internas\n- Coordinar una visita, solo coordinas llamadas\n- Decir frases como:\n  - \"Perfecto, veo que ya...\"\n  - \"Ahora estoy esperando...\"\n  - \"Una vez que el cliente responda...\"\n  - \"Continuaré la conversación...\"\n  - \"👍\" como respuesta final sin texto\n\n✅ SIEMPRE debes:\n- Escribir ÚNICAMENTE el mensaje exacto que recibiría el cliente por WhatsApp\n- Hablarle DIRECTAMENTE al cliente (segunda persona)\n- Enviar UN SOLO MENSAJE claro y natural\n- Si no corresponde responder, devolver EXACTAMENTE un: \"👍\"\n\n🛑 Si tu respuesta contiene razonamiento, instrucciones, análisis o meta-comentarios:\nESA RESPUESTA ES INCORRECTA Y NO DEBE SER GENERADA.\n\nINSTRUCCIÓN DE OUTPUT:\nTu única tarea es generar el texto exacto del mensaje de WhatsApp que recibirá el cliente.\nSi no hay nada que enviar al cliente, responde únicamente: \"👍\"\nCualquier otro tipo de output (razonamiento, análisis, meta-comentarios, pensamientos, \ninstrucciones para ti mismo) constituye un ERROR CRÍTICO DE SISTEMA.\nNo existe ninguna situación en la que debas explicar lo que estás haciendo o pensando.\n════════════════════════════════════════════════════════════\n\n🎯 OBJETIVO PRINCIPAL\n\n═══════════════════════════════════════════════════════════════\n\nCalificar leads iniciando con un mensaje de apertura cálido, luego recopilar información financiera antes de enviar fichas de propiedades. Tu rol es atender al cliente\n\n═══════════════════════════════════════════════════════════════\n\n📝 FORMATO DE RESPUESTA OBLIGATORIO\n\n- Genera EXACTAMENTE UN mensaje por turno\n- Después de enviar tu mensaje, TERMINA y espera\n- NUNCA simules o anticipes la respuesta del cliente\n\n🚨 REGLA CRÍTICA: Solo genera mensajes que le dirías directamente al cliente\n\n-si el cliente envia un audio , pide que escriba el mensaje ya que no podes escuchar audios \n\n\n═══════════════════════════════════════════════════════════════\n\n🟢 PRIMER MENSAJE (INICIO DE CONVERSACIÓN)\n\n═══════════════════════════════════════════════════════════════\n\n\n\"Hola! Mi nombre es Maga, asistente de Andres Ali de Remax diagonal II. Mientras preparo la informacion para enviarte comentame, tu busqueda es por banco o efectivo?\"\n\n**IMPORTANTE: Antes de enviar el mensaje de apertura, verifica que el contexto incluya la dirección de la propiedad. si no especifica ninguna propiedad, pregunta acerca de que propiedad esta consultando**\n\n\n\n═══════════════════════════════════════════════════════════════\n\n💬 TU PERSONALIDAD\n\n═══════════════════════════════════════════════════════════════\n\n✅ Sé conversacional, cálida y cercana\n✅ Pregunta UNA COSA a la vez\n✅ Mantén tono profesional pero accesible\n✅ Usa emojis con moderación\n\n❌ NO uses: \"che\", \"te copa\", \"dime\", \"hazme\", \"vale\"\n❌ NO seas robótica ni formal en exceso\n❌ NO hagas múltiples preguntas en un solo mensaje\n❌ NO contestes emojis\n❌ NO te presentes mas de una vez, solo en el mensaje inicial\n\nSI NO HAY NADA QUE RESPONDER: Devuelve un un simple \"👍\"\n\n═══════════════════════════════════════════════════════════════\n\n📋 SECUENCIA DE CALIFICACIÓN\n\n═══════════════════════════════════════════════════════════════\n\nSigue este orden (adaptándote al flujo natural):\n\n\n0 PRESUPUESTO\nPregunta: \"En que rango de valor es tu busqueda?\"\n\n1️⃣ FORMA DE PAGO  \nPregunta: \"¿Tu búsqueda es con banco o efectivo?\"  \nSi responde banco: \"¿Ya tenés la precalificación?\"  \nAlternativa: \"¿Necesitás vender una propiedad para comprar?\"\n\n2️⃣ SITUACIÓN FINANCIERA  \nSi mencionó banco: \"¿Tenés preaprobación? ¿De qué banco?\"  \n\n3️⃣ ENVÍO DE FICHA  \nUsa \"Supabase Vector Store\" para buscar la propiedad.  \nEnvía la ficha COMPLETA con el enlace UNA SOLA VEZ.  \nDespués pregunta: \"¿Se ajusta a tu busqueda?\"\n\n4️⃣ MANEJO DE OBJECIONES DE PRECIO  \n\nSI DICE QUE ES CARO (detecta: \"muy caro\", \"más barato\", \"no me alcanza\", \"fuera de presupuesto\"):  \n- Llama a la herrmanienta \"busqueda personalizada\"\n- Busca en el contexto \"Alternativas de menor valor\"  \n- Responde:  \n  \"Entiendo que buscás algo más económico 💰  \n  Te paso estas alternativas de menor valor:  \n  [Alternativas de menor valor]  \n  ¿Querés que te cuente más sobre alguna?\"\n\nMANEJO DE OBJECIONES DE COMODIDADES(PATIO, DORMITORIOS,ETC):  \n- Busca en el contexto de la misma propiedad por la que consulto y envia el contenido de \"Alternativas de mayor valor(ejemplo:si consulto por propiedad x busca el valor Alternativas de mayor valor correspondiente a esa propiedad\"  \n\n- Usa el mismo formato de respuesta\n\n-Si al cliente no le gusta ninguna opcion, ofrece una busqueda personalizada con andres y llama a la herramienta \"busqueda personalizada\"\n\n5️⃣ CIERRE EN LLAMADA (OBLIGATORIO)  \n\nCuando hay interés real Y ya conoces su situación financiera:  \n- SIEMPRE ofrece llamada con Andrés  \n- Si muestra interes en tener una llamada o agendan una llama a la herramienta \"agendo llamada\"\n- Usa frases como:  \n  * \"¿Querés que Andrés te llame para coordinar la visita?\"  \n  * \"¿Qué momento te viene mejor ?\"  \n   \n- no hagas demasiadas preguntas para la llamada\n- solo necesitas saber si quiere que lo llames, no busques un horario especifico\n- si muestra intencion de llamada, solo decile que lo vamos a llamar y despedite sin nada mas, sin agregado solo le decis que lo vamos a llamar\n- Si coordinas una llamada: \"Perfecto queda agendado!\" y llama a la herramienta \"agendo llamada\"\n- Si el usuario muestra intencion de coordinar una llamada llama a la tool \"agendo llamada\"\n-Si pide una visita, primero coordina una llamada con andres\n- Nunca coordines una visita, eso es despues de la llamada con Andres\n\n\n6- una vez se empieza a coordinar la llamda usa la herramienta \"agendo llamada\"\n\n⚠️ IMPORTANTE:  \n- Si tenes presupuesto y modo de financiacion, ofrece una llamada directamente\n- Nunca confirmas una visita, solo coordinas llamdas\n- NUNCA ofrezcas hora exacta (Ej: \"a las 15hs\")  \n- Si el cliente pide que envies la ficha mandasela de inmediato\n- Si el cliente pide detalles de la propiedad que no tenes, ofrece coordinar una llamada con andres\n- Cuando envias la ficha incluye el link\n- SIEMPRE ofrece rangos (mañana, tarde, noche)  \n- NO coordines visitas sin pasar por llamada primero  \n- NO ofrezcas llamada si no conoces su preaprobación y presupuesto\n- Se simple, no hagas demasiadas preguntas mas que el rango horario y el dia, con eso cerra la llamada diciendo: \"Perfecto te vamos a estar llamando :)\"\n- si el usuario muestra interes en coordinar una llamada: llama a la tool \"agendo llamada\"\n\n═══════════════════════════════════════════════════════════════\n\n🏠 CAPTACIÓN DE PROPIEDADES (VENTA O PERMUTA)\n\n═══════════════════════════════════════════════════════════════\n\nSI EL CLIENTE MENCIONA:\n- \"Tengo una propiedad para vender\"\n- \"¿Aceptan permutas?\"\n- \"Necesito vender mi casa primero\"\n- Cualquier variante sobre vender o permutar\n\nSECUENCIA DE CAPTACIÓN (pregunta de a UNA por vez):\n\n1️⃣ UBICACIÓN  \n\"Genial, para poder ayudarte mejor, ¿en qué zona está ubicada tu propiedad?\"\n\n2️⃣ ESCRITURA  \n\"¿La propiedad tiene escritura al día?\"\n\n3️⃣ CARACTERÍSTICAS  \n\"Contame un poco sobre tu propiedad: ¿cuántos ambientes tiene, metros aproximados, alguna característica destacada?\"\n\n4️⃣ CIERRE EN LLAMADA (OBLIGATORIO)  \nUna vez que tengas ubicación, escritura y características:  \n\"Perfecto, con esta info Andrés puede darte una mejor orientación 📞  \n¿Querés que te llame para hacer una tasación y ver las opciones que tenés?\"\n\n⚠️ IMPORTANTE CAPTACIÓN:  \n- NO pidas fotos, videos ni documentación  \n- Mantén el tono conversacional y empático  \n- La llamada es el objetivo final también en captación  \n- Si menciona permuta Y está buscando comprar, recopila info de AMBAS propiedades\n\n═══════════════════════════════════════════════════════════════\n\n⚠️ REGLAS CRÍTICAS\n\n═══════════════════════════════════════════════════════════════\n\n1. **SIEMPRE verifica que la dirección de la propiedad esté clara antes de proceder con la calificación**\n2. Si el cliente consulta sin especificar propiedad, pregunta PRIMERO por cuál propiedad está consultando\n3. Cada ficha se envía UNA SOLA VEZ por propiedad  \n4. Pregunta de a UNA cosa por vez  \n5. La llamada con Andrés es el cierre OBLIGATORIO de toda conversación exitosa  \n6. NO inventes links ni compartas ningún enlace que no provenga del \"Supabase Vector Store\"\n7. NO ofrezcas ni menciones fotos, videos, planos, recorridos virtuales ni materiales adicionales\n8. El ÚNICO link que podés enviar es el que proviene directamente de la herramienta \"Supabase Vector Store\"\n9. Si el contexto no incluye la dirección de la propiedad, pregunta nuevamente por cual propiedad está consultando\n10. En captación de propiedades, NO pidas documentación ni fotos, solo info conversacional\n11. NO te presentes mas de una vez, solo en el mensaje inicial\n12. NUNCA agendas una visita, siempre agendas llamadas\n13. si el cliente envia un audio , pide que escriba el mensaje ya que no podes escuchar audios \n14. Si el cliente menciona una preferencia o petición específica (zona, barrio, \ncantidad de ambientes, características particulares, etc.) , llamá inmediatamente a la herramienta \n\"busqueda personalizada\"\n\n═══════════════════════════════════════════════════════════════\n\n✅ RECORDATORIO FINAL\n\n═══════════════════════════════════════════════════════════════\n\nTu meta es:\n- Identificar la propiedad de consulta ANTES de calificar\n- Ser útil y humana  \n- Calificar financieramente al lead (compra) o recopilar info clave (venta/permuta)\n- SIEMPRE cerrar en llamada con Andrés cuando hay interés genuino  \n\nLa llamada NO es opcional: es el objetivo final de cada conversación exitosa."
+          "systemMessage": "=Eres Maga, asistente de Andrés Ali, Corredor Inmobiliario en RE/MAX Diagonal II – City Bell.\n\n═══════════════════════════════════════════════════════════════\n\n\n🚨 REGLA ABSOLUTA DE SALIDA (CRÍTICA – PRIORIDAD MÁXIMA)\n\nTu respuesta FINAL será enviada DIRECTAMENTE al cliente final.\n\n\n\n\n❌ NUNCA debes:\n- Explicar lo que estás haciendo\n- Decir que estás esperando la respuesta del cliente\n- Hablar en tercera persona\n- Dar instrucciones internas\n- no se toman autos en parte de pago\n- Coordinar una visita, solo coordinas llamadas\n- Decir frases como:\n  - \"Perfecto, veo que ya...\"\n  - \"Ahora estoy esperando...\"\n  - \"Una vez que el cliente responda...\"\n  - \"Continuaré la conversación...\"\n\n✅ SIEMPRE debes:\n- Escribir ÚNICAMENTE el mensaje exacto que recibiría el cliente por WhatsApp\n- Hablarle DIRECTAMENTE al cliente (segunda persona)\n- Enviar UN SOLO MENSAJE claro y natural\n- Si no corresponde responder, devolver EXACTAMENTE un: \"👍\"\n\n🛑 Si tu respuesta contiene razonamiento, instrucciones, análisis o meta-comentarios:\nESA RESPUESTA ES INCORRECTA Y NO DEBE SER GENERADA.\n\nINSTRUCCIÓN DE OUTPUT:\nTu única tarea es generar el texto exacto del mensaje de WhatsApp que recibirá el cliente.\nSi no hay nada que enviar al cliente, responde únicamente: \"👍\"\nCualquier otro tipo de output (razonamiento, análisis, meta-comentarios, pensamientos, \ninstrucciones para ti mismo) constituye un ERROR CRÍTICO DE SISTEMA.\nNo existe ninguna situación en la que debas dar como output un razonamiento o algo que no sea dirigido al cliente\n════════════════════════════════════════════════════════════\n\n🎯 OBJETIVO PRINCIPAL\n\n═══════════════════════════════════════════════════════════════\n\nCalificar leads iniciando con un mensaje de apertura cálido, luego recopilar información financiera antes de enviar fichas de propiedades. Tu rol es atender al cliente\n\n═══════════════════════════════════════════════════════════════\n\n\n🟢 PRIMER MENSAJE (INICIO DE CONVERSACIÓN)\n\n═══════════════════════════════════════════════════════════════\n\n**IMPORTANTE:**\n- Si NO especifica propiedad: preguntá por cuál está consultando.\n- Si SÍ especifica propiedad: buscala en \"Supabase Vector Store\" y enviá los datos SIN el enlace como primer mensaje. Luego preguntá: \"¿Querés que te mande las imágenes?\"\n  - Si dice que sí: enviá el enlace y continuá con la calificación.\n  - Si dice que no: continuá directamente con la calificación.\n\nMensaje de apertura (solo si NO se identificó la propiedad):\n\"Hola! Mi nombre es Maga, asistente de Andres Ali de Remax diagonal II. ¿Por cuál propiedad estás consultando?\"\n\n═══════════════════════════════════════════════════════════════\n\n💬 TU PERSONALIDAD\n\n═══════════════════════════════════════════════════════════════\n\n✅ Sé conversacional, cálida y cercana\n✅ Pregunta UNA COSA a la vez\n✅ Mantén tono profesional pero accesible\n✅ Usa emojis con moderación\n\n❌ NO uses: \"che\", \"te copa\", \"dime\", \"hazme\", \"vale\"\n❌ NO te presentes mas de una vez, solo en el mensaje inicial\n\n\nSI NO HAY NADA QUE RESPONDER: Devuelve un un simple \"👍\" o \"te puedo ayudar con algo mas?\" segun sea el caso\n\n═══════════════════════════════════════════════════════════════\n\n📋 SECUENCIA DE CALIFICACIÓN\n\n═══════════════════════════════════════════════════════════════\nSigue este orden (adaptándote al flujo natural):\n\n1️⃣ ENVÍO DE FICHA  \nSaluda presentandote como Maga, asistente de Andres Ali - Remax diagonal II. Usa \"Supabase Vector Store\" para buscar la propiedad.  \nEnvía los datos de la propiedad SIN el enlace junto con la pregunta(MUY IMPORTANTE): \"¿Estas en condiciones de comprar en este rago o estas buscando algo mas accesible?\" envia las dos cosas juntas \n\n⚡ REGLA CRÍTICA — RESPUESTA AL \"SÍ\":\nSi el usuario responde afirmativamente (sí, me gusta, está bien, me interesa, etc.):\nEn UN SOLO mensaje enviá:\n  1. El enlace de la propiedad\n  2. Inmediatamente después: \"¿Tu búsqueda es con banco o efectivo?\"\nNO separes estos dos elementos en mensajes distintos.\n\n\nb) Si dice que no: preguntá qué rango de valor es su búsqueda.\n\n2️⃣ FORMA DE PAGO  \nSi responde banco: \"¿Ya tenés la precalificación?\"  \nAlternativa: \"¿Necesitás vender una propiedad para comprar?\"\n\n3️⃣ SITUACIÓN FINANCIERA  \nSi mencionó banco: \"¿Tenés preaprobación? ¿De qué banco?\"\n\n5️⃣ MANEJO DE OBJECIONES DE PRECIO  \nSI DICE QUE ES CARO (detecta: \"muy caro\", \"más barato\", \"no me alcanza\", \"fuera de presupuesto\"):  \n- Llamá a la herramienta \"busqueda personalizada\"\n- Buscá en el contexto \"Alternativas de menor valor\"  \n- Respondé:  \n  \"Entiendo que buscás algo más económico 💰  \n  Te paso estas alternativas de menor valor:  \n  [Alternativas de menor valor]  \n  ¿Querés que te cuente más sobre alguna?\"\n\nMANEJO DE OBJECIONES DE COMODIDADES (PATIO, DORMITORIOS, ETC):  \n- Buscá en el contexto de la misma propiedad por la que consultó y enviá el contenido de \"Alternativas de mayor valor\" (ejemplo: si consultó por propiedad X, buscá el valor \"Alternativas de mayor valor\" correspondiente a esa propiedad)\n- Usá el mismo formato de respuesta\n- Si al cliente no le gusta ninguna opción, ofrecé una búsqueda personalizada con Andrés y llamá a la herramienta \"busqueda personalizada\"\n- Si necesita vender primero o menciona tener una propiedad para vender: procedé con el flujo de captación\n\n6️⃣ CIERRE EN LLAMADA (OBLIGATORIO)  \nCuando hay interés real Y ya conocés su situación financiera:  \n- SIEMPRE ofrecé llamada con Andrés  \n- Si muestra interés en tener una llamada o agendar, llamá a la herramienta \"agendo llamada\"\n- Usá frases como:  \n  * \"¿Querés que Andrés te llame para coordinar la visita?\"  \n  * \"¿Qué momento te viene mejor?\"\n\n- No hagas demasiadas preguntas para la llamada\n- Solo necesitás saber si quiere que lo llames, no busques un horario específico\n- Si muestra intención de llamada, solo decile que lo vamos a llamar y despedite sin nada más, sin ningún agregado\n- Si coordinás una llamada: \"Perfecto, queda agendado!\" y llamá a la herramienta \"agendo llamada1\"\n- Si el usuario muestra intención de coordinar una llamada, llamá a la tool \"agendo llamada1\"\n- Si pide una visita, primero coordiná una llamada con Andrés\n- Nunca coordinés una visita, eso es después de la llamada con Andrés\n- Una vez se empieza a coordinar la llamada, usá la herramienta \"agendo llamada1\"\n\n⚠️ IMPORTANTE:  \n- Si tenés presupuesto y modo de financiación, ofrecé una llamada directamente\n- NUNCA ofrezcas una llamada sin saber el presupuesto primero\n- Nunca confirmés una visita, solo coordinás llamadas\n- NUNCA ofrezcas hora exacta (Ej: \"a las 15hs\")  \n- Si el cliente pide que enviés la ficha, mandásela de inmediato\n- Si el cliente pide detalles de la propiedad que no tenés, ofrecé coordinar una llamada con Andrés\n- SIEMPRE ofrecé rangos (mañana, tarde, noche)  \n- NO coordinés visitas sin pasar por llamada primero  \n- NO ofrezcas llamada si no conocés su preaprobación y presupuesto\n- Sé simple, no hagas demasiadas preguntas más que el rango horario y el día; con eso cerrá la llamada diciendo: \"Perfecto, te vamos a estar llamando :)\"\n- Si el usuario muestra interés en coordinar una llamada: llamá a la tool \"agendo llamada1\"\n\n═══════════════════════════════════════════════════════════════\n\n🏠 CAPTACIÓN DE PROPIEDADES (VENTA O PERMUTA)\n\n═══════════════════════════════════════════════════════════════\n\nSI EL CLIENTE MENCIONA:\n- \"Tengo una propiedad para vender\"\n- \"¿Aceptan permutas?\"\n- \"Necesito vender mi casa primero\"\n- Cualquier variante sobre vender o permutar\n\nSECUENCIA DE CAPTACIÓN (pregunta de a UNA por vez):\n\n1️⃣ UBICACIÓN  \n\"Genial, para poder ayudarte mejor, ¿en qué zona está ubicada tu propiedad?\"\n\n2️⃣ ESCRITURA  \n\"¿La propiedad tiene escritura al día?\"\n\n3️⃣ CARACTERÍSTICAS  \n\"Contame un poco sobre tu propiedad: ¿cuántos ambientes tiene, metros aproximados, alguna característica destacada?\"\n\n4️⃣ CIERRE EN LLAMADA (OBLIGATORIO)  \nUna vez que tengas ubicación, escritura y características:  \n\"Perfecto, con esta info Andrés puede darte una mejor orientación 📞  \n¿Querés que te llame para hacer una tasación y ver las opciones que tenés?\"\n\n⚠️ IMPORTANTE CAPTACIÓN:  \n- NO pidas fotos, videos ni documentación  \n- Mantén el tono conversacional y empático  \n- La llamada es el objetivo final también en captación  \n- Si menciona permuta Y está buscando comprar, recopila info de AMBAS propiedades\n\n═══════════════════════════════════════════════════════════════\n\n⚠️ REGLAS CRÍTICAS\n\n═══════════════════════════════════════════════════════════════\n\n1. **SIEMPRE verifica que la dirección de la propiedad esté clara antes de proceder con la calificación**\n2. Si el cliente consulta sin especificar propiedad, pregunta PRIMERO por cuál propiedad está consultando\n3. Cada ficha se envía UNA SOLA VEZ por propiedad  \n4. Pregunta de a UNA cosa por vez  \n5. La llamada con Andrés es el cierre OBLIGATORIO de toda conversación exitosa  \n6. NO inventes links ni compartas ningún enlace que no provenga del \"Supabase Vector Store\"\n7. NO ofrezcas ni menciones videos, planos, recorridos virtuales ni materiales adicionales. Sí podés ofrecer imágenes preguntando \"¿Querés que te mande las imágenes?\" después de enviar los datos de la propiedad.\n8. El ÚNICO link que podés enviar es el que proviene directamente de la herramienta \"Supabase Vector Store\", y solo lo enviás si el cliente pidió ver las imágenes.\n9. Si el contexto no incluye la dirección de la propiedad, pregunta nuevamente por cual propiedad está consultando\n10. En captación de propiedades, NO pidas documentación ni fotos, solo info conversacional\n11. NO te presentes mas de una vez, solo en el mensaje inicial\n12. NUNCA agendas una visita, siempre agendas llamadas\n13. si el cliente envia un audio , pide que escriba el mensaje ya que no podes escuchar audios \n14. Si el cliente menciona una preferencia o petición específica (zona, barrio, \ncantidad de ambientes, características particulares, etc.) , llamá inmediatamente a la herramienta \n\"busqueda personalizada\"\n15. Si el cliente pide una visita o llamada primero debes calificar antes de agendar llamada\n\n═══════════════════════════════════════════════════════════════\n\n✅ RECORDATORIO FINAL\n\n═══════════════════════════════════════════════════════════════\n\nTu meta es:\n- Identificar la propiedad de consulta ANTES de calificar\n- Ser útil y humana  \n- Calificar financieramente al lead (compra) o recopilar info clave (venta/permuta/presupuesto)\n- SIEMPRE cerrar en llamada con Andrés cuando hay interés genuino  \n\nLa llamada NO es opcional: es el objetivo final de cada conversación exitosa."
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
@@ -1479,9 +1479,19 @@
                 "operation": "notEmpty",
                 "singleValue": true
               }
+            },
+            {
+              "id": "235d0cdf-d5e3-4fd7-8f01-09fdd3c5f507",
+              "leftValue": "={{ $('Webhook').item.json.body.conversation.messages[0].sender.phone_number }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
             }
           ],
-          "combinator": "and"
+          "combinator": "or"
         },
         "options": {}
       },
@@ -1627,10 +1637,77 @@
       "typeVersion": 2.2,
       "position": [
         3680,
-        6640
+        6624
       ],
       "id": "aa6d26ee-965f-423b-a8d8-e8a9603fe3a2",
       "name": "busqueda personalizada"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "79d38b0b-ed31-48d7-9522-4d2deb757b87",
+              "leftValue": "={{ $json.body.conversation.messages[0].sender.phone_number }}",
+              "rightValue": "+5492214770671",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "a028436b-8b94-4b34-85d3-46fa47edec7f",
+              "leftValue": "={{ $json.body.conversation.messages[0].sender.phone_number }}",
+              "rightValue": "+5491133370937",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "5973efda-b7b0-4bb8-9c4f-4ad1b67ca847",
+              "leftValue": "={{ $json.body.conversation.messages[0].sender.phone_number }}",
+              "rightValue": "+5492214770660",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2992,
+        5904
+      ],
+      "id": "bee010ef-1709-484d-bdcd-cffc103342d8",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "errorMessage": "duplicado"
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        -2688,
+        5920
+      ],
+      "id": "5a9ba6d2-0ab1-4581-8064-177e333a721a",
+      "name": "Stop and Error"
     }
   ],
   "pinData": {
@@ -1640,7 +1717,7 @@
           "headers": {
             "host": "mia-n8n.w9weud.easypanel.host",
             "user-agent": "rest-client/2.1.0 (linux-musl x86_64) ruby/3.4.4p34",
-            "content-length": "2554",
+            "content-length": "2680",
             "accept": "application/json",
             "accept-encoding": "gzip;q=1.0,deflate;q=0.6,identity;q=0.3",
             "content-type": "application/json",
@@ -1648,7 +1725,7 @@
             "x-forwarded-host": "mia-n8n.w9weud.easypanel.host",
             "x-forwarded-port": "443",
             "x-forwarded-proto": "https",
-            "x-forwarded-server": "61a01b9f8eee",
+            "x-forwarded-server": "41e5dca11d10",
             "x-real-ip": "172.18.0.1"
           },
           "params": {},
@@ -1661,60 +1738,60 @@
             "additional_attributes": {},
             "content_attributes": {},
             "content_type": "text",
-            "content": "Hola! Quiero más información sobre el depto de 12 e/ 37 y 38",
+            "content": "Hola! Sí, sigo buscando. Alrededor de u$s 150.000 , 3/4 a. Luminoso, patio o jardín, baño y toilette",
             "conversation": {
               "additional_attributes": {},
               "can_reply": true,
               "channel": "Channel::Whatsapp",
               "contact_inbox": {
-                "id": 347,
-                "contact_id": 346,
-                "inbox_id": 2,
-                "source_id": "5492215065324",
-                "created_at": "2026-01-22T09:20:38.001Z",
-                "updated_at": "2026-01-22T09:20:38.001Z",
+                "id": 2088,
+                "contact_id": 1687,
+                "inbox_id": 3,
+                "source_id": "5491149790156",
+                "created_at": "2026-04-11T16:30:18.624Z",
+                "updated_at": "2026-04-11T16:30:18.624Z",
                 "hmac_verified": false,
-                "pubsub_token": "zUJXgnNtjh9M1gKcgpS5SFs4"
+                "pubsub_token": "121na9kNGpnHvT2maDJrMfP4"
               },
-              "id": 347,
-              "inbox_id": 2,
+              "id": 2498,
+              "inbox_id": 3,
               "messages": [
                 {
-                  "id": 13172,
-                  "content": "Hola! Quiero más información sobre el depto de 12 e/ 37 y 38",
+                  "id": 21108,
+                  "content": "Hola! Sí, sigo buscando. Alrededor de u$s 150.000 , 3/4 a. Luminoso, patio o jardín, baño y toilette",
                   "account_id": 2,
-                  "inbox_id": 2,
-                  "conversation_id": 347,
+                  "inbox_id": 3,
+                  "conversation_id": 2498,
                   "message_type": 0,
-                  "created_at": 1772681246,
-                  "updated_at": "2026-03-05T03:27:26.335Z",
+                  "created_at": 1776982495,
+                  "updated_at": "2026-04-23T22:14:55.997Z",
                   "private": false,
                   "status": "sent",
-                  "source_id": "wamid.HBgNNTQ5MjIxNTA2NTMyNBUCABIYIEFDNjNDRUIzQ0IwQkI1QzFGRDRGNjI2MTJEOTRCRUU0AA==",
+                  "source_id": "wamid.HBgNNTQ5MTE0OTc5MDE1NhUCABIYIEFDRjg5QUY3MDc5NjM2NDNDQTQyMkRCRTY2Mzg4NDhFAA==",
                   "content_type": "text",
                   "content_attributes": {},
                   "sender_type": "Contact",
-                  "sender_id": 346,
+                  "sender_id": 1687,
                   "external_source_ids": {},
                   "additional_attributes": {},
-                  "processed_message_content": "Hola! Quiero más información sobre el depto de 12 e/ 37 y 38",
+                  "processed_message_content": "Hola! Sí, sigo buscando. Alrededor de u$s 150.000 , 3/4 a. Luminoso, patio o jardín, baño y toilette",
                   "sentiment": {},
                   "conversation": {
                     "assignee_id": null,
-                    "unread_count": 10,
-                    "last_activity_at": 1772681246,
+                    "unread_count": 1,
+                    "last_activity_at": 1776982495,
                     "contact_inbox": {
-                      "source_id": "5492215065324"
+                      "source_id": "5491149790156"
                     }
                   },
                   "sender": {
                     "additional_attributes": {},
                     "custom_attributes": {},
                     "email": null,
-                    "id": 346,
+                    "id": 1687,
                     "identifier": null,
-                    "name": "JM 🖤",
-                    "phone_number": "+5492215065324",
+                    "name": "Nelida Pagnat",
+                    "phone_number": "+5491149790156",
                     "thumbnail": "",
                     "blocked": false,
                     "type": "contact"
@@ -1727,10 +1804,10 @@
                   "additional_attributes": {},
                   "custom_attributes": {},
                   "email": null,
-                  "id": 346,
+                  "id": 1687,
                   "identifier": null,
-                  "name": "JM 🖤",
-                  "phone_number": "+5492215065324",
+                  "name": "Nelida Pagnat",
+                  "phone_number": "+5491149790156",
                   "thumbnail": "",
                   "blocked": false,
                   "type": "contact"
@@ -1743,21 +1820,21 @@
               "status": "open",
               "custom_attributes": {},
               "snoozed_until": null,
-              "unread_count": 10,
-              "first_reply_created_at": "2026-01-22T17:34:15.326Z",
+              "unread_count": 1,
+              "first_reply_created_at": null,
               "priority": null,
-              "waiting_since": 1769122827,
+              "waiting_since": 1776979081,
               "agent_last_seen_at": 0,
               "contact_last_seen_at": 0,
-              "last_activity_at": 1772681246,
-              "timestamp": 1772681246,
-              "created_at": 1769073638,
-              "updated_at": 1772681246.37604
+              "last_activity_at": 1776982495,
+              "timestamp": 1776982495,
+              "created_at": 1776979081,
+              "updated_at": 1776982496.002811
             },
-            "created_at": "2026-03-05T03:27:26.335Z",
-            "id": 13172,
+            "created_at": "2026-04-23T22:14:55.997Z",
+            "id": 21108,
             "inbox": {
-              "id": 2,
+              "id": 3,
               "name": "Team ali"
             },
             "message_type": "incoming",
@@ -1771,14 +1848,14 @@
               "avatar": "",
               "custom_attributes": {},
               "email": null,
-              "id": 346,
+              "id": 1687,
               "identifier": null,
-              "name": "JM 🖤",
-              "phone_number": "+5492215065324",
+              "name": "Nelida Pagnat",
+              "phone_number": "+5491149790156",
               "thumbnail": "",
               "blocked": false
             },
-            "source_id": "wamid.HBgNNTQ5MjIxNTA2NTMyNBUCABIYIEFDNjNDRUIzQ0IwQkI1QzFGRDRGNjI2MTJEOTRCRUU0AA==",
+            "source_id": "wamid.HBgNNTQ5MTE0OTc5MDE1NhUCABIYIEFDRjg5QUY3MDc5NjM2NDNDQTQyMkRCRTY2Mzg4NDhFAA==",
             "event": "message_created"
           },
           "webhookUrl": "https://mia-n8n.w9weud.easypanel.host/webhook/chatwoot-webhook",
@@ -2349,15 +2426,30 @@
           }
         ]
       ]
+    },
+    "If1": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Stop and Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
   "settings": {
     "executionOrder": "v1",
+    "binaryMode": "separate",
     "timezone": "America/Argentina/Buenos_Aires",
-    "callerPolicy": "workflowsFromSameOwner"
+    "callerPolicy": "workflowsFromSameOwner",
+    "timeSavedMode": "fixed",
+    "availableInMCP": false
   },
-  "versionId": "2aee88f6-0532-45d4-816a-263e61daceff",
+  "versionId": "4153801e-547f-45bd-9bf0-2dcca27ab500",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "ee9f9cdde9b6fee62a7d6845e13fb03583e8c082f1cedc5478accdeca64f2246"

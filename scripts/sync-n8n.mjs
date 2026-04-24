@@ -54,12 +54,34 @@ const headers = {
 // triggerCount, shared) es de sólo-lectura y rompe la validación.
 const ALLOWED_FIELDS = ['name', 'nodes', 'connections', 'settings', 'staticData'];
 
+// `settings` también es estricto: campos como binaryMode, callerPolicy,
+// timeSavedMode, availableInMCP son internos del UI y no aceptados por la API.
+const ALLOWED_SETTINGS_FIELDS = [
+  'saveExecutionProgress',
+  'saveManualExecutions',
+  'saveDataErrorExecution',
+  'saveDataSuccessExecution',
+  'executionTimeout',
+  'errorWorkflow',
+  'timezone',
+  'executionOrder',
+];
+
+function sanitizeSettings(settings) {
+  const out = {};
+  if (!settings || typeof settings !== 'object') return out;
+  for (const key of ALLOWED_SETTINGS_FIELDS) {
+    if (settings[key] !== undefined) out[key] = settings[key];
+  }
+  return out;
+}
+
 function sanitize(workflow) {
   const out = {};
   for (const key of ALLOWED_FIELDS) {
     if (workflow[key] !== undefined) out[key] = workflow[key];
   }
-  if (!out.settings) out.settings = {};
+  out.settings = sanitizeSettings(workflow.settings);
   return out;
 }
 
@@ -97,6 +119,10 @@ async function syncWorkflow(file) {
       console.log(`✔ actualizado: ${label}`);
       return { status: 'updated', file };
     } catch (e) {
+      if (e.status === 400 && /archived/i.test(e.message)) {
+        console.warn(`⚠ salteado (archivado en n8n): ${label}`);
+        return { status: 'skipped-archived', file };
+      }
       if (e.status !== 404) throw e;
       console.warn(`⚠ id ${wf.id} no existe en n8n, creando workflow nuevo...`);
     }
