@@ -1,0 +1,26 @@
+name: Sync n8n workflows
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workflows/**'
+      - 'scripts/sync-n8n.mjs'
+      - '.github/workflows/sync-n8n.yml'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Sync workflows to n8n
+        run: node scripts/sync-n8n.mjs
+        env:
+          N8N_BASE_URL: ${{ secrets.N8N_BASE_URL }}
+          N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
