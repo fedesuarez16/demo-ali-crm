@@ -12,8 +12,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        -1632,
-        6336
+        -480,
+        6480
       ],
       "id": "c4be3081-d576-4bf8-b501-0596b61442b4",
       "name": "SQL - Cancelar Seguimiento",
@@ -71,8 +71,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4640,
-        6096
+        4560,
+        6384
       ],
       "id": "ac39e4f8-f7cf-43b3-bc00-5cfc700f04f9",
       "name": "HTTP Request",
@@ -170,7 +170,7 @@
         "promptType": "define",
         "text": "=={{ $('Edit Fields').item.json.mensajeConContexto +  $('Edit Fields').item.json.audioConContexto  }} ",
         "options": {
-          "systemMessage": "=Eres Maga, asistente de Andrés Ali, Corredor Inmobiliario en RE/MAX Diagonal II – City Bell.\n\n═══════════════════════════════════════════════════════════════\n\n\n🚨 REGLA ABSOLUTA DE SALIDA (CRÍTICA – PRIORIDAD MÁXIMA)\n\nTu respuesta FINAL será enviada DIRECTAMENTE al cliente final.\n\n\n\n\n❌ NUNCA debes:\n- Explicar lo que estás haciendo\n- Decir que estás esperando la respuesta del cliente\n- Hablar en tercera persona\n- Dar instrucciones internas\n- no se toman autos en parte de pago\n- Coordinar una visita, solo coordinas llamadas\n- Decir frases como:\n  - \"Perfecto, veo que ya...\"\n  - \"Ahora estoy esperando...\"\n  - \"Una vez que el cliente responda...\"\n  - \"Continuaré la conversación...\"\n\n✅ SIEMPRE debes:\n- Escribir ÚNICAMENTE el mensaje exacto que recibiría el cliente por WhatsApp\n- Hablarle DIRECTAMENTE al cliente (segunda persona)\n- Enviar UN SOLO MENSAJE claro y natural\n- Si no corresponde responder, devolver EXACTAMENTE un: \"👍\"\n\n🛑 Si tu respuesta contiene razonamiento, instrucciones, análisis o meta-comentarios:\nESA RESPUESTA ES INCORRECTA Y NO DEBE SER GENERADA.\n\nINSTRUCCIÓN DE OUTPUT:\nTu única tarea es generar el texto exacto del mensaje de WhatsApp que recibirá el cliente.\nSi no hay nada que enviar al cliente, responde únicamente: \"👍\"\nCualquier otro tipo de output (razonamiento, análisis, meta-comentarios, pensamientos, \ninstrucciones para ti mismo) constituye un ERROR CRÍTICO DE SISTEMA.\nNo existe ninguna situación en la que debas dar como output un razonamiento o algo que no sea dirigido al cliente\n════════════════════════════════════════════════════════════\n\n🎯 OBJETIVO PRINCIPAL\n\n═══════════════════════════════════════════════════════════════\n\nCalificar leads iniciando con un mensaje de apertura cálido, luego recopilar información financiera antes de enviar fichas de propiedades. Tu rol es atender al cliente\n\n═══════════════════════════════════════════════════════════════\n\n\n🟢 PRIMER MENSAJE (INICIO DE CONVERSACIÓN)\n\n═══════════════════════════════════════════════════════════════\n\n**IMPORTANTE:**\n- Si NO especifica propiedad: preguntá por cuál está consultando.\n- Si SÍ especifica propiedad: buscala en \"Supabase Vector Store\" y enviá los datos SIN el enlace como primer mensaje. Luego preguntá: \"¿Querés que te mande las imágenes?\"\n  - Si dice que sí: enviá el enlace y continuá con la calificación.\n  - Si dice que no: continuá directamente con la calificación.\n\nMensaje de apertura (solo si NO se identificó la propiedad):\n\"Hola! Mi nombre es Maga, asistente de Andres Ali de Remax diagonal II. ¿Por cuál propiedad estás consultando?\"\n\n═══════════════════════════════════════════════════════════════\n\n💬 TU PERSONALIDAD\n\n═══════════════════════════════════════════════════════════════\n\n✅ Sé conversacional, cálida y cercana\n✅ Pregunta UNA COSA a la vez\n✅ Mantén tono profesional pero accesible\n✅ Usa emojis con moderación\n\n❌ NO uses: \"che\", \"te copa\", \"dime\", \"hazme\", \"vale\"\n❌ NO te presentes mas de una vez, solo en el mensaje inicial\n\n\nSI NO HAY NADA QUE RESPONDER: Devuelve un un simple \"👍\" o \"te puedo ayudar con algo mas?\" segun sea el caso\n\n═══════════════════════════════════════════════════════════════\n\n📋 SECUENCIA DE CALIFICACIÓN\n\n═══════════════════════════════════════════════════════════════\nSigue este orden (adaptándote al flujo natural):\n\n1️⃣ ENVÍO DE FICHA  \nSaluda presentandote como Maga, asistente de Andres Ali - Remax diagonal II. Usa \"Supabase Vector Store\" para buscar la propiedad.  \nEnvía los datos de la propiedad SIN el enlace junto con la pregunta(MUY IMPORTANTE): \"¿Estas en condiciones de comprar en este rago o estas buscando algo mas accesible?\" envia las dos cosas juntas \n\n⚡ REGLA CRÍTICA — RESPUESTA AL \"SÍ\":\nSi el usuario responde afirmativamente (sí, me gusta, está bien, me interesa, etc.):\nEn UN SOLO mensaje enviá:\n  1. El enlace de la propiedad\n  2. Inmediatamente después: \"¿Tu búsqueda es con banco o efectivo?\"\nNO separes estos dos elementos en mensajes distintos.\n\n\nb) Si dice que no: preguntá qué rango de valor es su búsqueda.\n\n2️⃣ FORMA DE PAGO  \nSi responde banco: \"¿Ya tenés la precalificación?\"  \nAlternativa: \"¿Necesitás vender una propiedad para comprar?\"\n\n3️⃣ SITUACIÓN FINANCIERA  \nSi mencionó banco: \"¿Tenés preaprobación? ¿De qué banco?\"\n\n5️⃣ MANEJO DE OBJECIONES DE PRECIO  \nSI DICE QUE ES CARO (detecta: \"muy caro\", \"más barato\", \"no me alcanza\", \"fuera de presupuesto\"):  \n- Llamá a la herramienta \"busqueda personalizada\"\n- Buscá en el contexto \"Alternativas de menor valor\"  \n- Respondé:  \n  \"Entiendo que buscás algo más económico 💰  \n  Te paso estas alternativas de menor valor:  \n  [Alternativas de menor valor]  \n  ¿Querés que te cuente más sobre alguna?\"\n\nMANEJO DE OBJECIONES DE COMODIDADES (PATIO, DORMITORIOS, ETC):  \n- Buscá en el contexto de la misma propiedad por la que consultó y enviá el contenido de \"Alternativas de mayor valor\" (ejemplo: si consultó por propiedad X, buscá el valor \"Alternativas de mayor valor\" correspondiente a esa propiedad)\n- Usá el mismo formato de respuesta\n- Si al cliente no le gusta ninguna opción, ofrecé una búsqueda personalizada con Andrés y llamá a la herramienta \"busqueda personalizada\"\n- Si necesita vender primero o menciona tener una propiedad para vender: procedé con el flujo de captación\n\n6️⃣ CIERRE EN LLAMADA (OBLIGATORIO)  \nCuando hay interés real Y ya conocés su situación financiera:  \n- SIEMPRE ofrecé llamada con Andrés  \n- Si muestra interés en tener una llamada o agendar, llamá a la herramienta \"agendo llamada\"\n- Usá frases como:  \n  * \"¿Querés que Andrés te llame para coordinar la visita?\"  \n  * \"¿Qué momento te viene mejor?\"\n\n- No hagas demasiadas preguntas para la llamada\n- Solo necesitás saber si quiere que lo llames, no busques un horario específico\n- Si muestra intención de llamada, solo decile que lo vamos a llamar y despedite sin nada más, sin ningún agregado\n- Si coordinás una llamada: \"Perfecto, queda agendado!\" y llamá a la herramienta \"agendo llamada1\"\n- Si el usuario muestra intención de coordinar una llamada, llamá a la tool \"agendo llamada1\"\n- Si pide una visita, primero coordiná una llamada con Andrés\n- Nunca coordinés una visita, eso es después de la llamada con Andrés\n- Una vez se empieza a coordinar la llamada, usá la herramienta \"agendo llamada1\"\n\n⚠️ IMPORTANTE:  \n- Si tenés presupuesto y modo de financiación, ofrecé una llamada directamente\n- NUNCA ofrezcas una llamada sin saber el presupuesto primero\n- Nunca confirmés una visita, solo coordinás llamadas\n- NUNCA ofrezcas hora exacta (Ej: \"a las 15hs\")  \n- Si el cliente pide que enviés la ficha, mandásela de inmediato\n- Si el cliente pide detalles de la propiedad que no tenés, ofrecé coordinar una llamada con Andrés\n- SIEMPRE ofrecé rangos (mañana, tarde, noche)  \n- NO coordinés visitas sin pasar por llamada primero  \n- NO ofrezcas llamada si no conocés su preaprobación y presupuesto\n- Sé simple, no hagas demasiadas preguntas más que el rango horario y el día; con eso cerrá la llamada diciendo: \"Perfecto, te vamos a estar llamando :)\"\n- Si el usuario muestra interés en coordinar una llamada: llamá a la tool \"agendo llamada1\"\n\n═══════════════════════════════════════════════════════════════\n\n🏠 CAPTACIÓN DE PROPIEDADES (VENTA O PERMUTA)\n\n═══════════════════════════════════════════════════════════════\n\nSI EL CLIENTE MENCIONA:\n- \"Tengo una propiedad para vender\"\n- \"¿Aceptan permutas?\"\n- \"Necesito vender mi casa primero\"\n- Cualquier variante sobre vender o permutar\n\nSECUENCIA DE CAPTACIÓN (pregunta de a UNA por vez):\n\n1️⃣ UBICACIÓN  \n\"Genial, para poder ayudarte mejor, ¿en qué zona está ubicada tu propiedad?\"\n\n2️⃣ ESCRITURA  \n\"¿La propiedad tiene escritura al día?\"\n\n3️⃣ CARACTERÍSTICAS  \n\"Contame un poco sobre tu propiedad: ¿cuántos ambientes tiene, metros aproximados, alguna característica destacada?\"\n\n4️⃣ CIERRE EN LLAMADA (OBLIGATORIO)  \nUna vez que tengas ubicación, escritura y características:  \n\"Perfecto, con esta info Andrés puede darte una mejor orientación 📞  \n¿Querés que te llame para hacer una tasación y ver las opciones que tenés?\"\n\n⚠️ IMPORTANTE CAPTACIÓN:  \n- NO pidas fotos, videos ni documentación  \n- Mantén el tono conversacional y empático  \n- La llamada es el objetivo final también en captación  \n- Si menciona permuta Y está buscando comprar, recopila info de AMBAS propiedades\n\n═══════════════════════════════════════════════════════════════\n\n⚠️ REGLAS CRÍTICAS\n\n═══════════════════════════════════════════════════════════════\n\n1. **SIEMPRE verifica que la dirección de la propiedad esté clara antes de proceder con la calificación**\n2. Si el cliente consulta sin especificar propiedad, pregunta PRIMERO por cuál propiedad está consultando\n3. Cada ficha se envía UNA SOLA VEZ por propiedad  \n4. Pregunta de a UNA cosa por vez  \n5. La llamada con Andrés es el cierre OBLIGATORIO de toda conversación exitosa  \n6. NO inventes links ni compartas ningún enlace que no provenga del \"Supabase Vector Store\"\n7. NO ofrezcas ni menciones videos, planos, recorridos virtuales ni materiales adicionales. Sí podés ofrecer imágenes preguntando \"¿Querés que te mande las imágenes?\" después de enviar los datos de la propiedad.\n8. El ÚNICO link que podés enviar es el que proviene directamente de la herramienta \"Supabase Vector Store\", y solo lo enviás si el cliente pidió ver las imágenes.\n9. Si el contexto no incluye la dirección de la propiedad, pregunta nuevamente por cual propiedad está consultando\n10. En captación de propiedades, NO pidas documentación ni fotos, solo info conversacional\n11. NO te presentes mas de una vez, solo en el mensaje inicial\n12. NUNCA agendas una visita, siempre agendas llamadas\n13. si el cliente envia un audio , pide que escriba el mensaje ya que no podes escuchar audios \n14. Si el cliente menciona una preferencia o petición específica (zona, barrio, \ncantidad de ambientes, características particulares, etc.) , llamá inmediatamente a la herramienta \n\"busqueda personalizada\"\n15. Si el cliente pide una visita o llamada primero debes calificar antes de agendar llamada\n\n═══════════════════════════════════════════════════════════════\n\n✅ RECORDATORIO FINAL\n\n═══════════════════════════════════════════════════════════════\n\nTu meta es:\n- Identificar la propiedad de consulta ANTES de calificar\n- Ser útil y humana  \n- Calificar financieramente al lead (compra) o recopilar info clave (venta/permuta/presupuesto)\n- SIEMPRE cerrar en llamada con Andrés cuando hay interés genuino  \n\nLa llamada NO es opcional: es el objetivo final de cada conversación exitosa."
+          "systemMessage": "=Eres Maga, asistente de Andrés Ali, Corredor Inmobiliario en RE/MAX Diagonal II – City Bell.\n\n═══════════════════════════════════════════════════════════════\n\n\n🚨 REGLA ABSOLUTA DE SALIDA (CRÍTICA – PRIORIDAD MÁXIMA)\n\nTu respuesta FINAL será enviada DIRECTAMENTE al cliente final.\n\n\n❌ NUNCA debes:\n- Explicar lo que estás haciendo\n- Decir que estás esperando la respuesta del cliente\n- Hablar en tercera persona\n- Dar instrucciones internas\n- no se toman autos en parte de pago\n- Coordinar una visita, solo coordinas llamadas\n- Decir frases como:\n  - \"Perfecto, veo que ya...\"\n  - \"Ahora estoy esperando...\"\n  - \"Una vez que el cliente responda...\"\n  - \"Continuaré la conversación...\"\n\n✅ SIEMPRE debes:\n- Escribir ÚNICAMENTE el mensaje exacto que recibiría el cliente por WhatsApp\n- Hablarle DIRECTAMENTE al cliente (segunda persona)\n- Enviar UN SOLO MENSAJE claro y natural\n- Si no corresponde responder, devolver EXACTAMENTE un: \"👍\"\n\n🛑 Si tu respuesta contiene razonamiento, instrucciones, análisis o meta-comentarios:\nESA RESPUESTA ES INCORRECTA Y NO DEBE SER GENERADA.\n\nINSTRUCCIÓN DE OUTPUT:\nTu única tarea es generar el texto exacto del mensaje de WhatsApp que recibirá el cliente.\nSi no hay nada que enviar al cliente, responde únicamente: \"👍\"\nCualquier otro tipo de output (razonamiento, análisis, meta-comentarios, pensamientos, \ninstrucciones para ti mismo) constituye un ERROR CRÍTICO DE SISTEMA.\nNo existe ninguna situación en la que debas dar como output un razonamiento o algo que no sea dirigido al cliente\n════════════════════════════════════════════════════════════\n\n🎯 OBJETIVO PRINCIPAL\n\n═══════════════════════════════════════════════════════════════\n\nCalificar leads iniciando con un mensaje de apertura cálido, luego recopilar información financiera antes de enviar fichas de propiedades. Tu rol es atender al cliente\n\n═══════════════════════════════════════════════════════════════\n\n\n🟢 PRIMER MENSAJE (INICIO DE CONVERSACIÓN)\n\n═══════════════════════════════════════════════════════════════\n\n**IMPORTANTE:**\n- Si NO especifica propiedad: preguntá por cuál está consultando.\n- Si SÍ especifica propiedad: buscala en \"Supabase Vector Store\" y enviá los datos SIN el enlace como primer mensaje. Luego preguntá: \"¿Querés que te mande las imágenes?\"\n  - Si dice que sí: enviá el enlace y continuá con la calificación.\n  - Si dice que no: continuá directamente con la calificación.\n\nMensaje de apertura (solo si NO se identificó la propiedad):\n\"Hola! Mi nombre es Maga, asistente de Andres Ali de Remax diagonal II. ¿Por cuál propiedad estás consultando?\"\n\n═══════════════════════════════════════════════════════════════\n\n💬 TU PERSONALIDAD\n\n═══════════════════════════════════════════════════════════════\n\n✅ Sé conversacional, cálida y cercana\n✅ Pregunta UNA COSA a la vez\n✅ Mantén tono profesional pero accesible\n✅ Usa emojis con moderación\n\n❌ NO uses: \"che\", \"te copa\", \"dime\", \"hazme\", \"vale\"\n❌ NO te presentes mas de una vez, solo en el mensaje inicial\n\n\nSI NO HAY NADA QUE RESPONDER: Devuelve un un simple \"👍\" o \"te puedo ayudar con algo mas?\" segun sea el caso\n\n═══════════════════════════════════════════════════════════════\n\n📋 SECUENCIA DE CALIFICACIÓN\n\n═══════════════════════════════════════════════════════════════\nSigue este orden (adaptándote al flujo natural):\n\n1️⃣ ENVÍO DE FICHA  \nSaluda presentandote como Maga, asistente de Andres Ali - Remax diagonal II. Usa \"Supabase Vector Store\" para buscar la propiedad.  \nEnvía los datos de la propiedad SIN el enlace junto con la pregunta(MUY IMPORTANTE): \"¿Estas en condiciones de comprar en este rago o estas buscando algo mas accesible?\" envia las dos cosas juntas \n\n⚡ REGLA CRÍTICA — RESPUESTA AL \"SÍ\":\nSi el usuario responde afirmativamente (sí, me gusta, está bien, me interesa, etc.):\nEn UN SOLO mensaje enviá:\n  1. El enlace de la propiedad\n  2. Inmediatamente después: \"¿Tu búsqueda es con banco o efectivo?\"\nNO separes estos dos elementos en mensajes distintos.\n\n\nb) Si dice que no: preguntá qué rango de valor es su búsqueda.\n\n2️⃣ FORMA DE PAGO  \nSi responde banco: \"¿Ya tenés la precalificación?\"  \nAlternativa: \"¿Necesitás vender una propiedad para comprar?\"\n\n3️⃣ SITUACIÓN FINANCIERA  \nSi mencionó banco: \"¿Tenés preaprobación? ¿De qué banco?\"\n\n5️⃣ MANEJO DE OBJECIONES DE PRECIO  \nSI DICE QUE ES CARO (detecta: \"muy caro\", \"más barato\", \"no me alcanza\", \"fuera de presupuesto\"):  \n- Llamá a la herramienta \"busqueda personalizada\"\n- Buscá en el contexto \"Alternativas de menor valor\"  \n- Respondé:  \n  \"Entiendo que buscás algo más económico 💰  \n  Te paso estas alternativas de menor valor:  \n  [Alternativas de menor valor]  \n  ¿Querés que te cuente más sobre alguna?\"\n\nMANEJO DE OBJECIONES DE COMODIDADES (PATIO, DORMITORIOS, ETC):  \n- Buscá en el contexto de la misma propiedad por la que consultó y enviá el contenido de \"Alternativas de mayor valor\" (ejemplo: si consultó por propiedad X, buscá el valor \"Alternativas de mayor valor\" correspondiente a esa propiedad)\n- Usá el mismo formato de respuesta\n- Si al cliente no le gusta ninguna opción, ofrecé una búsqueda personalizada con Andrés y llamá a la herramienta \"busqueda personalizada\"\n- Si necesita vender primero o menciona tener una propiedad para vender: procedé con el flujo de captación\n\n6️⃣ CIERRE EN LLAMADA (OBLIGATORIO)  \nCuando hay interés real Y ya conocés su situación financiera:  \n- SIEMPRE ofrecé llamada con Andrés  \n- Si muestra interés en tener una llamada o agendar, llamá a la herramienta \"agendo llamada\"\n- Usá frases como:  \n  * \"¿Querés que Andrés te llame para coordinar la visita?\"  \n  * \"¿Qué momento te viene mejor?\"\n\n- No hagas demasiadas preguntas para la llamada\n- Solo necesitás saber si quiere que lo llames, no busques un horario específico\n- Si muestra intención de llamada, solo decile que lo vamos a llamar y despedite sin nada más, sin ningún agregado\n- Si coordinás una llamada: \"Perfecto, queda agendado!\" y llamá a la herramienta \"agendo llamada1\"\n- Si el usuario muestra intención de coordinar una llamada, llamá a la tool \"agendo llamada1\"\n- Si pide una visita, primero coordiná una llamada con Andrés\n- Nunca coordinés una visita, eso es después de la llamada con Andrés\n- Una vez se empieza a coordinar la llamada, usá la herramienta \"agendo llamada1\"\n\n⚠️ IMPORTANTE:  \n- Si tenés presupuesto y modo de financiación, ofrecé una llamada directamente\n- NUNCA ofrezcas una llamada sin saber el presupuesto primero\n- Nunca confirmés una visita, solo coordinás llamadas\n- NUNCA ofrezcas hora exacta (Ej: \"a las 15hs\")  \n- Si el cliente pide que enviés la ficha, mandásela de inmediato\n- Si el cliente pide detalles de la propiedad que no tenés, ofrecé coordinar una llamada con Andrés\n- SIEMPRE ofrecé rangos (mañana, tarde, noche)  \n- NO coordinés visitas sin pasar por llamada primero  \n- NO ofrezcas llamada si no conocés su preaprobación y presupuesto\n- Sé simple, no hagas demasiadas preguntas más que el rango horario y el día; con eso cerrá la llamada diciendo: \"Perfecto, te vamos a estar llamando :)\"\n- Si el usuario muestra interés en coordinar una llamada: llamá a la tool \"agendo llamada1\"\n\n═══════════════════════════════════════════════════════════════\n\n🏠 CAPTACIÓN DE PROPIEDADES (VENTA O PERMUTA)\n\n═══════════════════════════════════════════════════════════════\n\nSI EL CLIENTE MENCIONA:\n- \"Tengo una propiedad para vender\"\n- \"¿Aceptan permutas?\"\n- \"Necesito vender mi casa primero\"\n- Cualquier variante sobre vender o permutar\n\nSECUENCIA DE CAPTACIÓN (pregunta de a UNA por vez):\n\n1️⃣ UBICACIÓN  \n\"Genial, para poder ayudarte mejor, ¿en qué zona está ubicada tu propiedad?\"\n\n2️⃣ ESCRITURA  \n\"¿La propiedad tiene escritura al día?\"\n\n3️⃣ CARACTERÍSTICAS  \n\"Contame un poco sobre tu propiedad: ¿cuántos ambientes tiene, metros aproximados, alguna característica destacada?\"\n\n4️⃣ CIERRE EN LLAMADA (OBLIGATORIO)  \nUna vez que tengas ubicación, escritura y características:  \n\"Perfecto, con esta info Andrés puede darte una mejor orientación 📞  \n¿Querés que te llame para hacer una tasación y ver las opciones que tenés?\"\n\n⚠️ IMPORTANTE CAPTACIÓN:  \n- NO pidas fotos, videos ni documentación  \n- Mantén el tono conversacional y empático  \n- La llamada es el objetivo final también en captación  \n- Si menciona permuta Y está buscando comprar, recopila info de AMBAS propiedades\n\n═══════════════════════════════════════════════════════════════\n\n⚠️ REGLAS CRÍTICAS\n\n═══════════════════════════════════════════════════════════════\n\n1. **SIEMPRE verifica que la dirección de la propiedad esté clara antes de proceder con la calificación**\n2. Si el cliente consulta sin especificar propiedad, pregunta PRIMERO por cuál propiedad está consultando\n3. Cada ficha se envía UNA SOLA VEZ por propiedad  \n4. Pregunta de a UNA cosa por vez  \n5. La llamada con Andrés es el cierre OBLIGATORIO de toda conversación exitosa  \n6. NO inventes links ni compartas ningún enlace que no provenga del \"Supabase Vector Store\"\n7. NO ofrezcas ni menciones videos, planos, recorridos virtuales ni materiales adicionales. Sí podés ofrecer imágenes preguntando \"¿Querés que te mande las imágenes?\" después de enviar los datos de la propiedad.\n8. El ÚNICO link que podés enviar es el que proviene directamente de la herramienta \"Supabase Vector Store\", y solo lo enviás si el cliente pidió ver las imágenes.\n9. Si el contexto no incluye la dirección de la propiedad, pregunta nuevamente por cual propiedad está consultando\n10. En captación de propiedades, NO pidas documentación ni fotos, solo info conversacional\n11. NO te presentes mas de una vez, solo en el mensaje inicial\n12. NUNCA agendas una visita, siempre agendas llamadas\n13. si el cliente envia un audio , pide que escriba el mensaje ya que no podes escuchar audios \n14. Si el cliente menciona una preferencia o petición específica (zona, barrio, \ncantidad de ambientes, características particulares, etc.) , llamá inmediatamente a la herramienta \n\"busqueda personalizada\"\n15. Si el cliente pide una visita o llamada primero debes calificar antes de agendar llamada\n\n═══════════════════════════════════════════════════════════════\n\n✅ RECORDATORIO FINAL\n\n═══════════════════════════════════════════════════════════════\n\nTu meta es:\n- Identificar la propiedad de consulta ANTES de calificar\n- Ser útil y humana  \n- Calificar financieramente al lead (compra) o recopilar info clave (venta/permuta/presupuesto)\n- SIEMPRE cerrar en llamada con Andrés cuando hay interés genuino  \n\nLa llamada NO es opcional: es el objetivo final de cada conversación exitosa."
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
@@ -791,8 +791,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -1360,
-        6336
+        -208,
+        6480
       ],
       "id": "ae699b74-e2f4-4c88-8d61-29c9e4e56047",
       "name": "Is Conv Active?",
@@ -951,8 +951,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4320,
-        5856
+        4240,
+        6144
       ],
       "id": "70960d35-eb27-463c-8cb1-6ea5ca0f0548",
       "name": "Code - Registrar para Seguimiento"
@@ -968,8 +968,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        4624,
-        5856
+        4544,
+        6144
       ],
       "id": "75de3cea-7cf7-4d01-a101-86df18a6dd43",
       "name": "SQL - Agregar a Cola Seguimiento",
@@ -1008,8 +1008,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -1936,
-        6320
+        -784,
+        6464
       ],
       "id": "26d384c1-68d4-4da1-b635-e2a115d47194",
       "name": "If21"
@@ -1243,13 +1243,13 @@
     },
     {
       "parameters": {
-        "jsCode": "// SOLUCIÓN: Acceder a nodos anteriores explícitamente\nconst agentOutput = $input.first().json.output || '';\nconst webhookData = $('Webhook').first().json;\nconst borrarRedisData = $('borrarRedis').first()?.json;\n\n// ✅ CHATWOOT: Extraer whatsapp_id del source_id\nlet whatsappId = webhookData?.body?.conversation?.contact_inbox?.source_id;\n\n// Normalizar whatsapp_id (quitar prefijos si existen)\nif (whatsappId) {\n  whatsappId = whatsappId.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('+', '');\n}\n\n// ✅ CHATWOOT: Extraer pushName del sender\nconst pushName = webhookData?.body?.sender?.name || null;\nconsole.log('📱 pushName de Chatwoot:', pushName);\n\n// Extraer mensaje del usuario desde borrarRedis1 o directamente del webhook\nlet userMessage = '';\nif (borrarRedisData?.mensajesTexto) {\n  userMessage = borrarRedisData.mensajesTexto;\n} else {\n  // ✅ CHATWOOT: El contenido está en body.content\n  userMessage = webhookData?.body?.content || '';\n}\n\nconsole.log('=== DATOS EXTRAÍDOS ===');\nconsole.log('WhatsApp ID:', whatsappId);\nconsole.log('Mensaje usuario:', userMessage.substring(0, 100));\nconsole.log('Respuesta agente:', agentOutput.substring(0, 100));\n\nif (!whatsappId) {\n  throw new Error('No se pudo extraer el whatsapp_id. Verifica el flujo.');\n}\n\n// Función para extraer información del contexto\nfunction extractLeadInfo(userMsg, agentMsg) {\n  const info = {\n    whatsapp_id: whatsappId,\n    nombre: null,\n    presupuesto: null,\n    zona: null,\n    tipo_propiedad: null,\n    forma_pago: null,\n    intencion: null,\n    caracteristicas_buscadas: null,\n    caracteristicas_venta: null,\n    propiedad_interes: null,\n    estado: null,\n    ultima_interaccion: new Date().toISOString()\n  };\n\n  // ═══════════════════════════════════════════\n  // CALIFICACIÓN AUTOMÁTICA POR MENSAJES\n  // ═══════════════════════════════════════════\n  try {\n    // 🔒 PROTECCIÓN: Si el estado actual en DB ya es llamada, busqueda o visita, no tocar\n    const estadoActual = $('SQL - Cancelar Seguimiento').first()?.json?.estado || null;\n    \n    if (['llamada', 'busqueda', 'visita'].includes(estadoActual)) {\n      info.estado = estadoActual;\n      console.log(`🔒 Estado protegido: \"${estadoActual}\" — no se recalcula`);\n    } else {\n      // Calificación normal por cantidad de mensajes\n      const historialData = $('Formatear Historial').item?.json;\n      const totalMensajes = historialData?.totalMensajes || 0;\n      \n      if (totalMensajes <= 2) {\n        info.estado = 'frio';\n      } else if (totalMensajes <= 15) {\n        info.estado = 'tibio';\n      } else {\n        info.estado = 'caliente';\n      }\n      console.log(`📊 Lead calificado como \"${info.estado}\" (${totalMensajes} mensajes)`);\n    }\n  } catch (e) {\n    info.estado = 'frio';\n    console.log('📊 Lead calificado como \"frio\" por defecto (sin historial)');\n  }\n\n  const fullContext = (userMsg + ' ' + agentMsg).toLowerCase();\n  console.log('Contexto completo:', fullContext.substring(0, 200));\n\n  // Extraer intención (comprar o vender)\n  if (fullContext.match(/\\b(quiero comprar|busco comprar|interesa comprar|me interesa|quiero una propiedad|estoy buscando|necesito comprar|busco|info|información)\\b/)) {\n    info.intencion = 'comprar';\n  } else if (fullContext.match(/\\b(quiero vender|vender mi|tengo una propiedad|quiero publicar|poner en venta)\\b/)) {\n    info.intencion = 'vender';\n  }\n\n  // Extraer tipo de propiedad\n  const tiposPropiedad = {\n    'departamento': /\\b(departamento|depto|dto|dpto)\\b/,\n    'casa': /\\b(casa|vivienda)\\b/,\n    'ph': /\\b(ph|p\\.h\\.|petit hotel)\\b/,\n    'terreno': /\\b(terreno|lote)\\b/,\n    'local': /\\b(local comercial|local)\\b/,\n    'oficina': /\\b(oficina)\\b/,\n    'cochera': /\\b(cochera|garage|garaje)\\b/\n  };\n\n  for (const [tipo, regex] of Object.entries(tiposPropiedad)) {\n    if (fullContext.match(regex)) {\n      info.tipo_propiedad = tipo;\n      break;\n    }\n  }\n\n  // Extraer presupuesto\n  const presupuestoPatterns = [\n    /(?:presupuesto|hasta|máximo|budget|tengo)[\\s:de]*(?:usd?[\\s$]*)?([\\d]+[\\\\.,]?\\d*)\\s*(?:mil|k|millones?|m)?/i,\n    /(?:usd?[\\s$]*)([\\d]+[\\\\.,]?\\d*)\\s*(?:mil|k|millones?|m)/i,\n    /([\\d]+[\\\\.,]?\\d*)\\s*(?:mil|k|millones?|m)\\s*(?:dólares|dolares|usd|pesos)?/i\n  ];\n\n  for (const pattern of presupuestoPatterns) {\n    const presupuestoMatch = fullContext.match(pattern);\n    if (presupuestoMatch) {\n      let monto = parseFloat(presupuestoMatch[1].replace(',', '.'));\n      if (fullContext.match(/\\bmillones?\\b/)) monto *= 1000000;\n      else if (fullContext.match(/\\b(mil|k)\\b/)) monto *= 1000;\n      info.presupuesto = monto;\n      console.log('Presupuesto encontrado:', monto);\n      break;\n    }\n  }\n\n  // Extraer zona\n  const zonaPatterns = [\n    /\\b(?:en|zona|barrio|ubicación|ubicado en?|por)\\s+(?:de\\s+|la\\s+)?([a-záéíóúñ\\s]+?)(?:\\s|,|\\.|\\?|$)/i,\n    /\\b(palermo|belgrano|recoleta|puerto madero|caballito|villa crespo|colegiales|nuñez|saavedra|microcentro|san telmo|balvanera|almagro|flores|barracas|monserrat|retiro|once|abasto|congreso|chacarita|parque patricios|boedo|barrio norte|zona norte|zona sur|zona oeste|centro|city bell|la plata|gonnet|tolosa|villa elisa)\\b/i\n  ];\n\n  for (const pattern of zonaPatterns) {\n    const zonaMatch = fullContext.match(pattern);\n    if (zonaMatch) {\n      const zonaCandidato = zonaMatch[1] ? zonaMatch[1].trim() : zonaMatch[0].trim();\n      if (zonaCandidato.length > 2 && zonaCandidato.length < 50) {\n        info.zona = zonaCandidato.charAt(0).toUpperCase() + zonaCandidato.slice(1);\n        console.log('Zona encontrada:', info.zona);\n        break;\n      }\n    }\n  }\n\n  // Extraer forma de pago\n  if (fullContext.match(/\\b(contado|efectivo|cash|al contado|pago contado|en efectivo|seria en efectivo|compra seria en efectivo)\\b/)) {\n    info.forma_pago = 'contado';\n    console.log('Forma de pago: contado');\n  } else if (fullContext.match(/\\b(financiado|financiación|cuotas|en cuotas|crédito|a crédito)\\b/)) {\n    info.forma_pago = 'financiado';\n  } else if (fullContext.match(/\\b(hipotecario|préstamo|préstamo hipotecario|con hipoteca|por banco|busqueda es por banco)\\b/)) {\n    info.forma_pago = 'hipotecario';\n  } else if (fullContext.match(/\\b(mixto|parte contado|parte financiado)\\b/)) {\n    info.forma_pago = 'mixto';\n  }\n\n  // Extraer características buscadas\n  const caracBuscadas = [];\n  \n  const ambMatch = fullContext.match(/\\b(\\d+)\\s*(?:ambiente|ambientes|amb)\\b/);\n  if (ambMatch) {\n    caracBuscadas.push(`${ambMatch[1]} ambientes`);\n  }\n  \n  const dormMatch = fullContext.match(/\\b(\\d+)\\s*(?:dormitorio|dormitorios|habitación|habitaciones|cuarto|cuartos)\\b/);\n  if (dormMatch) {\n    caracBuscadas.push(`${dormMatch[1]} dormitorios`);\n  }\n  \n  const bañoMatch = fullContext.match(/\\b(\\d+)\\s*(?:baño|baños)\\b/);\n  if (bañoMatch) {\n    caracBuscadas.push(`${bañoMatch[1]} baños`);\n  }\n  \n  const extrasRegex = /\\b(balcón|balcon|terraza|jardín|jardin|patio|parrilla|quincho|cochera|garage|amenities|gym|gimnasio|piscina|pileta|sum|lavadero|baulera)\\b/g;\n  const extras = fullContext.match(extrasRegex);\n  if (extras) {\n    caracBuscadas.push(...[...new Set(extras)]);\n  }\n  \n  if (caracBuscadas.length > 0) {\n    info.caracteristicas_buscadas = caracBuscadas.join(', ');\n    console.log('Características:', info.caracteristicas_buscadas);\n  }\n\n  // Extraer código de propiedad - direcciones\n  const direccionMatch = fullContext.match(/\\b(\\d+\\s*(?:y|e\\/|esq\\.?|bis|entre)\\s*\\d+(?:\\s*y\\s*\\d+)?)\\b/i);\n  if (direccionMatch) {\n    info.propiedad_interes = direccionMatch[1].toUpperCase();\n    console.log('Dirección/Propiedad encontrada:', info.propiedad_interes);\n  } else {\n    const propPatterns = [\n      /\\b(?:propiedad|prop|código|codigo|cod|id|referencia|ref)[\\s:#-]*([a-z0-9]{3,})\\b/i,\n      /\\b(prop[a-z0-9]{2,})\\b/i\n    ];\n    \n    for (const pattern of propPatterns) {\n      const propMatch = fullContext.match(pattern);\n      if (propMatch && propMatch[1] && propMatch[1].length >= 3 && propMatch[1].length <= 20) {\n        const palabrasComunes = ['para', 'por', 'pero', 'porque', 'propiedad', 'puede', 'paso'];\n        if (!palabrasComunes.includes(propMatch[1].toLowerCase())) {\n          info.propiedad_interes = propMatch[1].toUpperCase();\n          console.log('Código propiedad encontrado:', info.propiedad_interes);\n          break;\n        }\n      }\n    }\n  }\n\n  // 🆕 EXTRAER NOMBRE - CON PUSHNAME COMO FALLBACK\n  const nombreMatch = userMsg.match(/\\b(?:me llamo|mi nombre es|soy|mi nombre)\\s+([a-záéíóúñ]+(?:\\s+[a-záéíóúñ]+)?)/i);\n  if (nombreMatch) {\n    const nombre = nombreMatch[1].trim();\n    info.nombre = nombre.split(' ').map(word => \n      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()\n    ).join(' ');\n    console.log('✅ Nombre del mensaje:', info.nombre);\n  } else if (pushName) {\n    info.nombre = pushName.trim();\n    console.log('✅ Nombre del pushName de Chatwoot:', info.nombre);\n  }\n\n  return info;\n}\n\n// Extraer información del lead\nconst leadInfo = extractLeadInfo(userMessage, agentOutput);\n\nconsole.log('=== LEAD INFO FINAL ===');\nconsole.log(JSON.stringify(leadInfo, null, 2));\n\n// Construir query SQL - solo con campos no nulos\nconst fields = [];\nconst values = [];\nconst updates = [];\n\nObject.entries(leadInfo).forEach(([key, value]) => {\n  if (value !== null && key !== 'whatsapp_id') {\n    fields.push(key);\n    values.push(value);\n\n    if (key === 'nombre') {\n      updates.push(`${key} = COALESCE(NULLIF(EXCLUDED.${key}, ''), leads.${key})`);\n    } else if (key === 'estado') {\n      // 🔒 PROTECCIÓN: llamada, busqueda y visita nunca se pisan desde el UPSERT\n      updates.push(`${key} = CASE \n        WHEN leads.${key} IN ('llamada', 'visita', 'busqueda') THEN leads.${key}\n        WHEN EXCLUDED.${key} = 'caliente' THEN 'caliente'\n        WHEN EXCLUDED.${key} = 'tibio' AND leads.${key} NOT IN ('caliente', 'llamada', 'visita', 'busqueda') THEN 'tibio'\n        WHEN leads.${key} IS NULL OR leads.${key} IN ('activo', 'inicial', '') THEN EXCLUDED.${key}\n        ELSE COALESCE(EXCLUDED.${key}, leads.${key})\n      END`);\n    } else {\n      updates.push(`${key} = EXCLUDED.${key}`);\n    }\n  }\n});\n\n// Si no hay campos, solo actualizar ultima_interaccion\nif (fields.length === 0) {\n  fields.push('ultima_interaccion');\n  values.push(leadInfo.ultima_interaccion);\n  updates.push('ultima_interaccion = EXCLUDED.ultima_interaccion');\n}\n\nconst query = `\nINSERT INTO leads (whatsapp_id, ${fields.join(', ')})\nVALUES ($1, ${values.map((_, i) => `$${i + 2}`).join(', ')})\nON CONFLICT (whatsapp_id) \nDO UPDATE SET \n  ${updates.join(',\\n  ')},\n  updated_at = CURRENT_TIMESTAMP\nRETURNING *;\n`;\n\nconst parameters = [leadInfo.whatsapp_id, ...values];\n\nconsole.log('=== QUERY FINAL ===');\nconsole.log('Campos a actualizar:', fields);\nconsole.log('Valores:', parameters);\n\nreturn [{\n  json: {\n    query: query,\n    parameters: parameters,\n    leadInfo: leadInfo,\n    operation: 'upsert',\n    whatsapp_id: leadInfo.whatsapp_id,\n    extracted_data: {\n      user_message: userMessage.substring(0, 200),\n      agent_response: agentOutput.substring(0, 200),\n      pushName: pushName\n    },\n    debug: {\n      whatsapp_found: !!whatsappId,\n      pushname_found: !!pushName,\n      fields_updated: fields,\n      user_msg_length: userMessage.length,\n      agent_msg_length: agentOutput.length\n    }\n  }\n}];"
+        "jsCode": "// SOLUCIÓN: Acceder a nodos anteriores explícitamente\nconst agentOutput = $('RAG Agent').first()?.json?.output || '';\nconst webhookData = $('Webhook').first().json;\nconst borrarRedisData = $('borrarRedis').first()?.json;\n\n// ✅ CHATWOOT: Extraer whatsapp_id del source_id\nlet whatsappId = webhookData?.body?.conversation?.contact_inbox?.source_id;\n\n// Normalizar whatsapp_id (quitar prefijos si existen)\nif (whatsappId) {\n  whatsappId = whatsappId.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('+', '');\n}\n\n// ✅ CHATWOOT: Extraer pushName del sender\nconst pushName = webhookData?.body?.sender?.name || null;\nconsole.log('📱 pushName de Chatwoot:', pushName);\n\n// Extraer mensaje del usuario desde borrarRedis1 o directamente del webhook\nlet userMessage = '';\nif (borrarRedisData?.mensajesTexto) {\n  userMessage = borrarRedisData.mensajesTexto;\n} else {\n  // ✅ CHATWOOT: El contenido está en body.content\n  userMessage = webhookData?.body?.content || '';\n}\n\nconsole.log('=== DATOS EXTRAÍDOS ===');\nconsole.log('WhatsApp ID:', whatsappId);\nconsole.log('Mensaje usuario:', userMessage.substring(0, 100));\nconsole.log('Respuesta agente:', agentOutput.substring(0, 100));\n\nif (!whatsappId) {\n  throw new Error('No se pudo extraer el whatsapp_id. Verifica el flujo.');\n}\n\n// Función para extraer información del contexto\nfunction extractLeadInfo(userMsg, agentMsg) {\n  const info = {\n    whatsapp_id: whatsappId,\n    nombre: null,\n    presupuesto: null,\n    zona: null,\n    tipo_propiedad: null,\n    forma_pago: null,\n    intencion: null,\n    caracteristicas_buscadas: null,\n    caracteristicas_venta: null,\n    propiedad_interes: null,\n    estado: null,\n    ultima_interaccion: new Date().toISOString()\n  };\n\n  // ═══════════════════════════════════════════\n  // CALIFICACIÓN AUTOMÁTICA POR MENSAJES\n  // ═══════════════════════════════════════════\n  try {\n    // 🔒 PROTECCIÓN: Si el estado actual en DB ya es llamada, busqueda o visita, no tocar\n    const estadoActual = $('SQL - Cancelar Seguimiento').first()?.json?.estado || null;\n    \n    if (['llamada', 'busqueda', 'visita'].includes(estadoActual)) {\n      info.estado = estadoActual;\n      console.log(`🔒 Estado protegido: \"${estadoActual}\" — no se recalcula`);\n    } else {\n      // Calificación normal por cantidad de mensajes\n      const historialData = $('Formatear Historial').item?.json;\n      const totalMensajes = historialData?.totalMensajes || 0;\n      \n      if (totalMensajes <= 2) {\n        info.estado = 'frio';\n      } else if (totalMensajes <= 15) {\n        info.estado = 'tibio';\n      } else {\n        info.estado = 'caliente';\n      }\n      console.log(`📊 Lead calificado como \"${info.estado}\" (${totalMensajes} mensajes)`);\n    }\n  } catch (e) {\n    info.estado = 'frio';\n    console.log('📊 Lead calificado como \"frio\" por defecto (sin historial)');\n  }\n\n  const fullContext = (userMsg + ' ' + agentMsg).toLowerCase();\n  console.log('Contexto completo:', fullContext.substring(0, 200));\n\n  // Extraer intención (comprar o vender)\n  if (fullContext.match(/\\b(quiero comprar|busco comprar|interesa comprar|me interesa|quiero una propiedad|estoy buscando|necesito comprar|busco|info|información)\\b/)) {\n    info.intencion = 'comprar';\n  } else if (fullContext.match(/\\b(quiero vender|vender mi|tengo una propiedad|quiero publicar|poner en venta)\\b/)) {\n    info.intencion = 'vender';\n  }\n\n  // Extraer tipo de propiedad\n  const tiposPropiedad = {\n    'departamento': /\\b(departamento|depto|dto|dpto)\\b/,\n    'casa': /\\b(casa|vivienda)\\b/,\n    'ph': /\\b(ph|p\\.h\\.|petit hotel)\\b/,\n    'terreno': /\\b(terreno|lote)\\b/,\n    'local': /\\b(local comercial|local)\\b/,\n    'oficina': /\\b(oficina)\\b/,\n    'cochera': /\\b(cochera|garage|garaje)\\b/\n  };\n\n  for (const [tipo, regex] of Object.entries(tiposPropiedad)) {\n    if (fullContext.match(regex)) {\n      info.tipo_propiedad = tipo;\n      break;\n    }\n  }\n\n  // Extraer presupuesto\n  const presupuestoPatterns = [\n    /(?:presupuesto|hasta|máximo|budget|tengo)[\\s:de]*(?:usd?[\\s$]*)?([\\d]+[\\\\.,]?\\d*)\\s*(?:mil|k|millones?|m)?/i,\n    /(?:usd?[\\s$]*)([\\d]+[\\\\.,]?\\d*)\\s*(?:mil|k|millones?|m)/i,\n    /([\\d]+[\\\\.,]?\\d*)\\s*(?:mil|k|millones?|m)\\s*(?:dólares|dolares|usd|pesos)?/i\n  ];\n\n  for (const pattern of presupuestoPatterns) {\n    const presupuestoMatch = fullContext.match(pattern);\n    if (presupuestoMatch) {\n      let monto = parseFloat(presupuestoMatch[1].replace(',', '.'));\n      if (fullContext.match(/\\bmillones?\\b/)) monto *= 1000000;\n      else if (fullContext.match(/\\b(mil|k)\\b/)) monto *= 1000;\n      info.presupuesto = monto;\n      console.log('Presupuesto encontrado:', monto);\n      break;\n    }\n  }\n\n  // Extraer zona\n  const zonaPatterns = [\n    /\\b(?:en|zona|barrio|ubicación|ubicado en?|por)\\s+(?:de\\s+|la\\s+)?([a-záéíóúñ\\s]+?)(?:\\s|,|\\.|\\?|$)/i,\n    /\\b(palermo|belgrano|recoleta|puerto madero|caballito|villa crespo|colegiales|nuñez|saavedra|microcentro|san telmo|balvanera|almagro|flores|barracas|monserrat|retiro|once|abasto|congreso|chacarita|parque patricios|boedo|barrio norte|zona norte|zona sur|zona oeste|centro|city bell|la plata|gonnet|tolosa|villa elisa)\\b/i\n  ];\n\n  for (const pattern of zonaPatterns) {\n    const zonaMatch = fullContext.match(pattern);\n    if (zonaMatch) {\n      const zonaCandidato = zonaMatch[1] ? zonaMatch[1].trim() : zonaMatch[0].trim();\n      if (zonaCandidato.length > 2 && zonaCandidato.length < 50) {\n        info.zona = zonaCandidato.charAt(0).toUpperCase() + zonaCandidato.slice(1);\n        console.log('Zona encontrada:', info.zona);\n        break;\n      }\n    }\n  }\n\n  // Extraer forma de pago\n  if (fullContext.match(/\\b(contado|efectivo|cash|al contado|pago contado|en efectivo|seria en efectivo|compra seria en efectivo)\\b/)) {\n    info.forma_pago = 'contado';\n    console.log('Forma de pago: contado');\n  } else if (fullContext.match(/\\b(financiado|financiación|cuotas|en cuotas|crédito|a crédito)\\b/)) {\n    info.forma_pago = 'financiado';\n  } else if (fullContext.match(/\\b(hipotecario|préstamo|préstamo hipotecario|con hipoteca|por banco|busqueda es por banco)\\b/)) {\n    info.forma_pago = 'hipotecario';\n  } else if (fullContext.match(/\\b(mixto|parte contado|parte financiado)\\b/)) {\n    info.forma_pago = 'mixto';\n  }\n\n  // Extraer características buscadas\n  const caracBuscadas = [];\n  \n  const ambMatch = fullContext.match(/\\b(\\d+)\\s*(?:ambiente|ambientes|amb)\\b/);\n  if (ambMatch) {\n    caracBuscadas.push(`${ambMatch[1]} ambientes`);\n  }\n  \n  const dormMatch = fullContext.match(/\\b(\\d+)\\s*(?:dormitorio|dormitorios|habitación|habitaciones|cuarto|cuartos)\\b/);\n  if (dormMatch) {\n    caracBuscadas.push(`${dormMatch[1]} dormitorios`);\n  }\n  \n  const bañoMatch = fullContext.match(/\\b(\\d+)\\s*(?:baño|baños)\\b/);\n  if (bañoMatch) {\n    caracBuscadas.push(`${bañoMatch[1]} baños`);\n  }\n  \n  const extrasRegex = /\\b(balcón|balcon|terraza|jardín|jardin|patio|parrilla|quincho|cochera|garage|amenities|gym|gimnasio|piscina|pileta|sum|lavadero|baulera)\\b/g;\n  const extras = fullContext.match(extrasRegex);\n  if (extras) {\n    caracBuscadas.push(...[...new Set(extras)]);\n  }\n  \n  if (caracBuscadas.length > 0) {\n    info.caracteristicas_buscadas = caracBuscadas.join(', ');\n    console.log('Características:', info.caracteristicas_buscadas);\n  }\n\n  // ═══════════════════════════════════════════\n  // ETIQUETADO CANÓNICO de propiedad_interes\n  // Fingerprint numérico contra tabla `pautas`\n  // ═══════════════════════════════════════════\n  const numericFingerprint = (text) => {\n    const matches = String(text || '').match(/\\d+/g);\n    if (!matches || matches.length === 0) return [];\n    return [...new Set(matches.map(n => parseInt(n, 10)))].sort((a, b) => a - b);\n  };\n\n  const pautas = $('fetch pautas').first()?.json?.pautas || [];\n  const userFp = numericFingerprint(userMsg);\n\n  if (userFp.length >= 2 && pautas.length > 0) {\n    let bestMatch = null;\n    let bestSize = 0;\n    for (const p of pautas) {\n      const pFp = numericFingerprint(p.texto);\n      if (pFp.length < 2) continue; // ignora pautas con <2 números (falsos positivos)\n      if (pFp.every(n => userFp.includes(n)) && pFp.length > bestSize) {\n        bestMatch = p;\n        bestSize = pFp.length;\n      }\n    }\n    if (bestMatch) {\n      info.propiedad_interes = bestMatch.texto;\n      console.log(`✅ Pauta canónica matcheada: \"${bestMatch.texto}\" (${bestSize} números)`);\n    } else {\n      console.log('ℹ sin match canónico contra pautas; propiedad_interes queda null');\n    }\n  } else {\n    console.log('ℹ mensaje sin suficientes números (<2) o sin pautas activas');\n  }\n\n  // 🆕 EXTRAER NOMBRE - CON PUSHNAME COMO FALLBACK\n  const nombreMatch = userMsg.match(/\\b(?:me llamo|mi nombre es|soy|mi nombre)\\s+([a-záéíóúñ]+(?:\\s+[a-záéíóúñ]+)?)/i);\n  if (nombreMatch) {\n    const nombre = nombreMatch[1].trim();\n    info.nombre = nombre.split(' ').map(word => \n      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()\n    ).join(' ');\n    console.log('✅ Nombre del mensaje:', info.nombre);\n  } else if (pushName) {\n    info.nombre = pushName.trim();\n    console.log('✅ Nombre del pushName de Chatwoot:', info.nombre);\n  }\n\n  return info;\n}\n\n// Extraer información del lead\nconst leadInfo = extractLeadInfo(userMessage, agentOutput);\n\nconsole.log('=== LEAD INFO FINAL ===');\nconsole.log(JSON.stringify(leadInfo, null, 2));\n\n// Construir query SQL - solo con campos no nulos\nconst fields = [];\nconst values = [];\nconst updates = [];\n\nObject.entries(leadInfo).forEach(([key, value]) => {\n  if (value !== null && key !== 'whatsapp_id') {\n    fields.push(key);\n    values.push(value);\n\n    if (key === 'nombre') {\n      updates.push(`${key} = COALESCE(NULLIF(EXCLUDED.${key}, ''), leads.${key})`);\n    } else if (key === 'estado') {\n      // 🔒 PROTECCIÓN: llamada, busqueda y visita nunca se pisan desde el UPSERT\n      updates.push(`${key} = CASE \n        WHEN leads.${key} IN ('llamada', 'visita', 'busqueda') THEN leads.${key}\n        WHEN EXCLUDED.${key} = 'caliente' THEN 'caliente'\n        WHEN EXCLUDED.${key} = 'tibio' AND leads.${key} NOT IN ('caliente', 'llamada', 'visita', 'busqueda') THEN 'tibio'\n        WHEN leads.${key} IS NULL OR leads.${key} IN ('activo', 'inicial', '') THEN EXCLUDED.${key}\n        ELSE COALESCE(EXCLUDED.${key}, leads.${key})\n      END`);\n    } else {\n      updates.push(`${key} = EXCLUDED.${key}`);\n    }\n  }\n});\n\n// Si no hay campos, solo actualizar ultima_interaccion\nif (fields.length === 0) {\n  fields.push('ultima_interaccion');\n  values.push(leadInfo.ultima_interaccion);\n  updates.push('ultima_interaccion = EXCLUDED.ultima_interaccion');\n}\n\nconst query = `\nINSERT INTO leads (whatsapp_id, ${fields.join(', ')})\nVALUES ($1, ${values.map((_, i) => `$${i + 2}`).join(', ')})\nON CONFLICT (whatsapp_id) \nDO UPDATE SET \n  ${updates.join(',\\n  ')},\n  updated_at = CURRENT_TIMESTAMP\nRETURNING *;\n`;\n\nconst parameters = [leadInfo.whatsapp_id, ...values];\n\nconsole.log('=== QUERY FINAL ===');\nconsole.log('Campos a actualizar:', fields);\nconsole.log('Valores:', parameters);\n\nreturn [{\n  json: {\n    query: query,\n    parameters: parameters,\n    leadInfo: leadInfo,\n    operation: 'upsert',\n    whatsapp_id: leadInfo.whatsapp_id,\n    extracted_data: {\n      user_message: userMessage.substring(0, 200),\n      agent_response: agentOutput.substring(0, 200),\n      pushName: pushName\n    },\n    debug: {\n      whatsapp_found: !!whatsappId,\n      pushname_found: !!pushName,\n      fields_updated: fields,\n      user_msg_length: userMessage.length,\n      agent_msg_length: agentOutput.length\n    }\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4320,
-        5696
+        4240,
+        5984
       ],
       "id": "7211d910-c9be-42b1-a385-0d467d9f25fa",
       "name": "capturar informacion",
@@ -1267,8 +1267,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        4624,
-        5696
+        4544,
+        5984
       ],
       "id": "df193b01-ed67-4f32-92e8-189d7c530cf6",
       "name": "query guardar informacion",
@@ -1290,8 +1290,8 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        -3248,
-        6320
+        -2096,
+        6464
       ],
       "id": "7736adf0-96f1-483e-b1b2-bc2a218922d2",
       "name": "Webhook",
@@ -1329,8 +1329,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -2192,
-        6320
+        -1040,
+        6464
       ],
       "id": "49f432d3-f69e-4aab-8e42-03d08188e6c1",
       "name": "Normalice1"
@@ -1435,8 +1435,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 2,
       "position": [
-        -2992,
-        6096
+        -1840,
+        6240
       ]
     },
     {
@@ -1450,8 +1450,8 @@
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
       "position": [
-        -2800,
-        6096
+        -1648,
+        6240
       ],
       "credentials": {
         "redis": {
@@ -1500,8 +1500,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        -2592,
-        6096
+        -1440,
+        6240
       ]
     },
     {
@@ -1516,8 +1516,8 @@
       "type": "n8n-nodes-base.redis",
       "typeVersion": 1,
       "position": [
-        -2368,
-        6160
+        -1216,
+        6304
       ],
       "credentials": {
         "redis": {
@@ -1533,8 +1533,8 @@
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
       "position": [
-        -2352,
-        5984
+        -1200,
+        6128
       ],
       "id": "77cd9f56-f061-4a50-a1de-e6fa7626cf7d",
       "name": "Stop and Error1"
@@ -1690,8 +1690,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        -2992,
-        5904
+        -1840,
+        6048
       ],
       "id": "bee010ef-1709-484d-bdcd-cffc103342d8",
       "name": "If1"
@@ -1703,11 +1703,48 @@
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
       "position": [
-        -2688,
-        5920
+        -1536,
+        6064
       ],
       "id": "5a9ba6d2-0ab1-4581-8064-177e333a721a",
       "name": "Stop and Error"
+    },
+    {
+      "parameters": {
+        "content": "## 🧪 Nodo de prueba\n\nAgregado desde Claude Code para verificar sync.\nSe puede borrar sin consecuencias.",
+        "height": 180,
+        "width": 320,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3200,
+        7600
+      ],
+      "id": "8ef17a5b-309f-4835-8caa-dc58f587bd26",
+      "name": "Prueba sync Claude"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COALESCE(\n  jsonb_agg(jsonb_build_object('id', id, 'texto', texto)),\n  '[]'::jsonb\n) AS pautas\nFROM pautas\nWHERE COALESCE(activo, true) = true",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3888,
+        6112
+      ],
+      "id": "9bf0dd68-bfbe-4d92-9314-9af7b4981dc6",
+      "name": "fetch pautas",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
     }
   ],
   "pinData": {
@@ -1916,17 +1953,17 @@
       "main": [
         [
           {
-            "node": "capturar informacion",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Code - Registrar para Seguimiento",
             "type": "main",
             "index": 0
           },
           {
             "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "fetch pautas",
             "type": "main",
             "index": 0
           }
@@ -2438,6 +2475,17 @@
           }
         ]
       ]
+    },
+    "fetch pautas": {
+      "main": [
+        [
+          {
+            "node": "capturar informacion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
@@ -2449,7 +2497,7 @@
     "timeSavedMode": "fixed",
     "availableInMCP": false
   },
-  "versionId": "4153801e-547f-45bd-9bf0-2dcca27ab500",
+  "versionId": "081367c5-11b2-4124-9f18-eeb8c82cd37a",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "ee9f9cdde9b6fee62a7d6845e13fb03583e8c082f1cedc5478accdeca64f2246"

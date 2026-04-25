@@ -204,16 +204,34 @@ export interface SupabasePropiedad {
   notas?: string;
 }
 
-/** Fila de public.propiedad_busquedas */
+/** Fila de public.propiedad_busquedas (mismo esquema que SupabasePropiedad + origen y timestamps) */
 export interface PropiedadBusqueda {
   id: string;
-  valor: string;
+  tipo_de_propiedad: string;
+  direccion: string;
   zona: string;
-  patio: string;
-  piscina: string;
-  habitaciones: string;
+  valor: string;
+  dormitorios: string;
   banos: string;
-  mts2: string;
+  patio_parque: string;
+  garage: string;
+  mts_const: string;
+  lote: string;
+  piso: string;
+  link: string;
+  columna_1: string;
+  apto_banco: string;
+  alternativa_menor_1: string;
+  alternativa_menor_2: string;
+  alternativa_menor_3: string;
+  alterniva_menor_4: string;
+  alternativa_menor_5: string;
+  alternativa_mayor: string;
+  alternativa_mayor_2: string;
+  alternativa_mayor_3: string;
+  alternativa_mayor_4: string;
+  alternativa_mayor_5: string;
+  notas: string;
   archivo_origen?: string | null;
   created_at?: string | null;
 }

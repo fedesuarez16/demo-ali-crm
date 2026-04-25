@@ -29,13 +29,31 @@ const CHUNK = 250;
 
 const mapBusquedaRow = (row: any): PropiedadBusqueda => ({
   id: String(row.id ?? ''),
-  valor: row.valor ?? '',
+  tipo_de_propiedad: row.tipo_de_propiedad ?? '',
+  direccion: row.direccion ?? '',
   zona: row.zona ?? '',
-  patio: row.patio ?? '',
-  piscina: row.piscina ?? '',
-  habitaciones: row.habitaciones ?? '',
+  valor: row.valor ?? '',
+  dormitorios: row.dormitorios ?? '',
   banos: row.banos ?? '',
-  mts2: row.mts2 ?? '',
+  patio_parque: row.patio_parque ?? '',
+  garage: row.garage ?? '',
+  mts_const: row.mts_const ?? '',
+  lote: row.lote ?? '',
+  piso: row.piso ?? '',
+  link: row.link ?? '',
+  columna_1: row.columna_1 ?? '',
+  apto_banco: row.apto_banco ?? '',
+  alternativa_menor_1: row.alternativa_menor_1 ?? '',
+  alternativa_menor_2: row.alternativa_menor_2 ?? '',
+  alternativa_menor_3: row.alternativa_menor_3 ?? '',
+  alterniva_menor_4: row.alterniva_menor_4 ?? '',
+  alternativa_menor_5: row.alternativa_menor_5 ?? '',
+  alternativa_mayor: row.alternativa_mayor ?? '',
+  alternativa_mayor_2: row.alternativa_mayor_2 ?? '',
+  alternativa_mayor_3: row.alternativa_mayor_3 ?? '',
+  alternativa_mayor_4: row.alternativa_mayor_4 ?? '',
+  alternativa_mayor_5: row.alternativa_mayor_5 ?? '',
+  notas: row.notas ?? '',
   archivo_origen: row.archivo_origen ?? null,
   created_at: row.created_at ?? null,
 });
@@ -82,6 +100,27 @@ export async function insertPropiedadBusquedas(
     return { inserted };
   } catch (e: any) {
     return { inserted: 0, error: e?.message || 'Error al insertar' };
+  }
+}
+
+export async function updatePropiedadBusqueda(
+  id: string,
+  values: Record<PropiedadBusquedaDbColumn, string>
+): Promise<{ ok: boolean; error?: string }> {
+  const payload: Record<string, string | null> = {};
+  for (const k of PROPIEDAD_BUSQUEDA_DB_COLUMNS) {
+    payload[k] = values[k] ?? '';
+  }
+
+  try {
+    const { error } = await (getSupabase() as any)
+      .from('propiedad_busquedas')
+      .update(payload)
+      .eq('id', id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Error al actualizar' };
   }
 }
 
