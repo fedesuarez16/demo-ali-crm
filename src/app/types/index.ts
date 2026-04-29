@@ -207,6 +207,7 @@ export interface SupabasePropiedad {
 /** Fila de public.propiedad_busquedas (mismo esquema que SupabasePropiedad + origen y timestamps) */
 export interface PropiedadBusqueda {
   id: string;
+  agente_cliente: string;
   tipo_de_propiedad: string;
   direccion: string;
   zona: string;

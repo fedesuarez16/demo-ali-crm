@@ -29,6 +29,7 @@ const CHUNK = 250;
 
 const mapBusquedaRow = (row: any): PropiedadBusqueda => ({
   id: String(row.id ?? ''),
+  agente_cliente: row.agente_cliente ?? '',
   tipo_de_propiedad: row.tipo_de_propiedad ?? '',
   direccion: row.direccion ?? '',
   zona: row.zona ?? '',
@@ -121,6 +122,21 @@ export async function updatePropiedadBusqueda(
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message || 'Error al actualizar' };
+  }
+}
+
+export async function deletePropiedadBusqueda(
+  id: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { error } = await (getSupabase() as any)
+      .from('propiedad_busquedas')
+      .delete()
+      .eq('id', id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Error al borrar' };
   }
 }
 

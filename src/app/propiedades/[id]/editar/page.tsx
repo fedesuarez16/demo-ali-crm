@@ -12,6 +12,14 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Home, MapPin, DollarSign, Bed, Bath, Car, Square, Layers, Link as LinkIcon, Building2 } from 'lucide-react';
+import { PropiedadSelectField } from '../../../components/PropiedadSelectField';
+import {
+  TIPO_DE_PROPIEDAD_OPCIONES,
+  ZONA_OPCIONES,
+  PATIO_PARQUE_OPCIONES,
+  GARAGE_OPCIONES,
+  APTO_BANCO_OPCIONES,
+} from '../../../utils/propiedadOpciones';
 
 export default function EditPropertyPage() {
   const router = useRouter();
@@ -53,6 +61,14 @@ export default function EditPropertyPage() {
     setPropiedad({
       ...propiedad,
       [name]: value
+    });
+  };
+
+  const handleSelectChange = (name: keyof SupabasePropiedad) => (value: string) => {
+    if (!propiedad) return;
+    setPropiedad({
+      ...propiedad,
+      [name]: value,
     });
   };
   
@@ -123,12 +139,12 @@ export default function EditPropertyPage() {
                     <div className="space-y-2">
                       <Label htmlFor="tipo_de_propiedad">Tipo de Propiedad</Label>
                       <div className="relative">
-                        <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
+                        <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                        <PropiedadSelectField
                           id="tipo_de_propiedad"
-                          name="tipo_de_propiedad"
                           value={propiedad.tipo_de_propiedad}
-                          onChange={handleChange}
+                          onValueChange={handleSelectChange('tipo_de_propiedad')}
+                          options={TIPO_DE_PROPIEDAD_OPCIONES}
                           className="pl-10"
                           placeholder="Departamento, Casa, etc."
                         />
@@ -153,12 +169,12 @@ export default function EditPropertyPage() {
                     <div className="space-y-2">
                       <Label htmlFor="zona">Zona</Label>
                       <div className="relative">
-                        <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
+                        <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                        <PropiedadSelectField
                           id="zona"
-                          name="zona"
                           value={propiedad.zona}
-                          onChange={handleChange}
+                          onValueChange={handleSelectChange('zona')}
+                          options={ZONA_OPCIONES}
                           className="pl-10"
                           placeholder="Palermo, Recoleta, etc."
                         />
@@ -212,24 +228,24 @@ export default function EditPropertyPage() {
                     
                     <div className="space-y-2">
                       <Label htmlFor="patio_parque">Patio/Parque</Label>
-                      <Input
+                      <PropiedadSelectField
                         id="patio_parque"
-                        name="patio_parque"
                         value={propiedad.patio_parque}
-                        onChange={handleChange}
-                        placeholder="Sí/No o metros"
+                        onValueChange={handleSelectChange('patio_parque')}
+                        options={PATIO_PARQUE_OPCIONES}
+                        placeholder="Sí/No"
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label htmlFor="garage">Garage</Label>
                       <div className="relative">
-                        <Car className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
+                        <Car className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                        <PropiedadSelectField
                           id="garage"
-                          name="garage"
                           value={propiedad.garage}
-                          onChange={handleChange}
+                          onValueChange={handleSelectChange('garage')}
+                          options={GARAGE_OPCIONES}
                           className="pl-10"
                           placeholder="Sí/No o cantidad"
                         />
@@ -305,11 +321,11 @@ export default function EditPropertyPage() {
                     
                     <div className="space-y-2">
                       <Label htmlFor="apto_banco">Apto Banco</Label>
-                      <Input
+                      <PropiedadSelectField
                         id="apto_banco"
-                        name="apto_banco"
                         value={propiedad.apto_banco}
-                        onChange={handleChange}
+                        onValueChange={handleSelectChange('apto_banco')}
+                        options={APTO_BANCO_OPCIONES}
                         placeholder="Sí/No"
                       />
                     </div>

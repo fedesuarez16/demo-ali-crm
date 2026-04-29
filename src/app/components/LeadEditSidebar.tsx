@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Lead, LeadStatus, PropertyType, InterestReason } from '../types';
+import { getKanbanColumns } from '../services/columnService';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,71 @@ const LeadEditSidebar: React.FC<LeadEditSidebarProps> = ({
 
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [estadoOptions, setEstadoOptions] = useState<string[]>([
+    'inicial',
+    'frío',
+    'tibio',
+    'caliente',
+    'llamada',
+    'visita',
+  ]);
+  const [estadoColors, setEstadoColors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { visibleColumns, columnColors } = await getKanbanColumns();
+        if (cancelled) return;
+        setEstadoOptions(visibleColumns);
+        setEstadoColors(columnColors || {});
+      } catch (err) {
+        console.error('Error cargando columnas del kanban:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  const ESTADO_LABELS: Record<string, string> = {
+    inicial: '🆕 Inicial',
+    'frío': '❄️ Frío',
+    tibio: '🌤️ Tibio',
+    caliente: '🔥 Caliente',
+    llamada: '📞 Llamada',
+    visita: '👁️ Visita',
+  };
+
+  const renderedEstadoOptions = useMemo(() => {
+    const base = [...estadoOptions];
+    if (formData.estado && !base.includes(formData.estado as string)) {
+      base.unshift(formData.estado as string);
+    }
+    if (isNewLead && !base.includes('inicial')) {
+      base.unshift('inicial');
+    }
+    return base.filter((v, i, arr) => v && arr.indexOf(v) === i);
+  }, [estadoOptions, formData.estado, isNewLead]);
+
+  const formatEstadoLabel = (value: string): React.ReactNode => {
+    const known = ESTADO_LABELS[value];
+    if (known) return known;
+    const color = estadoColors[value];
+    const label = value.charAt(0).toUpperCase() + value.slice(1);
+    return (
+      <span className="inline-flex items-center gap-2">
+        {color && (
+          <span
+            className="inline-block h-2.5 w-2.5 rounded-full border border-black/10"
+            style={{ backgroundColor: color }}
+          />
+        )}
+        {label}
+      </span>
+    );
+  };
 
   // Cargar datos del lead cuando se abre el sidebar
   useEffect(() => {
@@ -262,12 +328,11 @@ const LeadEditSidebar: React.FC<LeadEditSidebarProps> = ({
                       <SelectValue placeholder="Seleccionar estado" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="inicial">🆕 Inicial</SelectItem>
-                      <SelectItem value="frío">❄️ Frío</SelectItem>
-                      <SelectItem value="tibio">🌤️ Tibio</SelectItem>
-                      <SelectItem value="caliente">🔥 Caliente</SelectItem>
-                      <SelectItem value="llamada">📞 Llamada</SelectItem>
-                      <SelectItem value="visita">👁️ Visita</SelectItem>
+                      {renderedEstadoOptions.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {formatEstadoLabel(value)}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

@@ -426,6 +426,18 @@ export default function LeadsKanbanPage() {
     }
   };
 
+  const handleColumnColorChange = async (column: string, newColor: string) => {
+    const previous = columnColors;
+    const updated = { ...columnColors, [column]: newColor };
+    setColumnColors(updated);
+    const success = await saveKanbanColumns(customColumns, visibleColumns, updated);
+    if (!success) {
+      console.error('Error saving column color to Supabase');
+      alert('Error al guardar el color de la columna. Por favor intenta nuevamente.');
+      setColumnColors(previous);
+    }
+  };
+
   const handleColumnToggle = async (column: string) => {
     // Nunca permitir agregar "frío"
     if (column === 'frío' || column === 'fríos' || column === 'frios') {
@@ -902,27 +914,46 @@ export default function LeadsKanbanPage() {
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
                 {/* Filtrar "frío" de las columnas mostradas en el selector */}
-                {allColumns.filter(col => col !== 'frío' && col !== 'fríos' && col !== 'frios').map((column, colIdx) => (
-                  <div key={`kanban-opt-${colIdx}-${column}`} className="flex items-center justify-between">
-                    <label className="flex items-center space-x-2 cursor-pointer flex-1">
-                      <input
-                        type="checkbox"
-                        checked={visibleColumns.includes(column)}
-                        onChange={() => handleColumnToggle(column)}
-                        className="rounded border-gray-300 text-gray-600 focus:ring-gray-500"
-                      />
-                      <span className="text-sm text-gray-700 capitalize">{column}</span>
-                    </label>
-                    {customColumns.includes(column) && (
-                      <button
-                        onClick={() => handleDeleteCustomColumn(column)}
-                        className="text-xs text-red-600 hover:text-red-800"
-                      >
-                        🗑️
-                      </button>
-                    )}
-                  </div>
-                ))}
+                {allColumns.filter(col => col !== 'frío' && col !== 'fríos' && col !== 'frios').map((column, colIdx) => {
+                  const colColor = columnColors[column] || '#94a3b8';
+                  return (
+                    <div key={`kanban-opt-${colIdx}-${column}`} className="flex items-center justify-between gap-2">
+                      <label className="flex items-center space-x-2 cursor-pointer flex-1 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={visibleColumns.includes(column)}
+                          onChange={() => handleColumnToggle(column)}
+                          className="rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                        />
+                        <span className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gray-300 overflow-hidden" title={`Color: ${colColor}`}>
+                          <span
+                            className="absolute inset-0"
+                            style={{ backgroundColor: colColor }}
+                            aria-hidden="true"
+                          />
+                          <input
+                            type="color"
+                            value={colColor}
+                            onChange={(e) => setColumnColors((prev) => ({ ...prev, [column]: e.target.value }))}
+                            onBlur={(e) => handleColumnColorChange(column, e.target.value)}
+                            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                            aria-label={`Color de ${column}`}
+                            title={`Cambiar color de ${column}`}
+                          />
+                        </span>
+                        <span className="text-sm text-gray-700 capitalize truncate">{column}</span>
+                      </label>
+                      {customColumns.includes(column) && (
+                        <button
+                          onClick={() => handleDeleteCustomColumn(column)}
+                          className="text-xs text-red-600 hover:text-red-800"
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

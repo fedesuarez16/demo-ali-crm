@@ -13,14 +13,21 @@ import {
   insertPropiedadBusquedas,
   getAllPropiedadBusquedas,
   updatePropiedadBusqueda,
+  deletePropiedadBusqueda,
 } from '../../services/busquedasPropiedadService';
 import { getAllPropiedades } from '../../services/propiedadesService';
 import { computeMatches, type BusquedaMatchResult } from '../../utils/busquedaMatching';
 import type { PropiedadBusqueda, SupabasePropiedad } from '../../types';
+import { PropiedadSelectField } from '../../components/PropiedadSelectField';
+import {
+  PROPIEDAD_DROPDOWN_OPCIONES,
+  type PropiedadDropdownField,
+} from '../../utils/propiedadOpciones';
 
 type DbCol = (typeof PROPIEDAD_BUSQUEDA_DB_COLUMNS)[number];
 
 const VISIBLE_COLUMNS: DbCol[] = [
+  'agente_cliente',
   'tipo_de_propiedad',
   'direccion',
   'zona',
@@ -36,6 +43,7 @@ const VISIBLE_COLUMNS: DbCol[] = [
 ];
 
 const COLUMN_LABELS: Record<DbCol, string> = {
+  agente_cliente: 'Agente/Cliente',
   tipo_de_propiedad: 'Tipo',
   direccion: 'Dirección',
   zona: 'Zona',
@@ -110,6 +118,55 @@ function downloadCsv(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
+const FICHA_FIELDS: Array<{ key: keyof SupabasePropiedad; label: string }> = [
+  { key: 'tipo_de_propiedad', label: 'Tipo' },
+  { key: 'direccion', label: 'Dirección' },
+  { key: 'zona', label: 'Zona' },
+  { key: 'valor', label: 'Valor' },
+  { key: 'dormitorios', label: 'Dormitorios' },
+  { key: 'banos', label: 'Baños' },
+  { key: 'patio_parque', label: 'Patio/Parque' },
+  { key: 'garage', label: 'Garage' },
+  { key: 'mts_const', label: 'm² const.' },
+  { key: 'lote', label: 'Lote' },
+  { key: 'piso', label: 'Piso' },
+  { key: 'apto_banco', label: 'Apto banco' },
+  { key: 'link', label: 'Link' },
+];
+
+function formatPropiedadFicha(p: SupabasePropiedad): string {
+  const lines: string[] = [];
+  lines.push(`Ficha #${p.id}`);
+  for (const f of FICHA_FIELDS) {
+    const value = (p[f.key] ?? '') as string;
+    if (value && String(value).trim()) {
+      lines.push(`${f.label}: ${value}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 export default function PropiedadBusquedasImportPage() {
   const [busquedas, setBusquedas] = useState<PropiedadBusqueda[]>([]);
   const [propiedades, setPropiedades] = useState<SupabasePropiedad[]>([]);
@@ -130,6 +187,46 @@ export default function PropiedadBusquedasImportPage() {
   const [manualForm, setManualForm] = useState(emptyForm());
   const [isSavingManual, setIsSavingManual] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
+
+  const [detailBusqueda, setDetailBusqueda] = useState<PropiedadBusqueda | null>(null);
+  const [detailNotas, setDetailNotas] = useState('');
+  const [isSavingDetail, setIsSavingDetail] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeleteBusqueda = async (b: PropiedadBusqueda) => {
+    const summary =
+      [b.tipo_de_propiedad, b.direccion || b.zona].filter(Boolean).join(' · ') ||
+      `#${b.id}`;
+    const ok = window.confirm(`¿Borrar la búsqueda "${summary}"? Esta acción no se puede deshacer.`);
+    if (!ok) return;
+    setDeletingId(b.id);
+    const result = await deletePropiedadBusqueda(b.id);
+    setDeletingId(null);
+    if (!result.ok) {
+      window.alert(`Error al borrar: ${result.error || 'desconocido'}`);
+      return;
+    }
+    setExpandedIds((prev) => {
+      if (!prev.has(b.id)) return prev;
+      const next = new Set(prev);
+      next.delete(b.id);
+      return next;
+    });
+    await loadLista();
+  };
+
+  const handleCopyText = async (key: string, text: string) => {
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      setCopiedKey(key);
+      window.setTimeout(() => {
+        setCopiedKey((curr) => (curr === key ? null : curr));
+      }, 1500);
+    }
+  };
 
   const loadLista = useCallback(async () => {
     setIsLoadingLista(true);
@@ -281,6 +378,37 @@ export default function PropiedadBusquedasImportPage() {
     setManualError(null);
   };
 
+  const openDetail = (b: PropiedadBusqueda) => {
+    setDetailBusqueda(b);
+    setDetailNotas((b.notas ?? '') as string);
+    setDetailError(null);
+  };
+
+  const closeDetail = () => {
+    setDetailBusqueda(null);
+    setDetailNotas('');
+    setDetailError(null);
+  };
+
+  const handleSaveDetailNotas = async () => {
+    if (!detailBusqueda) return;
+    setDetailError(null);
+    setIsSavingDetail(true);
+    const payload = emptyForm();
+    for (const k of PROPIEDAD_BUSQUEDA_DB_COLUMNS) {
+      payload[k] = (detailBusqueda[k] ?? '') as string;
+    }
+    payload.notas = detailNotas;
+    const result = await updatePropiedadBusqueda(detailBusqueda.id, payload);
+    setIsSavingDetail(false);
+    if (!result.ok) {
+      setDetailError(result.error || 'Error al guardar las notas');
+      return;
+    }
+    closeDetail();
+    await loadLista();
+  };
+
   const handleExport = () => {
     if (busquedas.length === 0) return;
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
@@ -377,18 +505,19 @@ export default function PropiedadBusquedasImportPage() {
                         {COLUMN_LABELS[c]}
                       </th>
                     ))}
+                    <th className="text-left px-3 py-2.5 font-semibold text-gray-700 whitespace-nowrap">Notas</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {isLoadingLista ? (
                     <tr>
-                      <td colSpan={tableColumns.length + 3} className="px-3 py-8 text-center text-gray-500">
+                      <td colSpan={tableColumns.length + 4} className="px-3 py-8 text-center text-gray-500">
                         Cargando…
                       </td>
                     </tr>
                   ) : busquedas.length === 0 ? (
                     <tr>
-                      <td colSpan={tableColumns.length + 3} className="px-3 py-8 text-center text-gray-500">
+                      <td colSpan={tableColumns.length + 4} className="px-3 py-8 text-center text-gray-500">
                         No hay búsquedas. Agregá una manualmente o importá un CSV.
                       </td>
                     </tr>
@@ -401,17 +530,31 @@ export default function PropiedadBusquedasImportPage() {
                         <tr key={b.id} className="hover:bg-slate-50/80">
                           <td className="px-3 py-2 text-gray-600 font-mono text-xs whitespace-nowrap">{b.id}</td>
                           <td className="px-3 py-2 whitespace-nowrap">
-                            <button
-                              type="button"
-                              onClick={() => openEdit(b)}
-                              className="inline-flex items-center justify-center p-1 rounded text-gray-500 hover:text-indigo-700 hover:bg-indigo-50"
-                              title="Editar búsqueda"
-                              aria-label="Editar búsqueda"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                              </svg>
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => openEdit(b)}
+                                className="inline-flex items-center justify-center p-1 rounded text-gray-500 hover:text-indigo-700 hover:bg-indigo-50"
+                                title="Editar búsqueda"
+                                aria-label="Editar búsqueda"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteBusqueda(b)}
+                                disabled={deletingId === b.id}
+                                className="inline-flex items-center justify-center p-1 rounded text-gray-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Borrar búsqueda"
+                                aria-label="Borrar búsqueda"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+                                </svg>
+                              </button>
+                            </div>
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap">
                             {result && result.criteriaCount > 0 ? (
@@ -463,16 +606,55 @@ export default function PropiedadBusquedasImportPage() {
                               </td>
                             );
                           })}
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {(() => {
+                              const hasNotas = !!(b.notas && String(b.notas).trim());
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => openDetail(b)}
+                                  className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border ${
+                                    hasNotas
+                                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                  }`}
+                                  title={hasNotas ? 'Ver notas' : 'Agregar notas'}
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9h6m-6 4h4" />
+                                  </svg>
+                                  {hasNotas ? 'Ver notas' : 'Agregar'}
+                                </button>
+                              );
+                            })()}
+                          </td>
                         </tr>,
                       ];
 
                       if (isExpanded && hasMatches && result) {
                         const top = result.matches.slice(0, 10);
+                        const copyAllKey = `all-${b.id}`;
+                        const copyAllText = top
+                          .map((m) => formatPropiedadFicha(m.propiedad))
+                          .join('\n\n---\n\n');
                         rows.push(
                           <tr key={`${b.id}-detail`} className="bg-amber-50/30">
-                            <td colSpan={tableColumns.length + 3} className="px-4 py-3">
-                              <div className="text-xs text-gray-600 mb-2">
-                                Top {top.length} de {result.totalCount} coincidencia{result.totalCount === 1 ? '' : 's'} (de {result.criteriaCount} criterio{result.criteriaCount === 1 ? '' : 's'} activo{result.criteriaCount === 1 ? '' : 's'}):
+                            <td colSpan={tableColumns.length + 4} className="px-4 py-3">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                                <div className="text-xs text-gray-600">
+                                  Top {top.length} de {result.totalCount} coincidencia{result.totalCount === 1 ? '' : 's'} (de {result.criteriaCount} criterio{result.criteriaCount === 1 ? '' : 's'} activo{result.criteriaCount === 1 ? '' : 's'}):
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyText(copyAllKey, copyAllText)}
+                                  className="inline-flex items-center gap-1.5 self-start sm:self-auto px-2.5 py-1 rounded-md text-xs font-medium border border-amber-300 bg-white text-amber-800 hover:bg-amber-100"
+                                  title="Copiar todas las fichas coincidentes"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                  </svg>
+                                  {copiedKey === copyAllKey ? '¡Copiado!' : `Copiar todas (${top.length})`}
+                                </button>
                               </div>
                               <div className="overflow-x-auto rounded border border-amber-200 bg-white">
                                 <table className="min-w-full text-xs">
@@ -487,37 +669,88 @@ export default function PropiedadBusquedasImportPage() {
                                       <th className="text-left px-2 py-1.5 font-semibold">Baños</th>
                                       <th className="text-left px-2 py-1.5 font-semibold">m²</th>
                                       <th className="text-left px-2 py-1.5 font-semibold">Campos coincidentes</th>
+                                      <th className="text-left px-2 py-1.5 font-semibold whitespace-nowrap">Acciones</th>
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-amber-100">
-                                    {top.map((m) => (
-                                      <tr key={m.propiedad.id}>
-                                        <td className="px-2 py-1.5 font-semibold text-amber-800 whitespace-nowrap">
-                                          {m.score}/{result.criteriaCount}
-                                        </td>
-                                        <td className="px-2 py-1.5">{m.propiedad.tipo_de_propiedad || '—'}</td>
-                                        <td className="px-2 py-1.5 max-w-[220px] truncate" title={m.propiedad.direccion}>
-                                          {m.propiedad.direccion || '—'}
-                                        </td>
-                                        <td className="px-2 py-1.5">{m.propiedad.zona || '—'}</td>
-                                        <td className="px-2 py-1.5 whitespace-nowrap">{m.propiedad.valor || '—'}</td>
-                                        <td className="px-2 py-1.5 whitespace-nowrap">{m.propiedad.dormitorios || '—'}</td>
-                                        <td className="px-2 py-1.5 whitespace-nowrap">{m.propiedad.banos || '—'}</td>
-                                        <td className="px-2 py-1.5 whitespace-nowrap">{m.propiedad.mts_const || '—'}</td>
-                                        <td className="px-2 py-1.5">
-                                          <div className="flex flex-wrap gap-1">
-                                            {m.matchedFields.map((f) => (
-                                              <span
-                                                key={f}
-                                                className="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px]"
+                                    {top.map((m) => {
+                                      const copyKey = `prop-${b.id}-${m.propiedad.id}`;
+                                      const link = (m.propiedad.link ?? '').trim();
+                                      const hasLink = !!link;
+                                      return (
+                                        <tr key={m.propiedad.id}>
+                                          <td className="px-2 py-1.5 font-semibold text-amber-800 whitespace-nowrap">
+                                            {m.score}/{result.criteriaCount}
+                                          </td>
+                                          <td className="px-2 py-1.5">{m.propiedad.tipo_de_propiedad || '—'}</td>
+                                          <td className="px-2 py-1.5 max-w-[220px] truncate" title={m.propiedad.direccion}>
+                                            {m.propiedad.direccion || '—'}
+                                          </td>
+                                          <td className="px-2 py-1.5">{m.propiedad.zona || '—'}</td>
+                                          <td className="px-2 py-1.5 whitespace-nowrap">{m.propiedad.valor || '—'}</td>
+                                          <td className="px-2 py-1.5 whitespace-nowrap">{m.propiedad.dormitorios || '—'}</td>
+                                          <td className="px-2 py-1.5 whitespace-nowrap">{m.propiedad.banos || '—'}</td>
+                                          <td className="px-2 py-1.5 whitespace-nowrap">{m.propiedad.mts_const || '—'}</td>
+                                          <td className="px-2 py-1.5">
+                                            <div className="flex flex-wrap gap-1">
+                                              {m.matchedFields.map((f) => (
+                                                <span
+                                                  key={f}
+                                                  className="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px]"
+                                                >
+                                                  {f}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </td>
+                                          <td className="px-2 py-1.5 whitespace-nowrap">
+                                            <div className="flex items-center gap-1">
+                                              {hasLink ? (
+                                                <a
+                                                  href={link}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="inline-flex items-center justify-center p-1 rounded text-indigo-700 hover:bg-indigo-50 border border-indigo-200"
+                                                  title="Abrir ficha (link)"
+                                                  aria-label="Abrir ficha"
+                                                >
+                                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                                  </svg>
+                                                </a>
+                                              ) : (
+                                                <span className="inline-flex items-center justify-center p-1 rounded text-gray-300 border border-gray-200" title="Sin link">
+                                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                                  </svg>
+                                                </span>
+                                              )}
+                                              <button
+                                                type="button"
+                                                onClick={() => handleCopyText(copyKey, formatPropiedadFicha(m.propiedad))}
+                                                className={`inline-flex items-center justify-center p-1 rounded border ${
+                                                  copiedKey === copyKey
+                                                    ? 'bg-green-50 text-green-700 border-green-300'
+                                                    : 'text-gray-700 border-gray-200 hover:bg-gray-50'
+                                                }`}
+                                                title="Copiar ficha"
+                                                aria-label="Copiar ficha"
                                               >
-                                                {f}
-                                              </span>
-                                            ))}
-                                          </div>
-                                        </td>
-                                      </tr>
-                                    ))}
+                                                {copiedKey === copyKey ? (
+                                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                  </svg>
+                                                ) : (
+                                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                  </svg>
+                                                )}
+                                              </button>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
                                   </tbody>
                                 </table>
                               </div>
@@ -614,6 +847,83 @@ export default function PropiedadBusquedasImportPage() {
         </div>
       </div>
 
+      {detailBusqueda && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Detalle de búsqueda #{detailBusqueda.id}
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Creado: {formatFecha(detailBusqueda.created_at)}
+                  {detailBusqueda.archivo_origen ? ` · Origen: ${detailBusqueda.archivo_origen}` : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeDetail}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Cerrar"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="border border-gray-200 rounded-md mb-4">
+              <dl className="divide-y divide-gray-100 text-sm">
+                {VISIBLE_COLUMNS.map((c) => {
+                  const value = (detailBusqueda[c] ?? '') as string;
+                  if (!value) return null;
+                  return (
+                    <div key={c} className="grid grid-cols-3 gap-2 px-3 py-1.5">
+                      <dt className="text-gray-500 col-span-1">{COLUMN_LABELS[c]}</dt>
+                      <dd className="text-gray-900 col-span-2 break-words">{value}</dd>
+                    </div>
+                  );
+                })}
+              </dl>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+              <textarea
+                value={detailNotas}
+                onChange={(e) => setDetailNotas(e.target.value)}
+                rows={6}
+                placeholder="Escribí notas sobre esta búsqueda…"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Las notas no se usan para calcular coincidencias.
+              </p>
+            </div>
+
+            {detailError && <p className="mt-1 mb-2 text-sm text-red-600">{detailError}</p>}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeDetail}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveDetailNotas}
+                disabled={isSavingDetail}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md disabled:opacity-50"
+              >
+                {isSavingDetail ? 'Guardando…' : 'Guardar notas'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
@@ -623,19 +933,44 @@ export default function PropiedadBusquedasImportPage() {
             <p className="text-sm text-gray-500 mb-4">Completá los campos que correspondan.</p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {VISIBLE_COLUMNS.map((key) => (
-                <div key={key}>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    {COLUMN_LABELS[key]}
-                  </label>
-                  <input
-                    type="text"
-                    value={manualForm[key]}
-                    onChange={(e) => handleManualField(key, e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              ))}
+              {VISIBLE_COLUMNS.map((key) => {
+                const dropdownOptions =
+                  PROPIEDAD_DROPDOWN_OPCIONES[key as PropiedadDropdownField];
+                const placeholder =
+                  key === 'valor'
+                    ? 'Ej: 100.000 - 200.000 (rango) o 200.000 (máximo)'
+                    : key === 'agente_cliente'
+                    ? 'Nombre del agente o cliente'
+                    : undefined;
+                const helpText =
+                  key === 'valor'
+                    ? 'Podés indicar un rango (mín - máx) o un único valor (se trata como tope máximo).'
+                    : null;
+                return (
+                  <div key={key}>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      {COLUMN_LABELS[key]}
+                    </label>
+                    {dropdownOptions ? (
+                      <PropiedadSelectField
+                        value={manualForm[key]}
+                        onValueChange={(v) => handleManualField(key, v)}
+                        options={dropdownOptions}
+                        placeholder="Seleccioná…"
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={manualForm[key]}
+                        onChange={(e) => handleManualField(key, e.target.value)}
+                        placeholder={placeholder}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    )}
+                    {helpText && <p className="mt-1 text-[11px] text-gray-500">{helpText}</p>}
+                  </div>
+                );
+              })}
             </div>
 
             {manualError && <p className="mt-3 text-sm text-red-600">{manualError}</p>}

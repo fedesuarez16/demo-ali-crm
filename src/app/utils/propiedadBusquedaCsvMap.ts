@@ -3,6 +3,7 @@
  */
 
 export const PROPIEDAD_BUSQUEDA_DB_COLUMNS = [
+  'agente_cliente',
   'tipo_de_propiedad',
   'direccion',
   'zona',
@@ -81,6 +82,11 @@ const HEADER_ALIASES: Record<string, PropiedadBusquedaDbColumn> = {
   // notas
   observaciones: 'notas',
   comentarios: 'notas',
+  // agente_cliente
+  agente: 'agente_cliente',
+  cliente: 'agente_cliente',
+  agente_o_cliente: 'agente_cliente',
+  'agente/cliente': 'agente_cliente',
   // typo alias por si el CSV trae el nombre "correcto"
   alternativa_menor_4: 'alterniva_menor_4',
 };

@@ -60,6 +60,34 @@ const numericLte = (busqueda: string, propiedad: string): boolean => {
   return p <= b;
 };
 
+const parseValorRange = (
+  s: string
+): { min: number | null; max: number | null } | null => {
+  if (isEmpty(s)) return null;
+  const parts = String(s)
+    .split(/\s*[-–—]\s*|\s+a\s+|\s+hasta\s+/i)
+    .map((p) => p.trim())
+    .filter((p) => p);
+  const nums = parts
+    .map(parseNumber)
+    .filter((n): n is number => n != null);
+  if (nums.length === 0) return null;
+  if (nums.length === 1) {
+    return { min: null, max: nums[0] };
+  }
+  return { min: Math.min(...nums), max: Math.max(...nums) };
+};
+
+const valorMatch = (busqueda: string, propiedad: string): boolean => {
+  const p = parseNumber(propiedad);
+  if (p == null) return false;
+  const range = parseValorRange(busqueda);
+  if (!range) return false;
+  if (range.min != null && p < range.min) return false;
+  if (range.max != null && p > range.max) return false;
+  return range.min != null || range.max != null;
+};
+
 type Comparator = (busquedaVal: string, propiedadVal: string) => boolean;
 
 interface FieldRule {
@@ -73,7 +101,7 @@ const RULES: FieldRule[] = [
   { busquedaKey: 'tipo_de_propiedad', propiedadKey: 'tipo_de_propiedad', label: 'Tipo', cmp: textMatch },
   { busquedaKey: 'direccion',         propiedadKey: 'direccion',         label: 'Dirección', cmp: textMatch },
   { busquedaKey: 'zona',              propiedadKey: 'zona',              label: 'Zona', cmp: textMatch },
-  { busquedaKey: 'valor',             propiedadKey: 'valor',             label: 'Valor', cmp: numericLte },
+  { busquedaKey: 'valor',             propiedadKey: 'valor',             label: 'Valor', cmp: valorMatch },
   { busquedaKey: 'dormitorios',       propiedadKey: 'dormitorios',       label: 'Dormitorios', cmp: numericGte },
   { busquedaKey: 'banos',             propiedadKey: 'banos',             label: 'Baños', cmp: numericGte },
   { busquedaKey: 'patio_parque',      propiedadKey: 'patio_parque',      label: 'Patio/Parque', cmp: textMatch },
