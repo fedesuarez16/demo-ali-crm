@@ -152,7 +152,7 @@ function ChatPageContent() {
     <AppLayout>
       <div className="flex flex-col h-[calc(100vh-10px)]">
         {/* Encabezado con tabs */}
-        <div className="border-b bg-slate-100 border-gray-200 py-[6px] px-4 sm:px-6">
+        <div className="border-b bg-slate-100 border-gray-200 py-[6px] pl-16 pr-4 sm:px-6">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
               <h1 className="text-base sm:text-lg font-medium text-gray-800 truncate">Centro de Comunicación</h1>

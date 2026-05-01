@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './Sidebar';
 
 interface AppLayoutProps {
@@ -10,9 +10,9 @@ interface AppLayoutProps {
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  const handleSidebarCollapse = (collapsed: boolean) => {
+  const handleSidebarCollapse = useCallback((collapsed: boolean) => {
     setSidebarCollapsed(collapsed);
-  };
+  }, []);
 
   return (
     <div className="bg-white h-full min-h-screen">

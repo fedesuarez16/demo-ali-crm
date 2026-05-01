@@ -32,21 +32,21 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
   
   // Ajustar según el tamaño de la ventana solo al montar (una sola vez)
   useEffect(() => {
-    // Solo ejecutar al montar para establecer el estado inicial correcto
     setMounted(true);
     if (typeof window !== 'undefined') {
       const isDesktop = window.innerWidth >= 1024;
       if (isDesktop) {
-        // En desktop, abrir sidebar
         setCollapsed(false);
         if (onCollapse) onCollapse(false);
       } else {
-        // En mobile, mantener cerrada
         setCollapsed(true);
         if (onCollapse) onCollapse(true);
       }
     }
-  }, [onCollapse]); // Solo ejecutar al montar
+    // Intencionalmente solo al montar: incluir onCollapse causa un loop porque
+    // AppLayout redefine la función en cada render y resetea el estado en mobile.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const menuCategories: MenuCategory[] = [
     {
@@ -195,16 +195,18 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
 
   return (
     <>
-      {/* Botón flotante para abrir sidebar - Solo en mobile, absolute en esquina superior izquierda */}
-      <button
-        onClick={toggleSidebar}
-        className="lg:hidden fixed top-4 left-4 z-[100] bg-black hover:bg-black text-white rounded-lg p-3 shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
-        aria-label="Abrir menú"
-      >
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
+      {/* Botón flotante para abrir sidebar - Solo en mobile y solo cuando la sidebar está cerrada */}
+      {collapsed && (
+        <button
+          onClick={toggleSidebar}
+          className="lg:hidden fixed top-3 left-3 z-[100] bg-black text-white rounded-lg p-2.5 shadow-2xl transition-transform duration-150 active:scale-95"
+          aria-label="Abrir menú"
+        >
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      )}
 
       {/* Overlay para cerrar sidebar en mobile */}
       {mounted && !collapsed && (

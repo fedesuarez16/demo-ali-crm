@@ -181,7 +181,7 @@ export default function CampanasActivasPage() {
 
   return (
     <AppLayout>
-      <div className="px-2 py-2 z-10 backdrop-blur bg-white/70 border-b border-slate-200 mb-6">
+      <div className="pl-16 pr-2 py-2 lg:px-2 z-10 backdrop-blur bg-white/70 border-b border-slate-200 mb-6">
         <nav className="flex" aria-label="Breadcrumb">
           <ol className="inline-flex items-center space-x-1 md:space-x-3">
             <li className="inline-flex items-center">
@@ -211,7 +211,7 @@ export default function CampanasActivasPage() {
         </nav>
       </div>
 
-      <div className="container mx-auto p-6 max-w-6xl">
+      <div className="container mx-auto p-3 sm:p-6 max-w-6xl">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Campañas</h1>
           <p className="text-sm text-gray-600">
@@ -219,7 +219,7 @@ export default function CampanasActivasPage() {
           </p>
         </div>
 
-        <Card className="p-6 mb-8">
+        <Card className="p-3 sm:p-6 mb-8">
           <form onSubmit={handleSave} className="space-y-4">
             <div>
               <label htmlFor="pauta" className="block text-sm font-medium text-gray-700 mb-2">

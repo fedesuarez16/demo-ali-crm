@@ -602,7 +602,7 @@ export default function LeadsKanbanPage() {
         {/* Nueva topbar con breadcrumbs */}
         <div className="sticky top-0 z-10 backdrop-blur bg-white border-b border-slate-200 mb-6">
           {/* Breadcrumbs */}
-          <div className="px-2  bg-slate-100 py-3">
+          <div className="pl-16 pr-2 lg:px-2  bg-slate-100 py-3">
             <nav className="flex" aria-label="Breadcrumb">
               <ol className="inline-flex items-center space-x-1 md:space-x-3">
                 <li className="inline-flex items-center">
@@ -634,8 +634,8 @@ export default function LeadsKanbanPage() {
           </div>
 
           {/* Título y acciones */}
-          <div className="px-6 py-2  flex justify-between items-center border-t border-gray-200">
-            <div className="flex items-center space-x-4">
+          <div className="px-3 sm:px-6 py-2 flex flex-col gap-2 lg:flex-row lg:justify-between lg:items-center border-t border-gray-200">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:space-x-4">
               <div className="flex items-center space-x-2">
                 <h1 className="text-md font-semibold text-slate-800 tracking-tight">Tablero de Leads</h1>
                 {searchTerm && (
@@ -644,9 +644,9 @@ export default function LeadsKanbanPage() {
                   </span>
                 )}
               </div>
-              
+
               {/* Barra de búsqueda */}
-              <div className="relative">
+              <div className="relative w-full sm:w-auto">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -657,7 +657,7 @@ export default function LeadsKanbanPage() {
                   placeholder="Buscar por nombre o teléfono..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-64 pl-10 pr-3 py-1.5 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                  className="block w-full sm:w-64 pl-10 pr-3 py-1.5 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
                 />
                 {searchTerm && (
                   <button
@@ -672,7 +672,7 @@ export default function LeadsKanbanPage() {
                 )}
               </div>
             </div>
-            <div className="flex space-x-2">
+            <div className="flex flex-wrap gap-2">
               {!isSelectionMode ? (
                 <button
                   onClick={() => setIsSelectionMode(true)}

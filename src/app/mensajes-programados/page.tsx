@@ -394,7 +394,7 @@ export default function MensajesProgramadosPage() {
     <AppLayout>
       <div className="mb-8 ">
         <div className="sticky top-0 z-10 backdrop-blur bg-white/70 border-b border-slate-200 mb-2">
-          <div className="px-2 py-2">
+          <div className="pl-16 pr-2 py-2 lg:px-2">
             <nav className="flex" aria-label="Breadcrumb">
               <ol className="inline-flex items-center space-x-1 md:space-x-3">
                 <li className="inline-flex items-center">
@@ -417,7 +417,7 @@ export default function MensajesProgramadosPage() {
             </nav>
           </div>
 
-          <div className="px-6 py-4 flex justify-between items-center border-t border-slate-100">
+          <div className="px-3 sm:px-6 py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 border-t border-slate-100">
             <div>
               <h1 className="text-lg font-semibold text-slate-800 tracking-tight">Mensajes Programados</h1>
               <p className="text-sm text-gray-500 mt-1">
@@ -434,7 +434,7 @@ export default function MensajesProgramadosPage() {
           </div>
         </div>
 
-        <div className="space-y-6 p-6">
+        <div className="space-y-6 p-3 sm:p-6">
           {mensajesPrioridadCola.length > 0 && (
             <Card className="border-2 border-amber-200 shadow-md ring-1 ring-amber-100/10 overflow-hidden">
               <button
@@ -689,7 +689,7 @@ export default function MensajesProgramadosPage() {
                     return (
                       <div
                         key={dayKey}
-                        className="flex-shrink-0 w-80 border border-gray-200 rounded-lg bg-white overflow-hidden"
+                        className="flex-shrink-0 w-[85vw] sm:w-80 border border-gray-200 rounded-lg bg-white overflow-hidden"
                       >
                         {/* Encabezado del acordeón */}
                         <button

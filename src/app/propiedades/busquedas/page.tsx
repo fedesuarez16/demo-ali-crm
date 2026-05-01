@@ -421,7 +421,7 @@ export default function PropiedadBusquedasImportPage() {
     <AppLayout>
       <div className="mb-8">
         <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
-          <div className="px-4 py-[13.5px] bg-slate-100 border-b border-slate-200 md:px-6">
+          <div className="pl-16 pr-4 py-[13.5px] bg-slate-100 border-b border-slate-200 lg:px-6">
             <nav className="flex" aria-label="Breadcrumb">
               <ol className="inline-flex items-center space-x-1 md:space-x-3 text-sm">
                 <li>
@@ -491,7 +491,7 @@ export default function PropiedadBusquedasImportPage() {
           </div>
         </div>
 
-        <div className="px-4 md:px-4 py-6 max-w-[1800px] mx-auto">
+        <div className="px-2 sm:px-4 py-6 max-w-[1800px] mx-auto">
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden mb-6">
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
@@ -768,7 +768,7 @@ export default function PropiedadBusquedasImportPage() {
           </div>
 
           {showImportPanel && (
-            <div className="border border-gray-200 rounded-lg p-6 bg-gray-50/80 mb-6">
+            <div className="border border-gray-200 rounded-lg p-3 sm:p-6 bg-gray-50/80 mb-6">
               <h2 className="text-sm font-semibold text-gray-800 mb-2">Importar desde CSV</h2>
               <p className="text-gray-600 text-sm mb-4">
                 La primera fila debe ser encabezados. Se aceptan los nombres de columna de <code className="text-xs bg-white px-1 rounded border">propiedades</code>.
@@ -849,7 +849,7 @@ export default function PropiedadBusquedasImportPage() {
 
       {detailBusqueda && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-4 sm:p-6">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">
@@ -926,7 +926,7 @@ export default function PropiedadBusquedasImportPage() {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-4 sm:p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-1">
               {editingId ? `Editar búsqueda #${editingId}` : 'Nueva búsqueda'}
             </h2>
