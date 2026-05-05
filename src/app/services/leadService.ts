@@ -559,40 +559,33 @@ export const filterLeads = (options: FilterOptions): Lead[] => {
       return false;
     }
     
-    // Filtrar por propiedad de interés (campaña) si se especifica
-    // Las opciones de filtro vienen de propiedades.direccion
-    // Se compara con leads.propiedad_interes usando fuzzy matching
+    // Filtrar por propiedad de interés (campaña) si se especifica.
+    // Las opciones de filtro vienen de propiedades.direccion; se comparan con
+    // leads.propiedad_interes usando huella numérica (mismo conjunto de números
+    // = misma campaña). Para textos sin números, se usa igualdad normalizada.
     if (options.propiedadInteres) {
-      const leadPropiedadInteres = (lead as any).propiedad_interes || '';
-      if (!leadPropiedadInteres) {
+      const rawLead = String((lead as any).propiedad_interes || '').trim();
+      if (!rawLead) {
         return false;
       }
-      
-      const rawLead = leadPropiedadInteres.trim();
       const rawFilter = options.propiedadInteres.trim();
-      const leadValue = rawLead.toLowerCase();
-      const filterValue = rawFilter.toLowerCase();
 
       let campaignMatch = false;
-      if (campaignGroupMap.size > 0) {
-        const repLead = campaignGroupMap.get(rawLead) || rawLead;
-        const repFilter = campaignGroupMap.get(rawFilter) || rawFilter;
-        if (repLead === repFilter) {
-          campaignMatch = true;
+      if (rawLead.toLowerCase() === rawFilter.toLowerCase()) {
+        campaignMatch = true;
+      } else {
+        const filterFp = campaignNumericFingerprint(rawFilter);
+        const leadFp = campaignNumericFingerprint(rawLead);
+        if (filterFp && leadFp) {
+          campaignMatch = filterFp === leadFp;
+        } else if (!filterFp && !leadFp) {
+          const nf = normalizeCampaignName(rawFilter);
+          const nl = normalizeCampaignName(rawLead);
+          campaignMatch = !!nf && !!nl && nf === nl;
         }
+        // si solo uno tiene dígitos, no hay match
       }
-      if (!campaignMatch) {
-        if (leadValue === filterValue) {
-          campaignMatch = true;
-        } else if (leadValue.includes(filterValue) || filterValue.includes(leadValue)) {
-          campaignMatch = true;
-        } else {
-          const similarity = stringSimilarity(leadPropiedadInteres, options.propiedadInteres);
-          if (similarity >= 0.6) {
-            campaignMatch = true;
-          }
-        }
-      }
+
       if (!campaignMatch) {
         return false;
       }
