@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Lead, LeadStatus, PropertyType, InterestReason } from '../types';
-import { getKanbanColumns } from '../services/columnService';
+import { getKanbanColumns, getDistinctLeadEstados } from '../services/columnService';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -57,9 +57,24 @@ const LeadEditSidebar: React.FC<LeadEditSidebarProps> = ({
     let cancelled = false;
     (async () => {
       try {
-        const { visibleColumns, columnColors } = await getKanbanColumns();
+        const [{ visibleColumns, customColumns, columnColors }, distinctLeadEstados] = await Promise.all([
+          getKanbanColumns(),
+          getDistinctLeadEstados(),
+        ]);
         if (cancelled) return;
-        setEstadoOptions(visibleColumns);
+        const baseStatuses = ['frío', 'tibio', 'caliente', 'llamada', 'visita'];
+        const colorKeys = Object.keys(columnColors || {});
+        const merged = [
+          ...visibleColumns,
+          ...baseStatuses,
+          ...customColumns,
+          ...colorKeys,
+          ...distinctLeadEstados,
+        ]
+          .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+          .map((value) => value.trim())
+          .filter((value, index, arr) => arr.indexOf(value) === index);
+        setEstadoOptions(merged);
         setEstadoColors(columnColors || {});
       } catch (err) {
         console.error('Error cargando columnas del kanban:', err);

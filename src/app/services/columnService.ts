@@ -193,6 +193,36 @@ export const saveKanbanColumns = async (
 };
 
 /**
+ * Obtiene los estados distintos efectivamente usados en la tabla `leads`.
+ * Sirve como fuente de verdad para "qué estados existen", incluyendo aquellos
+ * que están desincronizados de `kanban_columns` (configurados solo en colors,
+ * o estados legacy que ya no figuran en custom_columns/visible_columns).
+ */
+export const getDistinctLeadEstados = async (): Promise<string[]> => {
+  try {
+    const { data, error } = await (getSupabase() as any)
+      .from('leads')
+      .select('estado')
+      .not('estado', 'is', null);
+
+    if (error) {
+      console.error('Error fetching distinct estados from leads:', error.message);
+      return [];
+    }
+
+    const set = new Set<string>();
+    for (const row of (data || []) as Array<{ estado?: string | null }>) {
+      const value = (row.estado || '').toString().trim();
+      if (value) set.add(value);
+    }
+    return Array.from(set);
+  } catch (e) {
+    console.error('Exception fetching distinct estados from leads:', e);
+    return [];
+  }
+};
+
+/**
  * Migra datos de localStorage a Supabase (una sola vez)
  */
 export const migrateColumnsFromLocalStorage = async (): Promise<boolean> => {
