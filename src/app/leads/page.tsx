@@ -20,10 +20,15 @@ import {
 } from '../services/leadService';
 import { getAllPropiedadDirecciones } from '../services/propiedadesService';
 import { exportLeadsToCSV } from '../utils/exportUtils';
-import { getKanbanColumns, saveKanbanColumns, migrateColumnsFromLocalStorage } from '../services/columnService';
+import { getKanbanColumns, saveKanbanColumns, migrateColumnsFromLocalStorage, normalizeColumnName, getDistinctLeadEstados } from '../services/columnService';
 import { programarSeguimiento } from '../services/mensajeService';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
+
+// Estados base del Kanban (excluyendo "frío" que siempre está oculto)
+const BASE_STATES = ['tibio', 'caliente', 'llamada', 'visita'] as const;
+// Todas las variantes de "frío" que deben quedar excluidas de la lista de opciones
+const FRIO_BLACKLIST = new Set(['frío', 'fríos', 'frios']);
 
 export default function LeadsKanbanPage() {
   // Todos los hooks deben estar al inicio, antes de cualquier return condicional
@@ -62,46 +67,44 @@ export default function LeadsKanbanPage() {
   // Siempre excluir "frío" de las columnas visibles
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['tibio', 'caliente', 'llamada', 'visita']);
   const [columnColors, setColumnColors] = useState<Record<string, string>>({});
+  // Estados distintos tomados de leads.estado — sirven para mostrar columnas "huérfanas"
+  const [distinctEstados, setDistinctEstados] = useState<string[]>([]);
 
-  // Función para normalizar nombres de columnas
-  const normalizeColumnName = (col: string): string => {
-    const colLower = col.toLowerCase().trim();
-    if (colLower === 'fríos' || colLower === 'frios') return 'frío';
-    if (colLower === 'tibios') return 'tibio';
-    if (colLower === 'calientes') return 'caliente';
-    if (colLower === 'llamadas') return 'llamada';
-    if (colLower === 'visitas') return 'visita';
-    return colLower;
-  };
-
-  // Cargar columnas personalizadas desde Supabase al inicializar
+  // Cargar columnas personalizadas y estados distintos de leads desde Supabase al inicializar
   useEffect(() => {
     const loadColumns = async () => {
       try {
         // Primero intentar migrar desde localStorage si existe
         await migrateColumnsFromLocalStorage();
-        
-        // Cargar columnas desde Supabase
-        const { customColumns: loadedCustom, visibleColumns: loadedVisible, columnColors: loadedColors } = await getKanbanColumns();
-        
+
+        // Cargar columnas y estados distintos en paralelo
+        const [
+          { customColumns: loadedCustom, visibleColumns: loadedVisible, columnColors: loadedColors },
+          rawEstados,
+        ] = await Promise.all([
+          getKanbanColumns(),
+          getDistinctLeadEstados(),
+        ]);
+
         // Normalizar las columnas visibles para eliminar "Fríos" y "frío"
         const normalizedVisible = loadedVisible
           .map(normalizeColumnName)
           .filter((col, index, self) => self.indexOf(col) === index) // Eliminar duplicados
-          .filter(col => col !== 'fríos' && col !== 'frios' && col !== 'frío'); // Filtrar explícitamente "Fríos" y "frío"
-        
+          .filter(col => !FRIO_BLACKLIST.has(col)); // Filtrar toda la familia "frío"
+
         setCustomColumns(loadedCustom);
         // Siempre excluir "frío" de las columnas visibles
-        setVisibleColumns(normalizedVisible.length > 0 ? normalizedVisible : ['tibio', 'caliente', 'llamada', 'visita']);
+        setVisibleColumns(normalizedVisible.length > 0 ? normalizedVisible : [...BASE_STATES]);
         setColumnColors(loadedColors);
+        setDistinctEstados(rawEstados);
       } catch (error) {
         console.error('Error loading columns from Supabase:', error);
         // Fallback a valores por defecto (sin "frío")
         setCustomColumns([]);
-        setVisibleColumns(['tibio', 'caliente', 'llamada', 'visita']);
+        setVisibleColumns([...BASE_STATES]);
       }
     };
-    
+
     loadColumns();
   }, []);
   
@@ -367,6 +370,16 @@ export default function LeadsKanbanPage() {
     }
   };
 
+  // Helper: si el estado es huérfano (no está en customColumns ni en BASE_STATES),
+  // lo prepende a customColumns para que quede persistido en la próxima interacción del usuario.
+  const promoteToCustomIfOrphan = (estado: string, currentCustom: string[]): string[] => {
+    const norm = normalizeColumnName(estado);
+    if (!norm || FRIO_BLACKLIST.has(norm)) return currentCustom;
+    if ((BASE_STATES as readonly string[]).includes(norm)) return currentCustom;
+    if (currentCustom.includes(norm)) return currentCustom;
+    return [norm, ...currentCustom];
+  };
+
   // Funciones para manejar columnas personalizadas
   const handleAddColumn = async () => {
     const normalizedColumn = normalizeColumnName(newColumnName.trim().toLowerCase());
@@ -405,16 +418,21 @@ export default function LeadsKanbanPage() {
   };
 
   const handleDeleteCustomColumn = async (columnName: string) => {
-    const updatedCustomColumns = customColumns.filter(col => col !== columnName);
-    const updatedVisibleColumns = visibleColumns.filter(col => col !== columnName);
+    const norm = normalizeColumnName(columnName);
+    const updatedCustomColumns = customColumns.filter(col => normalizeColumnName(col) !== norm);
+    const updatedVisibleColumns = visibleColumns.filter(col => normalizeColumnName(col) !== norm);
     const updatedColumnColors = { ...columnColors };
     delete updatedColumnColors[columnName];
-    
+    delete updatedColumnColors[norm];
+
     setCustomColumns(updatedCustomColumns);
     setVisibleColumns(updatedVisibleColumns);
     setColumnColors(updatedColumnColors);
-    
-    // Guardar en Supabase
+    // Eliminar de distinctEstados para que desaparezca del selector en esta sesión
+    // (reaparecerá al recargar porque los leads aún llevan ese estado)
+    setDistinctEstados(prev => prev.filter(e => normalizeColumnName(e) !== norm));
+
+    // Guardar en Supabase (NO se promueve el estado a custom_columns)
     const success = await saveKanbanColumns(updatedCustomColumns, updatedVisibleColumns, updatedColumnColors);
     if (!success) {
       console.error('Error saving columns to Supabase');
@@ -423,40 +441,52 @@ export default function LeadsKanbanPage() {
       setCustomColumns(customColumns);
       setVisibleColumns(visibleColumns);
       setColumnColors(columnColors);
+      setDistinctEstados(prev => [...prev, columnName]);
     }
   };
 
   const handleColumnColorChange = async (column: string, newColor: string) => {
-    const previous = columnColors;
+    const previousColors = columnColors;
+    const previousCustom = customColumns;
     const updated = { ...columnColors, [column]: newColor };
+    const promoted = promoteToCustomIfOrphan(column, customColumns);
     setColumnColors(updated);
-    const success = await saveKanbanColumns(customColumns, visibleColumns, updated);
+    setCustomColumns(promoted);
+    const success = await saveKanbanColumns(promoted, visibleColumns, updated);
     if (!success) {
       console.error('Error saving column color to Supabase');
       alert('Error al guardar el color de la columna. Por favor intenta nuevamente.');
-      setColumnColors(previous);
+      setColumnColors(previousColors);
+      setCustomColumns(previousCustom);
     }
   };
 
   const handleColumnToggle = async (column: string) => {
     // Nunca permitir agregar "frío"
-    if (column === 'frío' || column === 'fríos' || column === 'frios') {
+    if (FRIO_BLACKLIST.has(normalizeColumnName(column))) {
       return;
     }
-    
-    const updatedVisibleColumns = visibleColumns.includes(column) 
+
+    const updatedVisibleColumns = visibleColumns.includes(column)
       ? visibleColumns.filter(col => col !== column)
       : [...visibleColumns, column];
-    
+
     // Asegurarse de que "frío" nunca esté en las columnas visibles
-    const filteredColumns = updatedVisibleColumns.filter(col => 
-      col !== 'frío' && col !== 'fríos' && col !== 'frios'
-    );
-    
+    const filteredColumns = updatedVisibleColumns.filter(col => !FRIO_BLACKLIST.has(normalizeColumnName(col)));
+
+    const promoted = promoteToCustomIfOrphan(column, customColumns);
+
     setVisibleColumns(filteredColumns);
-    
+    setCustomColumns(promoted);
+
     // Guardar en Supabase
-    await saveKanbanColumns(customColumns, filteredColumns, columnColors);
+    const success = await saveKanbanColumns(promoted, filteredColumns, columnColors);
+    if (!success) {
+      console.error('Error saving column toggle to Supabase');
+      // Rollback
+      setVisibleColumns(visibleColumns);
+      setCustomColumns(customColumns);
+    }
   };
 
   const moveVisibleColumn = useCallback(
@@ -464,13 +494,13 @@ export default function LeadsKanbanPage() {
       const normalizedColumn = normalizeColumnName(column);
 
       // Nunca permitir mover/insertar "frío"
-      if (normalizedColumn === 'frío' || normalizedColumn === 'fríos' || normalizedColumn === 'frios') {
+      if (FRIO_BLACKLIST.has(normalizedColumn)) {
         return;
       }
 
       const current = visibleColumns
         .map(normalizeColumnName)
-        .filter(c => c !== 'frío' && c !== 'fríos' && c !== 'frios');
+        .filter(c => !FRIO_BLACKLIST.has(c));
 
       const fromIndex = current.indexOf(normalizedColumn);
       if (fromIndex === -1) return;
@@ -490,8 +520,11 @@ export default function LeadsKanbanPage() {
         return true;
       });
 
+      const promoted = promoteToCustomIfOrphan(column, customColumns);
+
       setVisibleColumns(next);
-      await saveKanbanColumns(customColumns, next, columnColors);
+      setCustomColumns(promoted);
+      await saveKanbanColumns(promoted, next, columnColors);
     },
     [visibleColumns, customColumns, columnColors]
   );
@@ -500,8 +533,20 @@ export default function LeadsKanbanPage() {
     setIsColumnSelectorVisible(!isColumnSelectorVisible);
   };
 
-  // Siempre excluir "frío" de las columnas disponibles
-  const allColumns = ['tibio', 'caliente', 'llamada', 'visita', ...customColumns];
+  // Unión de: estados base + columnas personalizadas + estados huérfanos de leads.estado
+  // Siempre excluye la familia "frío". Los estados huérfanos aparecen ordenados alfabéticamente al final.
+  const allColumns = useMemo(() => {
+    const base: string[] = [...BASE_STATES];
+    const customs = customColumns.map(normalizeColumnName);
+    const orphans = distinctEstados
+      .map(normalizeColumnName)
+      .filter(c => !FRIO_BLACKLIST.has(c))
+      .filter(c => !base.includes(c) && !customs.includes(c))
+      .sort((a, b) => a.localeCompare(b));
+    const merged = [...base, ...customs, ...orphans];
+    const seen = new Set<string>();
+    return merged.filter(c => !FRIO_BLACKLIST.has(c) && !seen.has(c) && !!seen.add(c));
+  }, [customColumns, distinctEstados]);
 
   const handleSaveLead = async (leadData: Partial<Lead>) => {
     try {
@@ -851,10 +896,9 @@ export default function LeadsKanbanPage() {
                 <div className="flex space-x-2">
                   <button
                     onClick={async () => {
-                      // Excluir "frío" al seleccionar todas
-                      const columnsWithoutFrio = allColumns.filter(col => col !== 'frío' && col !== 'fríos' && col !== 'frios');
-                      setVisibleColumns(columnsWithoutFrio);
-                      await saveKanbanColumns(customColumns, columnsWithoutFrio);
+                      // allColumns ya excluye "frío" via useMemo
+                      setVisibleColumns(allColumns);
+                      await saveKanbanColumns(customColumns, allColumns);
                     }}
                     className="text-xs text-gray-600 hover:text-gray-800 font-medium"
                   >
@@ -913,9 +957,11 @@ export default function LeadsKanbanPage() {
               )}
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-                {/* Filtrar "frío" de las columnas mostradas en el selector */}
-                {allColumns.filter(col => col !== 'frío' && col !== 'fríos' && col !== 'frios').map((column, colIdx) => {
+                {/* allColumns ya excluye "frío" en el useMemo */}
+                {allColumns.map((column, colIdx) => {
                   const colColor = columnColors[column] || '#94a3b8';
+                  // Mostrar botón de eliminar para columnas no-base (custom y huérfanas)
+                  const isDeletable = !(BASE_STATES as readonly string[]).includes(column);
                   return (
                     <div key={`kanban-opt-${colIdx}-${column}`} className="flex items-center justify-between gap-2">
                       <label className="flex items-center space-x-2 cursor-pointer flex-1 min-w-0">
@@ -943,7 +989,7 @@ export default function LeadsKanbanPage() {
                         </span>
                         <span className="text-sm text-gray-700 capitalize truncate">{column}</span>
                       </label>
-                      {customColumns.includes(column) && (
+                      {isDeletable && (
                         <button
                           onClick={() => handleDeleteCustomColumn(column)}
                           className="text-xs text-red-600 hover:text-red-800"

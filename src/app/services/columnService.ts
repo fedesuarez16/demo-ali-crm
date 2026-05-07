@@ -33,7 +33,7 @@ const DEFAULT_COLORS: Record<string, string> = {
 };
 
 // Función para normalizar nombres de columnas (eliminar "Fríos", "Tibios", etc.)
-const normalizeColumnName = (col: string): string => {
+export const normalizeColumnName = (col: string): string => {
   const colLower = col.toLowerCase().trim();
   if (colLower === 'fríos' || colLower === 'frios') return 'frío';
   if (colLower === 'tibios') return 'tibio';
@@ -200,21 +200,39 @@ export const saveKanbanColumns = async (
  */
 export const getDistinctLeadEstados = async (): Promise<string[]> => {
   try {
-    const { data, error } = await (getSupabase() as any)
-      .from('leads')
-      .select('estado')
-      .not('estado', 'is', null);
-
-    if (error) {
-      console.error('Error fetching distinct estados from leads:', error.message);
-      return [];
-    }
-
+    // Supabase limita .select() a 1000 filas por defecto. Paginamos para cubrir
+    // tablas grandes — si no, se pierden estados de leads creados después de la fila 1000.
     const set = new Set<string>();
-    for (const row of (data || []) as Array<{ estado?: string | null }>) {
-      const value = (row.estado || '').toString().trim();
-      if (value) set.add(value);
+    const pageSize = 1000;
+    let from = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const to = from + pageSize - 1;
+      const { data, error } = await (getSupabase() as any)
+        .from('leads')
+        .select('estado')
+        .not('estado', 'is', null)
+        .range(from, to);
+
+      if (error) {
+        console.error('Error fetching distinct estados from leads:', error.message);
+        break;
+      }
+
+      const rows = (data || []) as Array<{ estado?: string | null }>;
+      for (const row of rows) {
+        const value = (row.estado || '').toString().trim();
+        if (value) set.add(value);
+      }
+
+      if (rows.length < pageSize) {
+        hasMore = false;
+      } else {
+        from += pageSize;
+      }
     }
+
     return Array.from(set);
   } catch (e) {
     console.error('Exception fetching distinct estados from leads:', e);

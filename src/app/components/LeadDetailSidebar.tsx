@@ -6,12 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, MessageSquare, Phone, Mail, Calendar, ChevronDown, MapPin, DollarSign, Home, User, Clock, FileText, Building, Send, Plus, Minus, Wifi, WifiOff, Bell } from 'lucide-react';
+import { X, Phone, Mail, Calendar, MapPin, DollarSign, Home, User, Clock, FileText, Building, Plus, Minus, Wifi, WifiOff, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { programarMensaje, programarSeguimiento, getSeguimientosPendientes, actualizarFechaProgramada, ColaSeguimiento, existeSeguimientoParaLead, eliminarTodosSeguimientosPendientes } from '../services/mensajeService';
+import { programarSeguimiento, getSeguimientosPendientes, actualizarFechaProgramada, ColaSeguimiento, existeSeguimientoParaLead, eliminarTodosSeguimientosPendientes } from '../services/mensajeService';
 import { useChatStatus } from '../../hooks/useChatStatus';
 import { updateLead } from '../services/leadService';
 
@@ -32,14 +31,6 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
   onEditLead,
   columnColors = {}
 }) => {
-  const [showMessageMenu, setShowMessageMenu] = useState(false);
-  const [messageForm, setMessageForm] = useState({
-    canal: '',
-    fechaHora: '',
-    plantilla: '',
-    mensajePersonalizado: ''
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [notas, setNotas] = useState(lead?.notas || '');
   const [isSavingNotas, setIsSavingNotas] = useState(false);
   const [seguimientosCount, setSeguimientosCount] = useState(lead?.seguimientos_count || 0);
@@ -201,36 +192,6 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
       };
     }
     return {};
-  };
-
-  const toggleMessageMenu = () => {
-    setShowMessageMenu(!showMessageMenu);
-    // Reset form when opening
-    if (!showMessageMenu) {
-      setMessageForm({
-        canal: '',
-        fechaHora: '',
-        plantilla: '',
-        mensajePersonalizado: ''
-      });
-    }
-  };
-
-  const handleFormChange = (field: string, value: string) => {
-    setMessageForm(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const getMensajePlantilla = (plantilla: string): string => {
-    const templates: Record<string, string> = {
-      inicial: `Hola ${lead?.nombreCompleto}, como estas? Retomo contacto para consultarte que te parecieron los productos que te envie y si se adecuan a tu busqueda.`,
-      comercial: `Hola ${lead?.nombreCompleto}, tengo una excelente oportunidad en ${lead?.zonaInteres} que se ajusta a tu presupuesto de ${lead ? formatCurrency(lead.presupuesto) : ''}. ¿Podemos coordinar una visita?`,
-      recordatorio: `Hola ${lead?.nombreCompleto}, te escribo para recordarte nuestra cita programada. ¿Sigues disponible para la visita?`,
-      personalizado: ''
-    };
-    return templates[plantilla] || '';
   };
 
   // Función para guardar notas
@@ -449,53 +410,6 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
     return normalized;
   };
 
-  const handleProgramarMensaje = async () => {
-    if (!lead || !messageForm.canal || !messageForm.fechaHora) {
-      alert('Por favor completa todos los campos obligatorios');
-      return;
-    }
-
-    setIsSubmitting(true);
-    
-    try {
-      const mensaje = messageForm.plantilla === 'personalizado' 
-        ? messageForm.mensajePersonalizado 
-        : getMensajePlantilla(messageForm.plantilla);
-
-      if (!mensaje.trim()) {
-        alert('Por favor ingresa un mensaje');
-        setIsSubmitting(false);
-        return;
-      }
-
-      const remoteJid = (lead as any).whatsapp_id || lead.telefono || lead.email;
-      
-      const success = await programarMensaje({
-        remote_jid: remoteJid,
-        mensaje: mensaje,
-        scheduled_at: messageForm.fechaHora
-      });
-
-      if (success) {
-        alert('Mensaje programado exitosamente');
-        setShowMessageMenu(false);
-        setMessageForm({
-          canal: '',
-          fechaHora: '',
-          plantilla: '',
-          mensajePersonalizado: ''
-        });
-      } else {
-        alert('Error al programar el mensaje. Intenta nuevamente.');
-      }
-    } catch (error) {
-      console.error('Error programando mensaje:', error);
-      alert('Error al programar el mensaje. Intenta nuevamente.');
-    }
-    
-    setIsSubmitting(false);
-  };
-
   // Activa o desactiva el agente para el lead actualizando leads.estado_chat en Supabase.
   // NOTA: El sidebar ya no escribe en los sets Redis JID. estado_chat es la única fuente de verdad
   // aquí. Si un flujo posterior necesita sincronizar Redis, debe agregarse explícitamente.
@@ -640,125 +554,7 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
               </Button>
             )}
             
-            {/* Message menu */}
-            <div className="relative">
-              <Button 
-                variant="outline" 
-                className="w-full justify-between"
-                onClick={toggleMessageMenu}
-              >
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4" />
-                  Programar mensaje
-                </div>
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-              
-              {/* Dropdown menu */}
-              {showMessageMenu && (
-                <Card className="absolute z-20 mt-2 w-full">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <MessageSquare className="h-4 w-4" />
-                      Programar mensaje
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="canal" className="text-xs font-medium">Canal *</Label>
-                      <Select value={messageForm.canal} onValueChange={(value) => handleFormChange('canal', value)}>
-                        <SelectTrigger className="h-8">
-                          <SelectValue placeholder="Seleccionar canal" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                        
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="datetime" className="text-xs font-medium">Fecha y hora *</Label>
-                      <Input 
-                        type="datetime-local" 
-                        className="h-8" 
-                        value={messageForm.fechaHora}
-                        onChange={(e) => handleFormChange('fechaHora', e.target.value)}
-                        min={new Date().toISOString().slice(0, 16)}
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="template" className="text-xs font-medium">Plantilla *</Label>
-                      <Select value={messageForm.plantilla} onValueChange={(value) => handleFormChange('plantilla', value)}>
-                        <SelectTrigger className="h-8">
-                          <SelectValue placeholder="Seleccionar plantilla" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="inicial">Seguimiento inicial</SelectItem>
-                          <SelectItem value="comercial">Propuesta comercial</SelectItem>
-                          <SelectItem value="recordatorio">Recordatorio de cita</SelectItem>
-                          <SelectItem value="personalizado">Personalizado</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Preview del mensaje */}
-                    {messageForm.plantilla && messageForm.plantilla !== 'personalizado' && (
-                      <div className="space-y-2">
-                        <Label className="text-xs font-medium">Vista previa del mensaje:</Label>
-                        <div className="bg-muted p-3 rounded-md text-xs text-muted-foreground border">
-                          {getMensajePlantilla(messageForm.plantilla)}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Campo de mensaje personalizado */}
-                    {messageForm.plantilla === 'personalizado' && (
-                      <div className="space-y-2">
-                        <Label htmlFor="mensaje" className="text-xs font-medium">Mensaje personalizado *</Label>
-                        <textarea
-                          className="w-full h-20 px-3 py-2 text-xs border border-input rounded-md bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
-                          placeholder="Escribe tu mensaje personalizado..."
-                          value={messageForm.mensajePersonalizado}
-                          onChange={(e) => handleFormChange('mensajePersonalizado', e.target.value)}
-                        />
-                      </div>
-                    )}
-                    
-                    <div className="flex justify-end gap-2 pt-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={toggleMessageMenu}
-                        disabled={isSubmitting}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        onClick={handleProgramarMensaje}
-                        disabled={isSubmitting || !messageForm.canal || !messageForm.fechaHora || !messageForm.plantilla}
-                      >
-                        {isSubmitting ? (
-                          <>
-                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
-                            Programando...
-                          </>
-                        ) : (
-                          <>
-                            <Send className="h-3 w-3 mr-2" />
-                            Programar
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-            
-            {/* Redis Campaign Buttons */}
+            {/* Agente management */}
             <div className="space-y-2">
               <div className="flex items-center gap-2 mb-2">
                 <div className="h-px bg-border flex-1"></div>
