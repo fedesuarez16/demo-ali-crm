@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Lead, LeadStatus, PropertyType, InterestReason } from '../types';
-import { getKanbanColumns, getDistinctLeadEstados } from '../services/columnService';
+import { getKanbanColumns, getDistinctLeadEstados, canonicalEstado } from '../services/columnService';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -57,24 +57,41 @@ const LeadEditSidebar: React.FC<LeadEditSidebarProps> = ({
     let cancelled = false;
     (async () => {
       try {
-        const [{ visibleColumns, customColumns, columnColors }, distinctLeadEstados] = await Promise.all([
+        const [{ customColumns, columnColors }, distinctLeadEstados] = await Promise.all([
           getKanbanColumns(),
           getDistinctLeadEstados(),
         ]);
         if (cancelled) return;
-        const baseStatuses = ['frío', 'tibio', 'caliente', 'llamada', 'visita'];
-        const colorKeys = Object.keys(columnColors || {});
-        const merged = [
-          ...visibleColumns,
-          ...baseStatuses,
-          ...customColumns,
-          ...colorKeys,
-          ...distinctLeadEstados,
-        ]
-          .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-          .map((value) => value.trim())
-          .filter((value, index, arr) => arr.indexOf(value) === index);
-        setEstadoOptions(merged);
+
+        const BASE_STATES = ['frío', 'tibio', 'caliente', 'llamada', 'visita'];
+
+        const baseCanonical = BASE_STATES
+          .map(v => canonicalEstado(v))
+          .filter((v): v is string => !!v);
+
+        const customsCanonical = (customColumns || [])
+          .map(v => canonicalEstado(v))
+          .filter((v): v is string => !!v);
+
+        const baseSet = new Set(baseCanonical);
+        const customsSet = new Set(customsCanonical);
+
+        const orphansCanonical = (distinctLeadEstados || [])
+          .map(v => canonicalEstado(v))
+          .filter((v): v is string => !!v)
+          .filter(v => !baseSet.has(v) && !customsSet.has(v))
+          .sort((a, b) => a.localeCompare(b));
+
+        const merged = [...baseCanonical, ...customsCanonical, ...orphansCanonical];
+
+        const seen = new Set<string>();
+        const deduped = merged.filter(v => {
+          if (seen.has(v)) return false;
+          seen.add(v);
+          return true;
+        });
+
+        setEstadoOptions(deduped);
         setEstadoColors(columnColors || {});
       } catch (err) {
         console.error('Error cargando columnas del kanban:', err);
@@ -95,14 +112,19 @@ const LeadEditSidebar: React.FC<LeadEditSidebarProps> = ({
   };
 
   const renderedEstadoOptions = useMemo(() => {
-    const base = [...estadoOptions];
-    if (formData.estado && !base.includes(formData.estado as string)) {
-      base.unshift(formData.estado as string);
+    const opts = [...estadoOptions];
+    const currentCanonical = canonicalEstado(formData.estado || '');
+    if (currentCanonical && !opts.includes(currentCanonical)) {
+      opts.unshift(currentCanonical);
+    } else if (formData.estado && !currentCanonical && !opts.includes(formData.estado)) {
+      // Fallback: keep raw if it doesn't canonicalize (defensive)
+      opts.unshift(formData.estado);
     }
-    if (isNewLead && !base.includes('inicial')) {
-      base.unshift('inicial');
+    if (isNewLead && !opts.includes('inicial')) {
+      opts.unshift('inicial');
     }
-    return base.filter((v, i, arr) => v && arr.indexOf(v) === i);
+    const seen = new Set<string>();
+    return opts.filter(v => !!v && !seen.has(v) && !!seen.add(v));
   }, [estadoOptions, formData.estado, isNewLead]);
 
   const formatEstadoLabel = (value: string): React.ReactNode => {

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Lead, FilterOptions, LeadStatus } from '../types';
+import { canonicalEstado } from './columnService';
 
 // Read from environment variables. Ensure these are set in your environment.
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string | undefined;
@@ -273,18 +274,6 @@ export const buildCampaignRepresentatives = (leads: Lead[]): CampaignGrouping =>
   return { representatives, rawToRep, groupsByRep };
 };
 
-// Función para normalizar estados de la base de datos
-const normalizeEstadoFromDB = (estado: string | null | undefined): string => {
-  if (!estado) return '';
-  const estadoLower = estado.toLowerCase().trim();
-  // Normalizar variaciones comunes
-  if (estadoLower === 'fríos' || estadoLower === 'frios') return 'frío';
-  if (estadoLower === 'tibios') return 'tibio';
-  if (estadoLower === 'calientes') return 'caliente';
-  if (estadoLower === 'llamadas') return 'llamada';
-  if (estadoLower === 'visitas') return 'visita';
-  return estadoLower;
-};
 
 // Map a DB row (snake_case or camelCase) into our Lead type
 // Nota: mapLeadRow es síncrono, pero calificarLead es asíncrono
@@ -299,7 +288,7 @@ const mapLeadRow = (row: any): Lead => {
     estado = 'frio'; // Valor temporal, se actualizará después
   } else {
     // Normalizar el estado si viene de la BD (ej: "Fríos" -> "frío")
-    estado = normalizeEstadoFromDB(estado);
+    estado = canonicalEstado(estado);
   }
   
   return {
@@ -404,7 +393,7 @@ export const recalificarLead = async (leadId: string): Promise<boolean> => {
       return false;
     }
     
-    const currentEstado = normalizeEstadoFromDB(lead.estado);
+    const currentEstado = canonicalEstado(lead.estado);
     // Recalificar si el estado es 'frío', 'tibio' o 'caliente' (los 3 estados automáticos basados en mensajes)
     // No recalificar 'llamada', 'visita' u otros estados manuales
     if (currentEstado !== 'frío' && currentEstado !== 'frio' && currentEstado !== 'tibio' && currentEstado !== 'caliente') {
@@ -623,7 +612,7 @@ export const getUniqueStatuses = (): string[] => {
     // Filtrar estados temporales que no deberían aparecer como columnas
     if (lead.estado && lead.estado !== 'activo' && lead.estado !== 'inicial') {
       // Normalizar el estado antes de agregarlo
-      const normalizedEstado = normalizeEstadoFromDB(lead.estado);
+      const normalizedEstado = canonicalEstado(lead.estado);
       if (normalizedEstado) {
         dataStatuses.add(normalizedEstado);
       }
@@ -698,7 +687,7 @@ export const updateLeadStatus = async (leadId: string, newStatus: string): Promi
     }
     
     // Normalizar el estado antes de guardarlo (ej: "Fríos" -> "frío")
-    const normalizedStatus = normalizeEstadoFromDB(newStatus.trim());
+    const normalizedStatus = canonicalEstado(newStatus.trim());
     
     // Cast table typing loosely to avoid TS inference issues without generated types
     const { data, error } = await (getSupabase() as any)
@@ -722,6 +711,49 @@ export const updateLeadStatus = async (leadId: string, newStatus: string): Promi
   } catch (e) {
     console.error('Exception updating lead status:', e);
     return false;
+  }
+};
+
+/**
+ * Reasigna masivamente todos los leads con `fromEstado` al `toEstado`.
+ * Devuelve la cantidad de filas actualizadas, o null si hubo error.
+ * Compara estados ya canonicalizados — asume que la BD tiene valores canónicos
+ * (los writes pasan por `canonicalEstado` en `updateLeadStatus`).
+ */
+export const bulkReassignLeadEstado = async (
+  fromEstado: string,
+  toEstado: string,
+): Promise<number | null> => {
+  try {
+    const fromCanonical = canonicalEstado(fromEstado);
+    const toCanonical = canonicalEstado(toEstado);
+
+    if (!fromCanonical || !toCanonical) {
+      console.error('Invalid estados for bulk reassign:', { fromEstado, toEstado });
+      return null;
+    }
+
+    const { data, error } = await (getSupabase() as any)
+      .from('leads')
+      .update({ estado: toCanonical })
+      .eq('estado', fromCanonical)
+      .select('id');
+
+    if (error) {
+      console.error('Error bulk reassigning leads:', error.message);
+      return null;
+    }
+
+    cachedLeads = cachedLeads.map(l =>
+      canonicalEstado(l.estado as unknown as string) === fromCanonical
+        ? ({ ...l, estado: toCanonical as LeadStatus } as Lead)
+        : l,
+    );
+
+    return Array.isArray(data) ? data.length : 0;
+  } catch (e) {
+    console.error('Exception bulk reassigning leads:', e);
+    return null;
   }
 };
 
@@ -1115,7 +1147,7 @@ export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promi
     // 1. El estado actual es inválido ('inicial' o 'activo')
     // 2. Se actualiza chatwoot_conversation_id y el estado es 'frío' o 'tibio'
     // 3. El estado actual es 'frío' o 'tibio' y se está actualizando el lead (puede haber nuevos mensajes)
-    const currentEstado = normalizeEstadoFromDB(currentLead?.estado);
+    const currentEstado = canonicalEstado(currentLead?.estado);
     const isUpdatingChatwootId = leadData.chatwoot_conversation_id !== undefined && 
                                   leadData.chatwoot_conversation_id !== currentLead?.chatwoot_conversation_id;
     const hasChatwootId = (leadData.chatwoot_conversation_id ?? currentLead?.chatwoot_conversation_id);

@@ -32,16 +32,46 @@ const DEFAULT_COLORS: Record<string, string> = {
   'visita': '#10b981'     // Verde
 };
 
-// Función para normalizar nombres de columnas (eliminar "Fríos", "Tibios", etc.)
-export const normalizeColumnName = (col: string): string => {
-  const colLower = col.toLowerCase().trim();
-  if (colLower === 'fríos' || colLower === 'frios') return 'frío';
-  if (colLower === 'tibios') return 'tibio';
-  if (colLower === 'calientes') return 'caliente';
-  if (colLower === 'llamadas') return 'llamada';
-  if (colLower === 'visitas') return 'visita';
-  return colLower;
+const SINGULAR_MAP: Readonly<Record<string, string>> = {
+  frios: 'frio',
+  tibios: 'tibio',
+  calientes: 'caliente',
+  llamadas: 'llamada',
+  visitas: 'visita',
 };
+
+const CANONICAL_ACCENT_MAP: Readonly<Record<string, string>> = {
+  frio: 'frío',
+  // tibio/caliente/llamada/visita no necesitan re-acento
+};
+
+/**
+ * Función canónica única para normalizar valores de `estado` en todo el codebase.
+ *
+ * Pipeline:
+ *   1. Elimina diacríticos vía NFD + remoción de combining marks Unicode.
+ *   2. Lowercase + trim + colapso de espacios internos.
+ *   3. Singulariza formas plurales conocidas (frios → frio, tibios → tibio, ...).
+ *   4. Re-aplica la forma acentuada canónica (frio → frío).
+ *
+ * Idempotente: canonicalEstado(canonicalEstado(x)) === canonicalEstado(x).
+ * Columnas personalizadas pasan con lowercase + strip + trim únicamente.
+ */
+export function canonicalEstado(input: string | null | undefined): string {
+  if (input == null) return '';
+  const stripped = input
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!stripped) return '';
+  const singular = SINGULAR_MAP[stripped] ?? stripped;
+  return CANONICAL_ACCENT_MAP[singular] ?? singular;
+}
+
+/** @deprecated Usar `canonicalEstado` en su lugar. Alias de una sola ciclo para compatibilidad. */
+export const normalizeColumnName = canonicalEstado;
 
 /**
  * Obtiene las columnas personalizadas desde Supabase
@@ -143,9 +173,14 @@ export const saveKanbanColumns = async (
     // Combinar con colores por defecto
     finalColumnColors = { ...DEFAULT_COLORS, ...finalColumnColors };
     
-    // Si se proporcionan nuevos colores, actualizarlos
+    // Si se proporcionan nuevos colores, actualizarlos (canonicalizando las claves)
     if (columnColors) {
-      finalColumnColors = { ...finalColumnColors, ...columnColors };
+      const canonicalizedColors: Record<string, string> = {};
+      for (const [key, value] of Object.entries(columnColors)) {
+        const canonicalKey = canonicalEstado(key) || key;
+        canonicalizedColors[canonicalKey] = value;
+      }
+      finalColumnColors = { ...finalColumnColors, ...canonicalizedColors };
     }
 
     const columnsData = {
@@ -222,8 +257,9 @@ export const getDistinctLeadEstados = async (): Promise<string[]> => {
 
       const rows = (data || []) as Array<{ estado?: string | null }>;
       for (const row of rows) {
-        const value = (row.estado || '').toString().trim();
-        if (value) set.add(value);
+        const raw = (row.estado || '').toString().trim();
+        const canonical = canonicalEstado(raw);
+        if (canonical) set.add(canonical);
       }
 
       if (rows.length < pageSize) {

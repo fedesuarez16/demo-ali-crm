@@ -19,6 +19,7 @@ import { programarSeguimiento } from '../../services/mensajeService';
 import { exportLeadsToCSV } from '../../utils/exportUtils';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
+import { canonicalEstado } from '../../services/columnService';
 
 export default function LeadsTablePage() {
   // Todos los hooks deben estar al inicio, antes de cualquier return condicional
@@ -36,17 +37,6 @@ export default function LeadsTablePage() {
   const [propiedadesInteres, setPropiedadesInteres] = useState<string[]>([]);
   const [showAllCampaigns, setShowAllCampaigns] = useState(false);
   
-  // Función para normalizar nombres de columnas
-  const normalizeColumnName = (col: string): string => {
-    const colLower = col.toLowerCase().trim();
-    if (colLower === 'fríos' || colLower === 'frios') return 'frío';
-    if (colLower === 'tibios') return 'tibio';
-    if (colLower === 'calientes') return 'caliente';
-    if (colLower === 'llamadas') return 'llamada';
-    if (colLower === 'visitas') return 'visita';
-    return colLower;
-  };
-
   // Estado para columnas visibles (normalizadas)
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['frío', 'tibio', 'caliente', 'llamada', 'visita']);
   const [isColumnSelectorVisible, setIsColumnSelectorVisible] = useState(false);
@@ -66,11 +56,11 @@ export default function LeadsTablePage() {
   const [tableScrollWidth, setTableScrollWidth] = useState<number>(0);
   const [tableClientWidth, setTableClientWidth] = useState<number>(0);
   
-  // Normalizar todas las columnas para evitar "Fríos"
+  // Normalizar todas las columnas para evitar variantes de "frío"
   const allColumns = ['frío', 'tibio', 'caliente', 'llamada', 'visita', ...customColumns]
-    .map(normalizeColumnName)
+    .map(canonicalEstado)
     .filter((col, index, self) => self.indexOf(col) === index)
-    .filter(col => col !== 'fríos' && col !== 'frios');
+    .filter(col => !!col);
 
   const shouldShowTopScrollbar = useMemo(() => {
     if (!tableScrollWidth || !tableClientWidth) return false;
@@ -128,13 +118,13 @@ export default function LeadsTablePage() {
     };
   }, []);
   
-  // Normalizar visibleColumns al cargar para eliminar "Fríos" si existe
+  // Normalizar visibleColumns al cargar para eliminar variantes de "frío"
   useEffect(() => {
     const normalized = visibleColumns
-      .map(normalizeColumnName)
+      .map(canonicalEstado)
       .filter((col, index, self) => self.indexOf(col) === index)
-      .filter(col => col !== 'fríos' && col !== 'frios');
-    
+      .filter(col => !!col);
+
     // Si hay diferencias, actualizar el estado (solo una vez al montar)
     if (JSON.stringify(normalized.sort()) !== JSON.stringify(visibleColumns.sort())) {
       setVisibleColumns(normalized);
@@ -151,30 +141,12 @@ export default function LeadsTablePage() {
       
       const allLeads = await getAllLeads();
       
-      // NORMALIZAR ESTADOS DE LEADS ANTES DE GUARDARLOS - convertir "Fríos" a "frío"
-      const normalizedLeads = allLeads.map(lead => {
-        const estado = lead.estado as string;
-        if (estado) {
-          const estadoLower = estado.toLowerCase().trim();
-          if (estadoLower === 'fríos' || estadoLower === 'frios') {
-            return { ...lead, estado: 'frío' as any };
-          }
-          if (estadoLower === 'tibios') {
-            return { ...lead, estado: 'tibio' as any };
-          }
-          if (estadoLower === 'calientes') {
-            return { ...lead, estado: 'caliente' as any };
-          }
-          if (estadoLower === 'llamadas') {
-            return { ...lead, estado: 'llamada' as any };
-          }
-          if (estadoLower === 'visitas') {
-            return { ...lead, estado: 'visita' as any };
-          }
-        }
-        return lead;
-      });
-      
+      // Canonicalizar estados de leads al cargar
+      const normalizedLeads = allLeads.map(lead => ({
+        ...lead,
+        estado: canonicalEstado(lead.estado as string) as any || lead.estado,
+      }));
+
       setLeads(normalizedLeads);
       setFilteredLeads(normalizedLeads);
       
@@ -236,30 +208,12 @@ export default function LeadsTablePage() {
         });
       }
       
-      // NORMALIZAR ESTADOS DESPUÉS DE FILTRAR
-      const normalizedFiltered = filtered.map(lead => {
-        const estado = lead.estado as string;
-        if (estado) {
-          const estadoLower = estado.toLowerCase().trim();
-          if (estadoLower === 'fríos' || estadoLower === 'frios') {
-            return { ...lead, estado: 'frío' as any };
-          }
-          if (estadoLower === 'tibios') {
-            return { ...lead, estado: 'tibio' as any };
-          }
-          if (estadoLower === 'calientes') {
-            return { ...lead, estado: 'caliente' as any };
-          }
-          if (estadoLower === 'llamadas') {
-            return { ...lead, estado: 'llamada' as any };
-          }
-          if (estadoLower === 'visitas') {
-            return { ...lead, estado: 'visita' as any };
-          }
-        }
-        return lead;
-      });
-      
+      // Canonicalizar estados después de filtrar
+      const normalizedFiltered = filtered.map(lead => ({
+        ...lead,
+        estado: canonicalEstado(lead.estado as string) as any || lead.estado,
+      }));
+
       setFilteredLeads(normalizedFiltered);
     } catch (error) {
       console.error('Error in filter effect:', error);
@@ -289,9 +243,9 @@ export default function LeadsTablePage() {
   };
 
   const moveVisibleColumn = (column: string, direction: 'left' | 'right') => {
-    const normalizedColumn = normalizeColumnName(column);
+    const normalizedColumn = canonicalEstado(column);
     setVisibleColumns(prev => {
-      const next = prev.map(normalizeColumnName);
+      const next = prev.map(canonicalEstado);
       const fromIndex = next.indexOf(normalizedColumn);
       if (fromIndex === -1) return prev;
 
@@ -313,9 +267,9 @@ export default function LeadsTablePage() {
   };
 
   const handleColumnToggle = (column: string) => {
-    const normalizedColumn = normalizeColumnName(column);
+    const normalizedColumn = canonicalEstado(column);
     setVisibleColumns(prev => {
-      const normalized = prev.map(normalizeColumnName);
+      const normalized = prev.map(canonicalEstado);
       return normalized.includes(normalizedColumn)
         ? normalized.filter(col => col !== normalizedColumn)
         : [...normalized, normalizedColumn];
@@ -324,9 +278,9 @@ export default function LeadsTablePage() {
 
   const handleSelectAllColumns = () => {
     const normalized = allColumns
-      .map(normalizeColumnName)
+      .map(canonicalEstado)
       .filter((col, index, self) => self.indexOf(col) === index)
-      .filter(col => col !== 'fríos' && col !== 'frios');
+      .filter(col => !!col);
     setVisibleColumns(normalized);
   };
 
@@ -336,7 +290,7 @@ export default function LeadsTablePage() {
 
   const handleAddColumn = () => {
     if (newColumnName.trim() && !allColumns.includes(newColumnName.trim().toLowerCase())) {
-      const newColumn = normalizeColumnName(newColumnName.trim());
+      const newColumn = canonicalEstado(newColumnName.trim());
       // No permitir agregar columnas que sean variaciones de las existentes
       if (newColumn === 'frío' || newColumn === 'tibio' || newColumn === 'caliente' || newColumn === 'llamada' || newColumn === 'visita') {
         alert('Esta columna ya existe con otro nombre');
@@ -440,28 +394,10 @@ export default function LeadsTablePage() {
       
       // Recargar leads para actualizar los contadores
       const allLeads = await getAllLeads();
-      const normalizedLeads = allLeads.map(lead => {
-        const estado = lead.estado as string;
-        if (estado) {
-          const estadoLower = estado.toLowerCase().trim();
-          if (estadoLower === 'fríos' || estadoLower === 'frios') {
-            return { ...lead, estado: 'frío' as any };
-          }
-          if (estadoLower === 'tibios') {
-            return { ...lead, estado: 'tibio' as any };
-          }
-          if (estadoLower === 'calientes') {
-            return { ...lead, estado: 'caliente' as any };
-          }
-          if (estadoLower === 'llamadas') {
-            return { ...lead, estado: 'llamada' as any };
-          }
-          if (estadoLower === 'visitas') {
-            return { ...lead, estado: 'visita' as any };
-          }
-        }
-        return lead;
-      });
+      const normalizedLeads = allLeads.map(lead => ({
+        ...lead,
+        estado: canonicalEstado(lead.estado as string) as any || lead.estado,
+      }));
       setLeads(normalizedLeads);
     } catch (error) {
       console.error('Error agregando leads a seguimientos:', error);
@@ -851,36 +787,14 @@ export default function LeadsTablePage() {
           <LeadTable 
             scrollContainerRef={tableScrollRef}
             contentMeasureRef={tableContentMeasureRef}
-            leads={filteredLeads.map(lead => {
-              // NORMALIZAR ESTADOS DE LEADS ANTES DE PASARLOS A LeadTable
-              const estado = lead.estado as string;
-              if (estado) {
-                const estadoLower = estado.toLowerCase().trim();
-                if (estadoLower === 'fríos' || estadoLower === 'frios') {
-                  return { ...lead, estado: 'frío' as any };
-                }
-                if (estadoLower === 'tibios') {
-                  return { ...lead, estado: 'tibio' as any };
-                }
-                if (estadoLower === 'calientes') {
-                  return { ...lead, estado: 'caliente' as any };
-                }
-                if (estadoLower === 'llamadas') {
-                  return { ...lead, estado: 'llamada' as any };
-                }
-                if (estadoLower === 'visitas') {
-                  return { ...lead, estado: 'visita' as any };
-                }
-              }
-              return lead;
-            })} 
+            leads={filteredLeads.map(lead => ({
+              ...lead,
+              estado: canonicalEstado(lead.estado as string) as any || lead.estado,
+            }))}
             visibleColumns={visibleColumns
-              .map(normalizeColumnName)
+              .map(canonicalEstado)
               .filter((col, index, self) => self.indexOf(col) === index)
-              .filter(col => {
-                const normalized = normalizeColumnName(col);
-                return normalized !== 'fríos' && normalized !== 'frios' && col !== 'fríos' && col !== 'frios';
-              })
+              .filter(col => !!col)
             }
             onSelectionChange={handleSelectionChange}
             selectedLeadIds={new Set(selectedLeads.map(l => l.id))}

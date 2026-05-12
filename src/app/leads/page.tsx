@@ -7,16 +7,17 @@ import LeadFilter from '../components/LeadFilter';
 import LeadEditSidebar from '../components/LeadEditSidebar';
 import AgentStatusToggle from '../components/AgentStatusToggle';
 import { Lead, FilterOptions, LeadStatus } from '../types';
-import { 
-  getAllLeads, 
-  filterLeads, 
+import {
+  getAllLeads,
+  filterLeads,
   getUniqueZones,
   getUniqueStatuses,
   getUniquePropertyTypes,
   getUniqueInterestReasons,
   updateLeadStatus,
   createLead,
-  updateLead
+  updateLead,
+  bulkReassignLeadEstado
 } from '../services/leadService';
 import { getAllPropiedadDirecciones } from '../services/propiedadesService';
 import { exportLeadsToCSV } from '../utils/exportUtils';
@@ -25,10 +26,8 @@ import { programarSeguimiento } from '../services/mensajeService';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 
-// Estados base del Kanban (excluyendo "frío" que siempre está oculto)
-const BASE_STATES = ['tibio', 'caliente', 'llamada', 'visita'] as const;
-// Todas las variantes de "frío" que deben quedar excluidas de la lista de opciones
-const FRIO_BLACKLIST = new Set(['frío', 'fríos', 'frios']);
+// Estados base del Kanban
+const BASE_STATES = ['frío', 'tibio', 'caliente', 'llamada', 'visita'] as const;
 
 export default function LeadsKanbanPage() {
   // Todos los hooks deben estar al inicio, antes de cualquier return condicional
@@ -64,8 +63,7 @@ export default function LeadsKanbanPage() {
   const [newColumnName, setNewColumnName] = useState('');
   const [newColumnColor, setNewColumnColor] = useState('#3b82f6'); // Color por defecto (azul)
   const [isColumnSelectorVisible, setIsColumnSelectorVisible] = useState(false);
-  // Siempre excluir "frío" de las columnas visibles
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(['tibio', 'caliente', 'llamada', 'visita']);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(['frío', 'tibio', 'caliente', 'llamada', 'visita']);
   const [columnColors, setColumnColors] = useState<Record<string, string>>({});
   // Estados distintos tomados de leads.estado — sirven para mostrar columnas "huérfanas"
   const [distinctEstados, setDistinctEstados] = useState<string[]>([]);
@@ -86,14 +84,12 @@ export default function LeadsKanbanPage() {
           getDistinctLeadEstados(),
         ]);
 
-        // Normalizar las columnas visibles para eliminar "Fríos" y "frío"
+        // Normalizar las columnas visibles
         const normalizedVisible = loadedVisible
           .map(normalizeColumnName)
-          .filter((col, index, self) => self.indexOf(col) === index) // Eliminar duplicados
-          .filter(col => !FRIO_BLACKLIST.has(col)); // Filtrar toda la familia "frío"
+          .filter((col, index, self) => self.indexOf(col) === index); // Eliminar duplicados
 
         setCustomColumns(loadedCustom);
-        // Siempre excluir "frío" de las columnas visibles
         setVisibleColumns(normalizedVisible.length > 0 ? normalizedVisible : [...BASE_STATES]);
         setColumnColors(loadedColors);
         setDistinctEstados(rawEstados);
@@ -222,13 +218,7 @@ export default function LeadsKanbanPage() {
       
       // Normalizar el estado antes de actualizar
       const normalizedStatus = normalizeColumnName(newStatus);
-      
-      // Si el estado normalizado es "frío", no permitir el cambio
-      if (normalizedStatus === 'frío') {
-        alert('No se puede cambiar el estado a "frío". Esta columna está deshabilitada.');
-        return;
-      }
-      
+
       // Actualizar el estado del lead en el servicio
       const success = await updateLeadStatus(leadId, normalizedStatus);
       
@@ -374,7 +364,7 @@ export default function LeadsKanbanPage() {
   // lo prepende a customColumns para que quede persistido en la próxima interacción del usuario.
   const promoteToCustomIfOrphan = (estado: string, currentCustom: string[]): string[] => {
     const norm = normalizeColumnName(estado);
-    if (!norm || FRIO_BLACKLIST.has(norm)) return currentCustom;
+    if (!norm) return currentCustom;
     if ((BASE_STATES as readonly string[]).includes(norm)) return currentCustom;
     if (currentCustom.includes(norm)) return currentCustom;
     return [norm, ...currentCustom];
@@ -384,11 +374,6 @@ export default function LeadsKanbanPage() {
   const handleAddColumn = async () => {
     const normalizedColumn = normalizeColumnName(newColumnName.trim().toLowerCase());
     
-    // Nunca permitir agregar "frío" o sus variaciones
-    if (normalizedColumn === 'frío' || normalizedColumn === 'fríos' || normalizedColumn === 'frios') {
-      alert('No se puede agregar la columna "frío"');
-      return;
-    }
     
     if (newColumnName.trim() && !visibleColumns.includes(normalizedColumn)) {
       const updatedCustomColumns = [...customColumns, normalizedColumn];
@@ -419,6 +404,43 @@ export default function LeadsKanbanPage() {
 
   const handleDeleteCustomColumn = async (columnName: string) => {
     const norm = normalizeColumnName(columnName);
+    const REASSIGN_TARGET = 'frío';
+
+    // Contar leads afectados — leen los estados canonicalizados de los leads
+    // para detectar correctamente variantes ('Frío', 'frio', etc.)
+    const affectedCount = leads.filter(l => normalizeColumnName(l.estado as string) === norm).length;
+
+    if (affectedCount > 0) {
+      const ok = window.confirm(
+        `Hay ${affectedCount} lead(s) con estado "${columnName}". ` +
+        `Al borrar esta columna esos leads se reasignarán a "${REASSIGN_TARGET}". ` +
+        `¿Continuar?`,
+      );
+      if (!ok) return;
+
+      const updated = await bulkReassignLeadEstado(columnName, REASSIGN_TARGET);
+      if (updated === null) {
+        alert('Error al reasignar leads. La columna no se eliminó.');
+        return;
+      }
+
+      // Reflejar la reasignación en el estado local
+      setLeads(prev =>
+        prev.map(l =>
+          normalizeColumnName(l.estado as string) === norm
+            ? ({ ...l, estado: REASSIGN_TARGET as LeadStatus })
+            : l,
+        ),
+      );
+      setFilteredLeads(prev =>
+        prev.map(l =>
+          normalizeColumnName(l.estado as string) === norm
+            ? ({ ...l, estado: REASSIGN_TARGET as LeadStatus })
+            : l,
+        ),
+      );
+    }
+
     const updatedCustomColumns = customColumns.filter(col => normalizeColumnName(col) !== norm);
     const updatedVisibleColumns = visibleColumns.filter(col => normalizeColumnName(col) !== norm);
     const updatedColumnColors = { ...columnColors };
@@ -428,16 +450,12 @@ export default function LeadsKanbanPage() {
     setCustomColumns(updatedCustomColumns);
     setVisibleColumns(updatedVisibleColumns);
     setColumnColors(updatedColumnColors);
-    // Eliminar de distinctEstados para que desaparezca del selector en esta sesión
-    // (reaparecerá al recargar porque los leads aún llevan ese estado)
     setDistinctEstados(prev => prev.filter(e => normalizeColumnName(e) !== norm));
 
-    // Guardar en Supabase (NO se promueve el estado a custom_columns)
     const success = await saveKanbanColumns(updatedCustomColumns, updatedVisibleColumns, updatedColumnColors);
     if (!success) {
       console.error('Error saving columns to Supabase');
       alert('Error al eliminar la columna. Por favor intenta nuevamente.');
-      // Revertir cambios locales
       setCustomColumns(customColumns);
       setVisibleColumns(visibleColumns);
       setColumnColors(columnColors);
@@ -462,17 +480,11 @@ export default function LeadsKanbanPage() {
   };
 
   const handleColumnToggle = async (column: string) => {
-    // Nunca permitir agregar "frío"
-    if (FRIO_BLACKLIST.has(normalizeColumnName(column))) {
-      return;
-    }
-
     const updatedVisibleColumns = visibleColumns.includes(column)
       ? visibleColumns.filter(col => col !== column)
       : [...visibleColumns, column];
 
-    // Asegurarse de que "frío" nunca esté en las columnas visibles
-    const filteredColumns = updatedVisibleColumns.filter(col => !FRIO_BLACKLIST.has(normalizeColumnName(col)));
+    const filteredColumns = updatedVisibleColumns;
 
     const promoted = promoteToCustomIfOrphan(column, customColumns);
 
@@ -493,14 +505,8 @@ export default function LeadsKanbanPage() {
     async (column: string, direction: 'left' | 'right') => {
       const normalizedColumn = normalizeColumnName(column);
 
-      // Nunca permitir mover/insertar "frío"
-      if (FRIO_BLACKLIST.has(normalizedColumn)) {
-        return;
-      }
-
       const current = visibleColumns
-        .map(normalizeColumnName)
-        .filter(c => !FRIO_BLACKLIST.has(c));
+        .map(normalizeColumnName);
 
       const fromIndex = current.indexOf(normalizedColumn);
       if (fromIndex === -1) return;
@@ -534,18 +540,18 @@ export default function LeadsKanbanPage() {
   };
 
   // Unión de: estados base + columnas personalizadas + estados huérfanos de leads.estado
-  // Siempre excluye la familia "frío". Los estados huérfanos aparecen ordenados alfabéticamente al final.
+  // Los estados huérfanos aparecen ordenados alfabéticamente al final.
   const allColumns = useMemo(() => {
     const base: string[] = [...BASE_STATES];
     const customs = customColumns.map(normalizeColumnName);
     const orphans = distinctEstados
       .map(normalizeColumnName)
-      .filter(c => !FRIO_BLACKLIST.has(c))
+      .filter(c => !!c)
       .filter(c => !base.includes(c) && !customs.includes(c))
       .sort((a, b) => a.localeCompare(b));
     const merged = [...base, ...customs, ...orphans];
     const seen = new Set<string>();
-    return merged.filter(c => !FRIO_BLACKLIST.has(c) && !seen.has(c) && !!seen.add(c));
+    return merged.filter(c => !!c && !seen.has(c) && !!seen.add(c));
   }, [customColumns, distinctEstados]);
 
   const handleSaveLead = async (leadData: Partial<Lead>) => {
@@ -889,8 +895,8 @@ export default function LeadsKanbanPage() {
           </div>
 
           {/* Selector de columnas plegable */}
-          <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isColumnSelectorVisible ? 'max-h-96' : 'max-h-0'}`}>
-            <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
+          <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isColumnSelectorVisible ? 'max-h-[70vh]' : 'max-h-0'}`}>
+            <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 max-h-[70vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium text-gray-700">Seleccionar columnas visibles</h3>
                 <div className="flex space-x-2">
@@ -918,12 +924,11 @@ export default function LeadsKanbanPage() {
               </div>
 
               {/* Orden de columnas (izq/der) */}
-              {visibleColumns.filter(col => col !== 'frío' && col !== 'fríos' && col !== 'frios').length > 1 && (
+              {visibleColumns.length > 1 && (
                 <div className="mb-3">
                   <div className="text-xs font-medium text-gray-600 mb-2">Orden de columnas</div>
                   <div className="flex flex-wrap gap-2">
                     {visibleColumns
-                      .filter(col => col !== 'frío' && col !== 'fríos' && col !== 'frios')
                       .map((col, idx, arr) => (
                         <div
                           key={`order-col-${col}-${idx}`}
@@ -957,13 +962,15 @@ export default function LeadsKanbanPage() {
               )}
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-                {/* allColumns ya excluye "frío" en el useMemo */}
                 {allColumns.map((column, colIdx) => {
                   const colColor = columnColors[column] || '#94a3b8';
                   // Mostrar botón de eliminar para columnas no-base (custom y huérfanas)
                   const isDeletable = !(BASE_STATES as readonly string[]).includes(column);
                   return (
-                    <div key={`kanban-opt-${colIdx}-${column}`} className="flex items-center justify-between gap-2">
+                    <div
+                      key={`kanban-opt-${colIdx}-${column}`}
+                      className="flex items-center justify-between gap-2 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 shadow-sm hover:border-gray-300 hover:bg-gray-50 transition-colors"
+                    >
                       <label className="flex items-center space-x-2 cursor-pointer flex-1 min-w-0">
                         <input
                           type="checkbox"
@@ -991,10 +998,15 @@ export default function LeadsKanbanPage() {
                       </label>
                       {isDeletable && (
                         <button
+                          type="button"
                           onClick={() => handleDeleteCustomColumn(column)}
-                          className="text-xs text-red-600 hover:text-red-800"
+                          aria-label={`Eliminar columna ${column}`}
+                          title={`Eliminar columna ${column}`}
+                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors"
                         >
-                          🗑️
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden="true">
+                            <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443a42.073 42.073 0 0 0-2.797.32 1 1 0 1 0 .194 1.99l.184-.024 1.155 11.55A2.75 2.75 0 0 0 7.474 20.5h5.052a2.75 2.75 0 0 0 2.738-2.471l1.155-11.55.184.024a1 1 0 1 0 .194-1.99 42.04 42.04 0 0 0-2.797-.32V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd" />
+                          </svg>
                         </button>
                       )}
                     </div>
@@ -1011,7 +1023,7 @@ export default function LeadsKanbanPage() {
               leads={filteredLeads} 
               onLeadStatusChange={handleLeadStatusChange}
               onEditLead={handleOpenEditLead}
-              visibleColumns={visibleColumns.filter(col => col !== 'frío' && col !== 'fríos' && col !== 'frios')}
+              visibleColumns={visibleColumns}
               columnColors={columnColors}
               onSelectionChange={handleSelectionChange}
               selectedLeadIds={new Set(selectedLeads.map(l => l.id))}

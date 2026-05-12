@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Lead, Property, LeadStatus } from '../types';
 import { findMatchingPropertiesForLead } from '../services/matchingService';
 import LeadDetailSidebar from './LeadDetailSidebar';
+import { canonicalEstado } from '../services/columnService';
 
 interface LeadCardsProps {
   leads: Lead[];
@@ -33,23 +34,10 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
   // Usar isSelectionMode si viene como prop, sino usar el estado interno
   const isSelectionMode = externalIsSelectionMode !== undefined ? externalIsSelectionMode : internalIsSelectionMode;
   
-  // Función para normalizar estados (convertir "Fríos" a "frío", etc.)
-  const normalizeEstado = (estado: string | undefined): string => {
-    if (!estado) return '';
-    const estadoLower = estado.toLowerCase().trim();
-    // Normalizar variaciones comunes
-    if (estadoLower === 'fríos' || estadoLower === 'frios') return 'frío';
-    if (estadoLower === 'tibios') return 'tibio';
-    if (estadoLower === 'calientes') return 'caliente';
-    if (estadoLower === 'llamadas') return 'llamada';
-    if (estadoLower === 'visitas') return 'visita';
-    return estadoLower;
-  };
-
   const defaultStatusOrder = ['frío', 'tibio', 'caliente', 'llamada', 'visita'];
-  // Normalizar las columnas visibles para eliminar "Fríos" si existe
-  const normalizedVisibleColumns = visibleColumns && visibleColumns.length > 0 
-    ? visibleColumns.map(normalizeEstado).filter((col, index, self) => self.indexOf(col) === index)
+  // Normalizar las columnas visibles para eliminar variantes de "frío"
+  const normalizedVisibleColumns = visibleColumns && visibleColumns.length > 0
+    ? visibleColumns.map(canonicalEstado).filter((col, index, self) => self.indexOf(col) === index)
     : defaultStatusOrder;
   const statusOrder = normalizedVisibleColumns;
   
@@ -77,7 +65,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
           if (!leadStatus) return;
           
           // Normalizar el estado del lead antes de agrupar
-          const normalizedStatus = normalizeEstado(leadStatus);
+          const normalizedStatus = canonicalEstado(leadStatus);
           
           // Si el estado normalizado coincide con alguna de nuestras columnas visibles, lo añadimos ahí
           if (statusOrder.includes(normalizedStatus)) {
@@ -142,38 +130,21 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
 
   // Debe ejecutarse en todo render (antes de cualquier return): si no, al pasar de leads a 0 hooks React rompe
   const allColumnsToShow = useMemo(() => {
-    const colKey = (s: string) =>
-      s
-        .normalize('NFKC')
-        .replace(/[\u200B-\u200D\uFEFF]/g, '')
-        .replace(/\u00A0/g, ' ')
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, ' ');
-
-    const visibleSetLower = new Set(statusOrder.map(s => colKey(s)));
+    const visibleSetCanonical = new Set(statusOrder.map(canonicalEstado));
 
     const columnsWithLeads = Object.keys(groupedLeads)
       .filter(status => groupedLeads[status].length > 0)
-      .map(normalizeEstado)
+      .map(canonicalEstado)
       .filter((status, index, self) => self.indexOf(status) === index);
 
-    const filteredColumns = columnsWithLeads.filter(
-      status =>
-        status !== 'fríos' &&
-        status !== 'frios' &&
-        status !== 'tibios' &&
-        status !== 'calientes' &&
-        status !== 'llamadas' &&
-        status !== 'visitas'
+    const customColumns = columnsWithLeads.filter(
+      status => !visibleSetCanonical.has(canonicalEstado(status))
     );
-
-    const customColumns = filteredColumns.filter(status => !visibleSetLower.has(colKey(status)));
 
     const result: string[] = [];
     const seen = new Set<string>();
     for (const col of [...statusOrder, ...customColumns]) {
-      const key = colKey(col);
+      const key = canonicalEstado(col);
       if (!seen.has(key)) {
         seen.add(key);
         result.push(col);
