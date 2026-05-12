@@ -76,7 +76,7 @@ export function ChartBarLeadsPorEstado({
   columnColors,
   estadoOrder,
   className,
-}: ChartBarLeadsPorEstadoProps): JSX.Element {
+}: ChartBarLeadsPorEstadoProps) {
   const data = useMemo<BarDatum[]>(() => {
     const counts = new Map<string, number>();
 
