@@ -21,6 +21,8 @@ const toPayload = (r: Record<PropiedadBusquedaDbColumn, string>, archivoOrigen: 
   for (const k of PROPIEDAD_BUSQUEDA_DB_COLUMNS) {
     row[k] = r[k] ?? '';
   }
+  // etiqueta is the only nullable text field — empty string means "no etiqueta", persist as NULL
+  if (row.etiqueta === '') row.etiqueta = null;
   row.archivo_origen = archivoOrigen;
   return row;
 };
@@ -55,6 +57,7 @@ const mapBusquedaRow = (row: any): PropiedadBusqueda => ({
   alternativa_mayor_4: row.alternativa_mayor_4 ?? '',
   alternativa_mayor_5: row.alternativa_mayor_5 ?? '',
   notas: row.notas ?? '',
+  etiqueta: row.etiqueta ?? '',
   archivo_origen: row.archivo_origen ?? null,
   created_at: row.created_at ?? null,
 });
@@ -137,6 +140,51 @@ export async function deletePropiedadBusqueda(
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message || 'Error al borrar' };
+  }
+}
+
+export async function updateEtiquetaBulk(
+  ids: string[],
+  etiqueta: string
+): Promise<{ ok: boolean; updated: number; error?: string }> {
+  if (ids.length === 0) return { ok: true, updated: 0 };
+  const trimmed = etiqueta.trim();
+  const payload = { etiqueta: trimmed === '' ? null : trimmed };
+  try {
+    let updated = 0;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK);
+      const { error } = await (getSupabase() as any)
+        .from('propiedad_busquedas')
+        .update(payload)
+        .in('id', slice);
+      if (error) return { ok: false, updated, error: error.message };
+      updated += slice.length;
+    }
+    return { ok: true, updated };
+  } catch (e: any) {
+    return { ok: false, updated: 0, error: e?.message || 'Error al etiquetar' };
+  }
+}
+
+export async function deletePropiedadBusquedasBulk(
+  ids: string[]
+): Promise<{ ok: boolean; deleted: number; error?: string }> {
+  if (ids.length === 0) return { ok: true, deleted: 0 };
+  try {
+    let deleted = 0;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK);
+      const { error } = await (getSupabase() as any)
+        .from('propiedad_busquedas')
+        .delete()
+        .in('id', slice);
+      if (error) return { ok: false, deleted, error: error.message };
+      deleted += slice.length;
+    }
+    return { ok: true, deleted };
+  } catch (e: any) {
+    return { ok: false, deleted: 0, error: e?.message || 'Error al borrar' };
   }
 }
 

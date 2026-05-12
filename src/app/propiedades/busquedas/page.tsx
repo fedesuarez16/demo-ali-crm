@@ -14,6 +14,8 @@ import {
   getAllPropiedadBusquedas,
   updatePropiedadBusqueda,
   deletePropiedadBusqueda,
+  deletePropiedadBusquedasBulk,
+  updateEtiquetaBulk,
 } from '../../services/busquedasPropiedadService';
 import { getAllPropiedades } from '../../services/propiedadesService';
 import { computeMatches, type BusquedaMatchResult } from '../../utils/busquedaMatching';
@@ -28,6 +30,7 @@ type DbCol = (typeof PROPIEDAD_BUSQUEDA_DB_COLUMNS)[number];
 
 const VISIBLE_COLUMNS: DbCol[] = [
   'agente_cliente',
+  'etiqueta',
   'tipo_de_propiedad',
   'direccion',
   'zona',
@@ -69,6 +72,7 @@ const COLUMN_LABELS: Record<DbCol, string> = {
   alternativa_mayor_4: 'Alt. mayor 4',
   alternativa_mayor_5: 'Alt. mayor 5',
   notas: 'Notas',
+  etiqueta: 'Etiqueta',
 };
 
 const emptyForm = (): Record<DbCol, string> =>
@@ -195,6 +199,75 @@ export default function PropiedadBusquedasImportPage() {
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isTagging, setIsTagging] = useState(false);
+  const [etiquetaFilter, setEtiquetaFilter] = useState<string>('__all__');
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (prev.size === busquedasFiltradas.length && busquedasFiltradas.length > 0) {
+        return new Set();
+      }
+      return new Set(busquedasFiltradas.map((b) => b.id));
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleBulkTag = async () => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    const input = window.prompt(
+      `Etiqueta para ${count} búsqueda${count === 1 ? '' : 's'} seleccionada${count === 1 ? '' : 's'} (dejá vacío para quitar la etiqueta):`,
+      ''
+    );
+    if (input === null) return;
+    setIsTagging(true);
+    const result = await updateEtiquetaBulk(Array.from(selectedIds), input);
+    setIsTagging(false);
+    if (!result.ok) {
+      window.alert(
+        `Error al etiquetar (${result.updated}/${count} actualizadas): ${result.error || 'desconocido'}`
+      );
+      return;
+    }
+    clearSelection();
+    await loadLista();
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    const ok = window.confirm(
+      `¿Borrar ${count} búsqueda${count === 1 ? '' : 's'} seleccionada${count === 1 ? '' : 's'}? Esta acción no se puede deshacer.`
+    );
+    if (!ok) return;
+    setIsBulkDeleting(true);
+    const result = await deletePropiedadBusquedasBulk(Array.from(selectedIds));
+    setIsBulkDeleting(false);
+    if (!result.ok) {
+      window.alert(
+        `Error al borrar (${result.deleted}/${count} eliminadas): ${result.error || 'desconocido'}`
+      );
+    }
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of selectedIds) next.delete(id);
+      return next;
+    });
+    clearSelection();
+    await loadLista();
+  };
 
   const handleDeleteBusqueda = async (b: PropiedadBusqueda) => {
     const summary =
@@ -238,6 +311,40 @@ export default function PropiedadBusquedasImportPage() {
     setPropiedades(props);
     setIsLoadingLista(false);
   }, []);
+
+  const etiquetasDisponibles = useMemo(() => {
+    const groups = new Map<string, { label: string; count: number }>();
+    let untagged = 0;
+    for (const b of busquedas) {
+      const raw = (b.etiqueta ?? '').trim();
+      if (!raw) {
+        untagged++;
+        continue;
+      }
+      const key = raw.toLowerCase();
+      const prev = groups.get(key);
+      if (prev) prev.count++;
+      else groups.set(key, { label: raw, count: 1 });
+    }
+    const items = Array.from(groups.entries())
+      .map(([key, v]) => ({ key, label: v.label, count: v.count }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'es'));
+    return { items, untagged };
+  }, [busquedas]);
+
+  const busquedasFiltradas = useMemo(() => {
+    if (etiquetaFilter === '__all__') return busquedas;
+    if (etiquetaFilter === '__none__') {
+      return busquedas.filter((b) => !((b.etiqueta ?? '').trim()));
+    }
+    return busquedas.filter(
+      (b) => (b.etiqueta ?? '').trim().toLowerCase() === etiquetaFilter
+    );
+  }, [busquedas, etiquetaFilter]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [etiquetaFilter]);
 
   const matchesByBusquedaId = useMemo(() => {
     const map = new Map<string, BusquedaMatchResult>();
@@ -410,9 +517,9 @@ export default function PropiedadBusquedasImportPage() {
   };
 
   const handleExport = () => {
-    if (busquedas.length === 0) return;
+    if (busquedasFiltradas.length === 0) return;
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    downloadCsv(`propiedad_busquedas_${stamp}.csv`, buildCsv(busquedas));
+    downloadCsv(`propiedad_busquedas_${stamp}.csv`, buildCsv(busquedasFiltradas));
   };
 
   const tableColumns = useMemo(() => VISIBLE_COLUMNS, []);
@@ -447,10 +554,29 @@ export default function PropiedadBusquedasImportPage() {
             <div>
               <h1 className="text-lg font-semibold text-slate-800 tracking-tight">Búsquedas</h1>
               <p className="text-xs text-gray-500 mt-0.5">
-                {busquedas.length} registro{busquedas.length !== 1 ? 's' : ''}
+                {busquedasFiltradas.length} registro{busquedasFiltradas.length !== 1 ? 's' : ''}
+                {etiquetaFilter !== '__all__' && (
+                  <span className="text-gray-400"> · de {busquedas.length} total</span>
+                )}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <label className="inline-flex items-center gap-1.5 text-xs text-gray-600">
+                <span className="font-medium">Etiqueta:</span>
+                <select
+                  value={etiquetaFilter}
+                  onChange={(e) => setEtiquetaFilter(e.target.value)}
+                  className="px-2 py-1.5 border border-slate-200 rounded-md text-sm bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="__all__">Todas ({busquedas.length})</option>
+                  <option value="__none__">Sin etiqueta ({etiquetasDisponibles.untagged})</option>
+                  {etiquetasDisponibles.items.map((e) => (
+                    <option key={e.key} value={e.key}>
+                      {e.label} ({e.count})
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
                 onClick={() => {
@@ -479,7 +605,7 @@ export default function PropiedadBusquedasImportPage() {
               <button
                 type="button"
                 onClick={handleExport}
-                disabled={busquedas.length === 0}
+                disabled={busquedasFiltradas.length === 0}
                 className="inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -493,10 +619,69 @@ export default function PropiedadBusquedasImportPage() {
 
         <div className="px-2 sm:px-4 py-6 max-w-[1800px] mx-auto">
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden mb-6">
+            {selectedIds.size > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-indigo-50 border-b border-indigo-100">
+                <div className="text-sm text-indigo-900">
+                  <span className="font-semibold">{selectedIds.size}</span>{' '}
+                  búsqueda{selectedIds.size === 1 ? '' : 's'} seleccionada
+                  {selectedIds.size === 1 ? '' : 's'}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    disabled={isBulkDeleting || isTagging}
+                    className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkTag}
+                    disabled={isBulkDeleting || isTagging}
+                    className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5a1.99 1.99 0 011.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.99 1.99 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                    {isTagging ? 'Etiquetando…' : 'Etiquetar'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkDelete}
+                    disabled={isBulkDeleting || isTagging}
+                    className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+                    </svg>
+                    {isBulkDeleting
+                      ? 'Borrando…'
+                      : `Borrar ${selectedIds.size} seleccionada${selectedIds.size === 1 ? '' : 's'}`}
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="bg-slate-50 border-b border-gray-200">
                   <tr>
+                    <th className="px-3 py-2.5 w-10">
+                      <input
+                        type="checkbox"
+                        aria-label="Seleccionar todas las búsquedas visibles"
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        disabled={busquedasFiltradas.length === 0}
+                        checked={busquedasFiltradas.length > 0 && selectedIds.size === busquedasFiltradas.length}
+                        ref={(el) => {
+                          if (el) {
+                            el.indeterminate =
+                              selectedIds.size > 0 && selectedIds.size < busquedasFiltradas.length;
+                          }
+                        }}
+                        onChange={toggleSelectAll}
+                      />
+                    </th>
                     <th className="text-left px-3 py-2.5 font-semibold text-gray-700 whitespace-nowrap">ID</th>
                     <th className="text-left px-3 py-2.5 font-semibold text-gray-700 whitespace-nowrap"></th>
                     <th className="text-left px-3 py-2.5 font-semibold text-gray-700 whitespace-nowrap">Coincidencias</th>
@@ -511,23 +696,37 @@ export default function PropiedadBusquedasImportPage() {
                 <tbody className="divide-y divide-gray-100">
                   {isLoadingLista ? (
                     <tr>
-                      <td colSpan={tableColumns.length + 4} className="px-3 py-8 text-center text-gray-500">
+                      <td colSpan={tableColumns.length + 5} className="px-3 py-8 text-center text-gray-500">
                         Cargando…
                       </td>
                     </tr>
-                  ) : busquedas.length === 0 ? (
+                  ) : busquedasFiltradas.length === 0 ? (
                     <tr>
-                      <td colSpan={tableColumns.length + 4} className="px-3 py-8 text-center text-gray-500">
-                        No hay búsquedas. Agregá una manualmente o importá un CSV.
+                      <td colSpan={tableColumns.length + 5} className="px-3 py-8 text-center text-gray-500">
+                        {busquedas.length === 0
+                          ? 'No hay búsquedas. Agregá una manualmente o importá un CSV.'
+                          : 'No hay búsquedas con esa etiqueta.'}
                       </td>
                     </tr>
                   ) : (
-                    busquedas.flatMap((b) => {
+                    busquedasFiltradas.flatMap((b) => {
                       const result = matchesByBusquedaId.get(b.id);
                       const isExpanded = expandedIds.has(b.id);
                       const hasMatches = !!result && result.totalCount > 0;
                       const rows: React.ReactNode[] = [
-                        <tr key={b.id} className="hover:bg-slate-50/80">
+                        <tr
+                          key={b.id}
+                          className={`hover:bg-slate-50/80 ${selectedIds.has(b.id) ? 'bg-indigo-50/40' : ''}`}
+                        >
+                          <td className="px-3 py-2 w-10">
+                            <input
+                              type="checkbox"
+                              aria-label={`Seleccionar búsqueda ${b.id}`}
+                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                              checked={selectedIds.has(b.id)}
+                              onChange={() => toggleSelected(b.id)}
+                            />
+                          </td>
                           <td className="px-3 py-2 text-gray-600 font-mono text-xs whitespace-nowrap">{b.id}</td>
                           <td className="px-3 py-2 whitespace-nowrap">
                             <div className="flex items-center gap-1">
@@ -596,6 +795,23 @@ export default function PropiedadBusquedasImportPage() {
                           </td>
                           {tableColumns.map((c) => {
                             const value = (b[c] ?? '') as string;
+                            if (c === 'etiqueta') {
+                              const tag = value.trim();
+                              return (
+                                <td key={c} className="px-3 py-2 whitespace-nowrap">
+                                  {tag ? (
+                                    <span
+                                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200"
+                                      title={tag}
+                                    >
+                                      {tag}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-gray-400">—</span>
+                                  )}
+                                </td>
+                              );
+                            }
                             return (
                               <td
                                 key={c}
@@ -639,7 +855,7 @@ export default function PropiedadBusquedasImportPage() {
                           .join('\n\n---\n\n');
                         rows.push(
                           <tr key={`${b.id}-detail`} className="bg-amber-50/30">
-                            <td colSpan={tableColumns.length + 4} className="px-4 py-3">
+                            <td colSpan={tableColumns.length + 5} className="px-4 py-3">
                               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
                                 <div className="text-xs text-gray-600">
                                   Top {top.length} de {result.totalCount} coincidencia{result.totalCount === 1 ? '' : 's'} (de {result.criteriaCount} criterio{result.criteriaCount === 1 ? '' : 's'} activo{result.criteriaCount === 1 ? '' : 's'}):

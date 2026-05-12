@@ -4,6 +4,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import AppLayout from "../components/AppLayout";
 import { Lead } from "../types";
 import { getAllLeads, campaignNumericFingerprint } from "../services/leadService";
+import { getKanbanColumns } from '@/app/services/columnService';
+import { ChartBarLeadsPorEstado } from '@/app/components/ChartBarLeadsPorEstado';
 import { ChartAreaInteractive } from "@/components/ui/chart-area-interactive";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartConfig } from "@/components/ui/chart";
@@ -88,6 +90,7 @@ export default function Page() {
   /** '' = todas las campañas en el gráfico combinado; si no, fríos/tibios/calientes de esa campaña */
   const [campaignChartFilter, setCampaignChartFilter] = useState<string>('');
   const [pautas, setPautas] = useState<Pauta[]>([]);
+  const [columnColors, setColumnColors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const loadLeads = async () => {
@@ -121,6 +124,20 @@ export default function Page() {
       }
     };
     loadPautas();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { columnColors } = await getKanbanColumns();
+        if (!cancelled) setColumnColors(columnColors);
+      } catch (e) {
+        console.error('Error cargando column_colors:', e);
+        if (!cancelled) setColumnColors({});
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const { periodDates, periodRangeClipped } = useMemo(() => {
@@ -516,6 +533,17 @@ export default function Page() {
             </CardContent>
           </Card>
 
+          {/* Bar chart estado skeleton */}
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-48 mb-2" />
+              <Skeleton className="h-4 w-72" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-[300px] w-full" />
+            </CardContent>
+          </Card>
+
           {/* Category charts skeleton */}
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 px-2">
             {[1, 2, 3].map((i) => (
@@ -730,6 +758,22 @@ export default function Page() {
               config={chartConfig}
               dateKey="date"
               valueKey="leads"
+            />
+          </CardContent>
+        </Card>
+
+        {/* Bar chart: distribución total de leads por estado (snapshot) */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Leads por Estado</CardTitle>
+            <CardDescription>
+              Distribución total del pipeline (snapshot — no depende del rango de fechas).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartBarLeadsPorEstado
+              leads={leads}
+              columnColors={columnColors}
             />
           </CardContent>
         </Card>

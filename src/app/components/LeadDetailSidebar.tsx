@@ -48,7 +48,8 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
   
   // Hook para verificar el estado del chat via n8n webhook
   const phoneNumber = (lead as any)?.whatsapp_id || lead?.telefono;
-  const { isActive: isChatActive, lastActivity, loading: chatLoading, refreshChatStatus, source, chatData } = useChatStatus(phoneNumber);
+  const { lastActivity, loading: chatLoading, refreshChatStatus, source, chatData } = useChatStatus(phoneNumber);
+  const isChatActive = (localLead?.estado_chat ?? 1) !== 0;
   
   // Sincronizar el mirror local cuando el lead prop cambia (por ejemplo, el padre re-fetches)
   useEffect(() => {

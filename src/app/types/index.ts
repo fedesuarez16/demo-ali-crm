@@ -233,6 +233,7 @@ export interface PropiedadBusqueda {
   alternativa_mayor_4: string;
   alternativa_mayor_5: string;
   notas: string;
+  etiqueta: string;
   archivo_origen?: string | null;
   created_at?: string | null;
 }

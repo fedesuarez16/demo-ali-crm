@@ -29,6 +29,7 @@ export const PROPIEDAD_BUSQUEDA_DB_COLUMNS = [
   'alternativa_mayor_4',
   'alternativa_mayor_5',
   'notas',
+  'etiqueta',
 ] as const;
 
 export type PropiedadBusquedaDbColumn = (typeof PROPIEDAD_BUSQUEDA_DB_COLUMNS)[number];
@@ -82,6 +83,10 @@ const HEADER_ALIASES: Record<string, PropiedadBusquedaDbColumn> = {
   // notas
   observaciones: 'notas',
   comentarios: 'notas',
+  // etiqueta
+  tag: 'etiqueta',
+  label: 'etiqueta',
+  categoria: 'etiqueta',
   // agente_cliente
   agente: 'agente_cliente',
   cliente: 'agente_cliente',
