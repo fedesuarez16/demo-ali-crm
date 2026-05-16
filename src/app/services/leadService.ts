@@ -1056,6 +1056,58 @@ export const findLeadByPhone = async (phone: string): Promise<Lead | null> => {
 };
 
 /**
+ * Borra un lead por id de la tabla `leads`. Hard delete.
+ * Los seguimientos en `cola_seguimientos` / `cola_seguimientos_dos` deben limpiarse aparte
+ * (ej. con `eliminarTodosSeguimientosPendientes(remoteJid)` antes de llamar a esto).
+ */
+export const deleteLead = async (leadId: string): Promise<boolean> => {
+  try {
+    const leadIdNum = parseInt(leadId, 10);
+    const idToUse = isNaN(leadIdNum) ? leadId : leadIdNum;
+    const supabase = getSupabase();
+    const { error } = await (supabase as any)
+      .from('leads')
+      .delete()
+      .eq('id', idToUse);
+    if (error) {
+      console.error('Error deleting lead:', error);
+      return false;
+    }
+    // Limpiar cache local
+    const idx = cachedLeads.findIndex(l => l.id === leadId);
+    if (idx >= 0) cachedLeads.splice(idx, 1);
+    return true;
+  } catch (e) {
+    console.error('Exception in deleteLead:', e);
+    return false;
+  }
+};
+
+/**
+ * Trae un lead fresco desde Supabase por su id (sin tocar caches).
+ */
+export const getLeadById = async (leadId: string): Promise<Lead | null> => {
+  try {
+    const leadIdNum = parseInt(leadId, 10);
+    const idToUse = isNaN(leadIdNum) ? leadId : leadIdNum;
+    const supabase = getSupabase();
+    const { data, error } = await (supabase as any)
+      .from('leads')
+      .select('*')
+      .eq('id', idToUse)
+      .single();
+    if (error) {
+      console.error('Error fetching lead by id:', error);
+      return null;
+    }
+    return data ? mapLeadRow(data) : null;
+  } catch (e) {
+    console.error('Exception in getLeadById:', e);
+    return null;
+  }
+};
+
+/**
  * Actualiza un lead existente
  */
 export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promise<Lead | null> => {

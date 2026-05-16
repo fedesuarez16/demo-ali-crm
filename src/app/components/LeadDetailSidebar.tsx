@@ -8,11 +8,11 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, Phone, Mail, Calendar, MapPin, DollarSign, Home, User, Clock, FileText, Building, Plus, Minus, Wifi, WifiOff, Bell } from 'lucide-react';
+import { X, Phone, Mail, Calendar, MapPin, DollarSign, Home, User, Clock, FileText, Building, Plus, Minus, Wifi, WifiOff, Bell, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { programarSeguimiento, getSeguimientosPendientes, actualizarFechaProgramada, ColaSeguimiento, existeSeguimientoParaLead, eliminarTodosSeguimientosPendientes } from '../services/mensajeService';
 import { useChatStatus } from '../../hooks/useChatStatus';
-import { updateLead } from '../services/leadService';
+import { updateLead, getLeadById, deleteLead } from '../services/leadService';
 
 interface LeadDetailSidebarProps {
   lead: Lead | null;
@@ -21,15 +21,19 @@ interface LeadDetailSidebarProps {
   isOpen: boolean;
   onEditLead?: (lead: Lead) => void;
   columnColors?: Record<string, string>;
+  onLeadRefreshed?: (lead: Lead) => void;
+  onLeadDeleted?: (leadId: string) => void;
 }
 
-const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({ 
-  lead, 
-  onClose, 
-  matchingProperties, 
+const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
+  lead,
+  onClose,
+  matchingProperties,
   isOpen,
   onEditLead,
-  columnColors = {}
+  columnColors = {},
+  onLeadRefreshed,
+  onLeadDeleted
 }) => {
   const [notas, setNotas] = useState(lead?.notas || '');
   const [isSavingNotas, setIsSavingNotas] = useState(false);
@@ -45,7 +49,9 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
   const [fechaProgramadaEdit, setFechaProgramadaEdit] = useState<string>('');
   const [isEditingFechaProgramada, setIsEditingFechaProgramada] = useState(false);
   const [isSavingFechaProgramada, setIsSavingFechaProgramada] = useState(false);
-  
+  const [isRefreshingLead, setIsRefreshingLead] = useState(false);
+  const [isDeletingLead, setIsDeletingLead] = useState(false);
+
   // Hook para verificar el estado del chat via n8n webhook
   const phoneNumber = (lead as any)?.whatsapp_id || lead?.telefono;
   const { lastActivity, loading: chatLoading, refreshChatStatus, source, chatData } = useChatStatus(phoneNumber);
@@ -66,53 +72,52 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
     }
   }, [lead?.id, lead?.notas, lead?.seguimientos_count]);
 
-  // Cargar seguimiento pendiente cuando cambia el lead
-  useEffect(() => {
-    const loadSeguimientoPendiente = async () => {
-      if (!lead) {
+  const loadSeguimientoPendienteFor = async (target: Lead | null) => {
+    if (!target) {
+      setSeguimientoPendiente(null);
+      return;
+    }
+
+    try {
+      const remoteJid = (target as any).whatsapp_id || target.telefono || '';
+      if (!remoteJid) {
         setSeguimientoPendiente(null);
         return;
       }
 
-      try {
-        const remoteJid = (lead as any).whatsapp_id || lead.telefono || '';
-        if (!remoteJid) {
-          setSeguimientoPendiente(null);
-          return;
-        }
+      const seguimientos = await getSeguimientosPendientes(remoteJid);
+      if (seguimientos.length > 0) {
+        const seguimiento = seguimientos[0];
+        setSeguimientoPendiente(seguimiento);
 
-        const seguimientos = await getSeguimientosPendientes(remoteJid);
-        if (seguimientos.length > 0) {
-          // Tomar el primer seguimiento pendiente (más próximo)
-          const seguimiento = seguimientos[0];
-          setSeguimientoPendiente(seguimiento);
-          
-          // Preparar fecha para el input datetime-local
-          const fechaProgramada = seguimiento.fecha_programada || seguimiento.scheduled_at;
-          if (fechaProgramada) {
-            const date = new Date(fechaProgramada);
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            setFechaProgramadaEdit(`${year}-${month}-${day}T${hours}:${minutes}`);
-          } else {
-            setFechaProgramadaEdit('');
-          }
+        const fechaProgramada = seguimiento.fecha_programada || seguimiento.scheduled_at;
+        if (fechaProgramada) {
+          const date = new Date(fechaProgramada);
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          const hours = String(date.getHours()).padStart(2, '0');
+          const minutes = String(date.getMinutes()).padStart(2, '0');
+          setFechaProgramadaEdit(`${year}-${month}-${day}T${hours}:${minutes}`);
         } else {
-          setSeguimientoPendiente(null);
           setFechaProgramadaEdit('');
         }
-      } catch (error) {
-        console.error('Error loading seguimiento pendiente:', error);
+      } else {
         setSeguimientoPendiente(null);
+        setFechaProgramadaEdit('');
       }
-    };
-
-    if (isOpen && lead) {
-      loadSeguimientoPendiente();
+    } catch (error) {
+      console.error('Error loading seguimiento pendiente:', error);
+      setSeguimientoPendiente(null);
     }
+  };
+
+  // Cargar seguimiento pendiente cuando cambia el lead
+  useEffect(() => {
+    if (isOpen && lead) {
+      loadSeguimientoPendienteFor(lead);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead?.id, (lead as any)?.whatsapp_id, lead?.telefono, isOpen]);
 
   // Verificar si el lead tiene seguimientos pendientes al abrir o cambiar de lead
@@ -135,6 +140,63 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
       });
     return () => { cancelled = true; };
   }, [lead?.id, (lead as any)?.whatsapp_id, lead?.telefono, isOpen]);
+
+  // Refresca toda la información del lead desde Supabase y los datos relacionados.
+  const handleRefreshLead = async () => {
+    if (!lead?.id || isRefreshingLead) return;
+    setIsRefreshingLead(true);
+    try {
+      const fresh = await getLeadById(lead.id);
+      if (fresh) {
+        setLocalLead(fresh);
+        if (fresh.notas !== undefined) setNotas(fresh.notas || '');
+        if (fresh.seguimientos_count !== undefined && fresh.seguimientos_count !== null) {
+          setSeguimientosCount(fresh.seguimientos_count);
+        }
+        onLeadRefreshed?.(fresh);
+        await loadSeguimientoPendienteFor(fresh);
+      }
+      await refreshChatStatus();
+    } catch (err) {
+      console.error('Error refrescando información del lead:', err);
+    } finally {
+      setIsRefreshingLead(false);
+    }
+  };
+
+  // Elimina el lead (hard delete) y sus seguimientos pendientes. Pide confirmación.
+  const handleDeleteLead = async () => {
+    if (!lead || isDeletingLead) return;
+    const nombre = lead.nombreCompleto || (lead as any).nombre || (lead as any).whatsapp_id || lead.telefono || 'este lead';
+    const confirmed = window.confirm(
+      `¿Eliminar a "${nombre}"? Esta acción es irreversible y borrará también todos sus seguimientos pendientes.`
+    );
+    if (!confirmed) return;
+
+    setIsDeletingLead(true);
+    try {
+      const remoteJid = (lead as any).whatsapp_id || lead.telefono || '';
+      if (remoteJid) {
+        try {
+          await eliminarTodosSeguimientosPendientes(remoteJid);
+        } catch (err) {
+          console.error('Error limpiando seguimientos pendientes antes de eliminar lead:', err);
+        }
+      }
+      const ok = await deleteLead(lead.id);
+      if (ok) {
+        onLeadDeleted?.(lead.id);
+        onClose();
+      } else {
+        window.alert('No se pudo eliminar el lead. Revisá la consola para más detalles.');
+      }
+    } catch (err) {
+      console.error('Error eliminando lead:', err);
+      window.alert('Error eliminando lead.');
+    } finally {
+      setIsDeletingLead(false);
+    }
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-AR', {
@@ -506,14 +568,30 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                 )}
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="hover:bg-accent"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleDeleteLead}
+                disabled={isDeletingLead}
+                className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                title="Eliminar lead"
+              >
+                {isDeletingLead ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-400"></div>
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="hover:bg-accent"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           
           {/* Chat Status Details */}
@@ -668,21 +746,21 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                 })()}
               </div>
               
-              {/* Refresh Chat Status Button */}
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={refreshChatStatus}
-                disabled={chatLoading}
+              {/* Refresh Lead Button — refetches all lead info from Supabase + chat status */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshLead}
+                disabled={chatLoading || isRefreshingLead}
                 className="w-full text-xs"
-                title="Consulta el estado del chat desde n8n webhook"
+                title="Refresca toda la información del lead desde Supabase y el estado del chat"
               >
-                {chatLoading ? (
+                {(chatLoading || isRefreshingLead) ? (
                   <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-400 mr-2"></div>
                 ) : (
                   <Wifi className="h-3 w-3 mr-2" />
                 )}
-                Refrescar Estado 
+                Refrescar Estado
               </Button>
             </div>
             

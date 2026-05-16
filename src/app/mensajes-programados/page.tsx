@@ -33,6 +33,39 @@ const PLANTILLAS = [
   { value: 'generico_01', label: 'Generico 01' },
 ];
 
+function labelByState(active: boolean | null, error: string | null): string {
+  if (active === null) return error ? 'Estado no disponible' : 'Cargando...';
+  return active ? 'Detener seguimientos' : 'Reactivar seguimientos';
+}
+
+function SpinnerIcon() {
+  return (
+    <svg className="h-4 w-4 mr-2 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden>
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  );
+}
+
+function StateIcon({ active }: { active: boolean | null }) {
+  if (active === true) {
+    return (
+      <svg className="h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+        <rect x="6" y="5" width="4" height="14" rx="1" />
+        <rect x="14" y="5" width="4" height="14" rx="1" />
+      </svg>
+    );
+  }
+  if (active === false) {
+    return (
+      <svg className="h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+        <polygon points="5,3 19,12 5,21" />
+      </svg>
+    );
+  }
+  return null;
+}
+
 export default function MensajesProgramadosPage() {
   const [mensajes, setMensajes] = useState<ColaSeguimiento[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,9 +75,12 @@ export default function MensajesProgramadosPage() {
   const [tempFecha, setTempFecha] = useState<string>('');
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [genericosExpanded, setGenericosExpanded] = useState(false);
+  const [workflowActivo, setWorkflowActivo] = useState<boolean | null>(null);
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
+  const [isTogglingWorkflow, setIsTogglingWorkflow] = useState(false);
 
   useEffect(() => {
-    loadMensajes();
+    void Promise.all([loadMensajes(), loadWorkflowState()]);
   }, []);
 
   const loadMensajes = async () => {
@@ -56,6 +92,23 @@ export default function MensajesProgramadosPage() {
       console.error('Error loading mensajes programados:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadWorkflowState = async () => {
+    try {
+      const res = await fetch('/api/n8n/seguimiento-workflow', { method: 'GET', cache: 'no-store' });
+      const data = await res.json();
+      if (res.ok) {
+        setWorkflowActivo(data.active);
+        setWorkflowError(null);
+      } else {
+        setWorkflowActivo(null);
+        setWorkflowError(data.error ?? 'No se pudo cargar el estado del workflow');
+      }
+    } catch {
+      setWorkflowActivo(null);
+      setWorkflowError('No se pudo cargar el estado del workflow');
     }
   };
 
@@ -78,6 +131,38 @@ export default function MensajesProgramadosPage() {
     } finally {
       setIsDeleting(null);
     }
+  };
+
+  const handleToggleWorkflow = async () => {
+    if (workflowActivo === null) return;
+    if (workflowActivo === true) {
+      const ok = window.confirm('¿Detener el envío automático de seguimientos? Los mensajes pendientes no se borran, simplemente dejan de enviarse hasta que reactives el workflow.');
+      if (!ok) return;
+    }
+    setIsTogglingWorkflow(true);
+    try {
+      const res = await fetch('/api/n8n/seguimiento-workflow', {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: workflowActivo ? 'deactivate' : 'activate' }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setWorkflowActivo(data.active);
+        setWorkflowError(null);
+      } else {
+        window.alert('No se pudo cambiar el estado: ' + (data.error ?? res.statusText));
+      }
+    } catch {
+      window.alert('Error de red al cambiar el estado del workflow.');
+    } finally {
+      setIsTogglingWorkflow(false);
+    }
+  };
+
+  const handleRefreshAll = async () => {
+    await Promise.all([loadMensajes(), loadWorkflowState()]);
   };
 
   const handleUpdatePlantilla = async (mensajeId: number, plantilla: string | null, tablaOrigen?: string) => {
@@ -425,12 +510,32 @@ export default function MensajesProgramadosPage() {
                 {mensajes.filter(m => m.estado === 'enviado').length} enviado(s)
               </p>
             </div>
-            <Button onClick={loadMensajes} variant="outline" size="sm">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Actualizar
-            </Button>
+            <div className="flex gap-2 items-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleToggleWorkflow}
+                disabled={isTogglingWorkflow || workflowActivo === null}
+                className={
+                  workflowActivo === true
+                    ? 'text-amber-700 border-amber-300 hover:bg-amber-50 hover:text-amber-800'
+                    : ''
+                }
+                title={
+                  workflowError ??
+                  (workflowActivo === null ? 'Cargando estado del workflow…' : undefined)
+                }
+              >
+                {isTogglingWorkflow ? <SpinnerIcon /> : <StateIcon active={workflowActivo} />}
+                {labelByState(workflowActivo, workflowError)}
+              </Button>
+              <Button onClick={handleRefreshAll} variant="outline" size="sm">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Actualizar
+              </Button>
+            </div>
           </div>
         </div>
 

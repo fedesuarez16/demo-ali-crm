@@ -6,6 +6,7 @@ import { Lead } from "../types";
 import { getAllLeads, campaignNumericFingerprint } from "../services/leadService";
 import { getKanbanColumns } from '@/app/services/columnService';
 import { ChartBarLeadsPorEstado } from '@/app/components/ChartBarLeadsPorEstado';
+import { CostoPorLeadCard } from '@/app/components/CostoPorLeadCard';
 import { ChartAreaInteractive } from "@/components/ui/chart-area-interactive";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartConfig } from "@/components/ui/chart";
@@ -81,6 +82,7 @@ function defaultPeriodStart(): string {
 }
 
 const MAX_CHART_DAYS = 731;
+const SIN_CAMPANA_SENTINEL = '__sin_campana__';
 
 export default function Page() {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -89,6 +91,7 @@ export default function Page() {
   const [chartPeriodEnd, setChartPeriodEnd] = useState(defaultPeriodEnd);
   /** '' = todas las campañas en el gráfico combinado; si no, fríos/tibios/calientes de esa campaña */
   const [campaignChartFilter, setCampaignChartFilter] = useState<string>('');
+  const [barEstadoCampaignFilter, setBarEstadoCampaignFilter] = useState<string>('');
   const [pautas, setPautas] = useState<Pauta[]>([]);
   const [columnColors, setColumnColors] = useState<Record<string, string>>({});
 
@@ -329,6 +332,39 @@ export default function Page() {
       setCampaignChartFilter('');
     }
   }, [campaignChartFilter, uniqueCampaigns]);
+
+  const barEstadoFilteredLeads = useMemo<Lead[]>(() => {
+    const periodSet = new Set(periodDates);
+    const out: Lead[] = [];
+    for (const lead of leads) {
+      if (!periodSet.has(leadCalendarDate(lead))) continue;
+      const raw = String((lead as any).propiedad_interes || '').trim();
+      if (barEstadoCampaignFilter === '') {
+        if (leadRawToPautaCampaign.has(raw)) out.push(lead);
+      } else if (barEstadoCampaignFilter === SIN_CAMPANA_SENTINEL) {
+        if (!leadRawToPautaCampaign.has(raw)) out.push(lead);
+      } else {
+        if (leadRawToPautaCampaign.get(raw) === barEstadoCampaignFilter) out.push(lead);
+      }
+    }
+    return out;
+  }, [leads, periodDates, leadRawToPautaCampaign, barEstadoCampaignFilter]);
+
+  const effectiveBarEstadoCampaignFilter = useMemo<string>(() => {
+    if (!barEstadoCampaignFilter) return '';
+    if (barEstadoCampaignFilter === SIN_CAMPANA_SENTINEL) return SIN_CAMPANA_SENTINEL;
+    return uniqueCampaigns.includes(barEstadoCampaignFilter) ? barEstadoCampaignFilter : '';
+  }, [barEstadoCampaignFilter, uniqueCampaigns]);
+
+  useEffect(() => {
+    if (
+      barEstadoCampaignFilter &&
+      barEstadoCampaignFilter !== SIN_CAMPANA_SENTINEL &&
+      !uniqueCampaigns.includes(barEstadoCampaignFilter)
+    ) {
+      setBarEstadoCampaignFilter('');
+    }
+  }, [barEstadoCampaignFilter, uniqueCampaigns]);
 
   /** Gráfico principal por campaña: todas las series de campaña, o frío/tibio/caliente de una sola */
   const campaignMainChartData = useMemo(() => {
@@ -777,6 +813,61 @@ export default function Page() {
             />
           </CardContent>
         </Card>
+
+        {/* Bar chart: distribución de estados por campaña en el rango */}
+        <Card>
+          <CardHeader className="space-y-4">
+            <div>
+              <CardTitle>Leads por Estado por Campaña</CardTitle>
+              <CardDescription>
+                {effectiveBarEstadoCampaignFilter === SIN_CAMPANA_SENTINEL ? (
+                  <>Leads sin campaña asignada en el rango del dashboard ({chartPeriodStart} → {chartPeriodEnd}).</>
+                ) : effectiveBarEstadoCampaignFilter ? (
+                  <>
+                    Leads de la campaña{' '}
+                    <span className="font-medium text-foreground">{effectiveBarEstadoCampaignFilter}</span>
+                    {' '}en el rango del dashboard ({chartPeriodStart} → {chartPeriodEnd}).
+                  </>
+                ) : (
+                  <>
+                    Distribución por estado de leads que matchean alguna pauta, en el rango del dashboard ({chartPeriodStart} → {chartPeriodEnd}).
+                  </>
+                )}
+              </CardDescription>
+            </div>
+            <div className="flex flex-col gap-2 sm:max-w-md">
+              <Label htmlFor="bar-estado-campaign-filter" className="text-xs text-muted-foreground">
+                Filtrar por campaña
+              </Label>
+              <select
+                id="bar-estado-campaign-filter"
+                aria-label="Filtrar gráfico Leads por Estado por Campaña"
+                value={barEstadoCampaignFilter}
+                onChange={(e) => setBarEstadoCampaignFilter(e.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">Todas las campañas</option>
+                {uniqueCampaigns.map((c, idx) => (
+                  <option key={`bar-estado-camp-${idx}-${c}`} value={c}>
+                    {c}
+                  </option>
+                ))}
+                <option value={SIN_CAMPANA_SENTINEL}>Sin campaña</option>
+              </select>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ChartBarLeadsPorEstado
+              leads={barEstadoFilteredLeads}
+              columnColors={columnColors}
+            />
+          </CardContent>
+        </Card>
+
+        <CostoPorLeadCard
+          leads={barEstadoFilteredLeads}
+          columnColors={columnColors}
+        />
 
         {/* Gráficos de categorías en una fila */}
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">

@@ -270,6 +270,12 @@ export default function LeadsKanbanPage() {
     setSelectedLeads(leads);
   };
 
+  const handleLeadDeleted = (leadId: string) => {
+    setLeads(prev => prev.filter(l => l.id !== leadId));
+    setFilteredLeads(prev => prev.filter(l => l.id !== leadId));
+    setSelectedLeads(prev => prev.filter(l => l.id !== leadId));
+  };
+
   const handleAddToSeguimientos = async () => {
     if (selectedLeads.length === 0) {
       alert('❌ Por favor selecciona al menos un lead');
@@ -1019,8 +1025,8 @@ export default function LeadsKanbanPage() {
         
         <div className="mb-8 min-w-0 max-w-full bg-white px-2">
           <div className="min-w-0 max-w-full">
-            <LeadCards 
-              leads={filteredLeads} 
+            <LeadCards
+              leads={filteredLeads}
               onLeadStatusChange={handleLeadStatusChange}
               onEditLead={handleOpenEditLead}
               visibleColumns={visibleColumns}
@@ -1034,6 +1040,7 @@ export default function LeadsKanbanPage() {
                   setSelectedLeads([]);
                 }
               }}
+              onLeadDeleted={handleLeadDeleted}
             />
           </div>
         </div>

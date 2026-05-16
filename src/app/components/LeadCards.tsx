@@ -14,12 +14,13 @@ interface LeadCardsProps {
   selectedLeadIds?: Set<string>;
   isSelectionMode?: boolean;
   onSelectionModeChange?: (enabled: boolean) => void;
+  onLeadDeleted?: (leadId: string) => void;
 }
 
 /** min-w-[240px] + gap-2 (8px) en el flex del tablero */
 const KANBAN_COLUMN_SCROLL_STEP = 248;
 
-const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEditLead, visibleColumns, columnColors = {}, onSelectionChange, selectedLeadIds: externalSelectedIds, isSelectionMode: externalIsSelectionMode, onSelectionModeChange }) => {
+const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEditLead, visibleColumns, columnColors = {}, onSelectionChange, selectedLeadIds: externalSelectedIds, isSelectionMode: externalIsSelectionMode, onSelectionModeChange, onLeadDeleted }) => {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [matchingProperties, setMatchingProperties] = useState<Map<string, Property[]>>(new Map());
@@ -867,6 +868,11 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
         isOpen={showSidebar}
         onEditLead={onEditLead}
         columnColors={columnColors}
+        onLeadRefreshed={(refreshed) => setSelectedLead(refreshed)}
+        onLeadDeleted={(deletedId) => {
+          setSelectedLead(null);
+          onLeadDeleted?.(deletedId);
+        }}
       />
     </>
   );
