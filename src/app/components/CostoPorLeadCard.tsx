@@ -37,6 +37,12 @@ const ARS_FORMATTER = new Intl.NumberFormat('es-AR', {
   minimumFractionDigits: 2,
 });
 
+const PERCENT_FORMATTER = new Intl.NumberFormat('es-AR', {
+  style: 'percent',
+  maximumFractionDigits: 1,
+  minimumFractionDigits: 1,
+});
+
 function toLabel(canonical: string): string {
   if (LABEL_BY_CANONICAL[canonical]) return LABEL_BY_CANONICAL[canonical];
   return canonical.charAt(0).toUpperCase() + canonical.slice(1);
@@ -59,11 +65,12 @@ function computeOrder(keys: Iterable<string>, estadoOrder?: string[]): string[] 
 }
 
 interface CostoRow {
-  estado: string;
-  label:  string;
-  count:  number;
-  cost:   number | null;
-  color:  string;
+  estado:  string;
+  label:   string;
+  count:   number;
+  percent: number | null;
+  cost:    number | null;
+  color:   string;
 }
 
 export interface CostoPorLeadCardProps {
@@ -93,23 +100,28 @@ export function CostoPorLeadCard({
       if (!key) continue;
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
+    const totalLeads = leads.length;
     const orderedKeys = computeOrder(counts.keys(), estadoOrder);
     return orderedKeys.map(k => {
       const count = counts.get(k) ?? 0;
-      const cost = montoNumber !== null && count > 0 ? montoNumber / count : null;
+      const percent = totalLeads > 0 ? count / totalLeads : null;
+      const cost = montoNumber !== null && percent !== null
+        ? montoNumber * percent
+        : null;
       return {
-        estado: k,
-        label:  toLabel(k),
+        estado:  k,
+        label:   toLabel(k),
         count,
+        percent,
         cost,
-        color:  columnColors?.[k] ?? FALLBACK_COLORS[k] ?? FALLBACK_CUSTOM_COLOR,
+        color:   columnColors?.[k] ?? FALLBACK_COLORS[k] ?? FALLBACK_CUSTOM_COLOR,
       };
     });
   }, [leads, columnColors, estadoOrder, montoNumber]);
 
   const totalRow = useMemo(() => {
     const count = leads.length;
-    const cost = montoNumber !== null && count > 0 ? montoNumber / count : null;
+    const cost = montoNumber !== null && count > 0 ? montoNumber : null;
     return { count, cost };
   }, [leads, montoNumber]);
 
@@ -117,9 +129,9 @@ export function CostoPorLeadCard({
     <Card className={className}>
       <CardHeader className="space-y-4">
         <div>
-          <CardTitle>Costo por Lead</CardTitle>
+          <CardTitle>Presupuesto por estado</CardTitle>
           <CardDescription>
-            Ingresá el monto gastado para calcular el costo por lead según el filtro aplicado arriba (campaña + rango de fechas).
+            Ingresá el monto gastado para ver cómo se distribuye el presupuesto entre los estados, proporcional a la cantidad de leads (filtro de campaña + rango de fechas).
           </CardDescription>
         </div>
         <div className="flex flex-col gap-2 sm:max-w-md">
@@ -145,7 +157,8 @@ export function CostoPorLeadCard({
               <tr className="border-b">
                 <th className="py-2 text-left font-medium">Estado</th>
                 <th className="py-2 text-right font-medium">Cantidad</th>
-                <th className="py-2 text-right font-medium">Costo por lead</th>
+                <th className="py-2 text-right font-medium">% del total</th>
+                <th className="py-2 text-right font-medium">Presupuesto asignado</th>
               </tr>
             </thead>
             <tbody>
@@ -163,6 +176,9 @@ export function CostoPorLeadCard({
                   </td>
                   <td className="py-2 text-right tabular-nums">{r.count}</td>
                   <td className="py-2 text-right tabular-nums">
+                    {r.percent !== null ? PERCENT_FORMATTER.format(r.percent) : '—'}
+                  </td>
+                  <td className="py-2 text-right tabular-nums">
                     {r.cost !== null ? ARS_FORMATTER.format(r.cost) : '—'}
                   </td>
                 </tr>
@@ -170,6 +186,9 @@ export function CostoPorLeadCard({
               <tr className="border-t-2 font-semibold">
                 <td className="py-2">Total</td>
                 <td className="py-2 text-right tabular-nums">{totalRow.count}</td>
+                <td className="py-2 text-right tabular-nums">
+                  {totalRow.count > 0 ? PERCENT_FORMATTER.format(1) : '—'}
+                </td>
                 <td className="py-2 text-right tabular-nums">
                   {totalRow.cost !== null ? ARS_FORMATTER.format(totalRow.cost) : '—'}
                 </td>

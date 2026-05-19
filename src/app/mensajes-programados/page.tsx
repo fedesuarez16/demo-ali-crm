@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import AppLayout from '../components/AppLayout';
+import { SeguimientoPipeline } from '../components/SeguimientoPipeline';
+import { cn } from '@/lib/utils';
 import { getMensajesProgramados, eliminarMensajeProgramado, actualizarPlantillaMensaje, actualizarFechaProgramada, ColaSeguimiento } from '../services/mensajeService';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -74,6 +76,7 @@ export default function MensajesProgramadosPage() {
   const [editingFecha, setEditingFecha] = useState<number | null>(null);
   const [tempFecha, setTempFecha] = useState<string>('');
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const [expandedPipelines, setExpandedPipelines] = useState<Set<string>>(new Set());
   const [genericosExpanded, setGenericosExpanded] = useState(false);
   const [workflowActivo, setWorkflowActivo] = useState<boolean | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
@@ -392,6 +395,14 @@ export default function MensajesProgramadosPage() {
     });
   };
 
+  const togglePipeline = (key: string) => {
+    setExpandedPipelines(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
   const esSeguimientoGenericoCola = (m: ColaSeguimiento) =>
     m.seguimientos_count === 100 ||
     m.seguimientos_count === 101 ||
@@ -422,8 +433,8 @@ export default function MensajesProgramadosPage() {
     return fechaMensaje >= hoy;
   });
   
-  const mensajesEnviados = mensajes.filter(
-    m => m.estado === 'enviado' && !esSeguimientoGenericoCola(m)
+  const mensajesCompletados = mensajes.filter(
+    m => m.seguimientos_count === 8 && !esSeguimientoGenericoCola(m)
   );
 
   // Agrupar mensajes pendientes por día
@@ -439,7 +450,7 @@ export default function MensajesProgramadosPage() {
   }, {} as Record<string, ColaSeguimiento[]>);
 
   // Agrupar mensajes enviados por día
-  const mensajesEnviadosPorDia = mensajesEnviados.reduce((acc, mensaje) => {
+  const mensajesCompletadosPorDia = mensajesCompletados.reduce((acc, mensaje) => {
     const fechaProgramada = mensaje.fecha_programada || mensaje.scheduled_at || mensaje.enviado_at || undefined;
     const dayKey = getDayKey(fechaProgramada ?? undefined);
     
@@ -460,7 +471,7 @@ export default function MensajesProgramadosPage() {
   };
 
   const diasPendientesOrdenados = ordenarDias(Object.keys(mensajesPendientesPorDia));
-  const diasEnviadosOrdenados = ordenarDias(Object.keys(mensajesEnviadosPorDia));
+  const diasCompletadosOrdenados = ordenarDias(Object.keys(mensajesCompletadosPorDia));
 
   if (isLoading) {
     return (
@@ -507,7 +518,7 @@ export default function MensajesProgramadosPage() {
               <h1 className="text-lg font-semibold text-slate-800 tracking-tight">Mensajes Programados</h1>
               <p className="text-sm text-gray-500 mt-1">
                 {mensajes.filter(m => m.estado === 'pendiente').length} pendiente(s) ·{' '}
-                {mensajes.filter(m => m.estado === 'enviado').length} enviado(s)
+                {mensajes.filter(m => m.seguimientos_count === 8).length} completado(s)
               </p>
             </div>
             <div className="flex gap-2 items-center">
@@ -757,6 +768,37 @@ export default function MensajesProgramadosPage() {
                             )}
                           </Button>
                         </div>
+                        {(() => {
+                          if (mensaje.id === undefined) return null;
+                          const key = `${mensaje.tabla_origen ?? 'cola_seguimientos'}-${mensaje.id}`;
+                          return (
+                            <div className="mt-2 border-t border-slate-100 pt-2">
+                              <button
+                                type="button"
+                                onClick={() => togglePipeline(key)}
+                                className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-800 transition-colors"
+                                aria-expanded={expandedPipelines.has(key)}
+                                aria-controls={`pipeline-${key}`}
+                              >
+                                <svg
+                                  className={cn('h-3 w-3 transition-transform', expandedPipelines.has(key) && 'rotate-90')}
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  aria-hidden
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                                Pipeline de seguimientos
+                              </button>
+                              {expandedPipelines.has(key) && (
+                                <div id={`pipeline-${key}`} className="mt-2">
+                                  <SeguimientoPipeline count={mensaje.seguimientos_count ?? null} />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })}
@@ -946,6 +988,37 @@ export default function MensajesProgramadosPage() {
                                         )}
                                       </Button>
                                     </div>
+                                    {(() => {
+                                      if (mensaje.id === undefined) return null;
+                                      const key = `${mensaje.tabla_origen ?? 'cola_seguimientos'}-${mensaje.id}`;
+                                      return (
+                                        <div className="mt-2 border-t border-slate-100 pt-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => togglePipeline(key)}
+                                            className="flex items-center gap-1 text-xs text-slate-600 hover:text-slate-800 transition-colors"
+                                            aria-expanded={expandedPipelines.has(key)}
+                                            aria-controls={`pipeline-${key}`}
+                                          >
+                                            <svg
+                                              className={cn('h-3 w-3 transition-transform', expandedPipelines.has(key) && 'rotate-90')}
+                                              fill="none"
+                                              viewBox="0 0 24 24"
+                                              stroke="currentColor"
+                                              aria-hidden
+                                            >
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                            </svg>
+                                            Pipeline de seguimientos
+                                          </button>
+                                          {expandedPipelines.has(key) && (
+                                            <div id={`pipeline-${key}`} className="mt-2">
+                                              <SeguimientoPipeline count={mensaje.seguimientos_count ?? null} />
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 );
                               })}
@@ -960,30 +1033,30 @@ export default function MensajesProgramadosPage() {
             </CardContent>
           </Card>
 
-          {/* Mensajes Enviados */}
+          {/* Mensajes Completados (count=8, final del pipeline frío) */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <span className="h-2 w-2 bg-green-500 rounded-full"></span>
-                Enviados ({mensajesEnviados.length})
+                Completados ({mensajesCompletados.length})
               </CardTitle>
               <CardDescription>
-                Mensajes que ya fueron enviados
+                Leads que llegaron al toque 8 (final del pipeline frío)
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {mensajesEnviados.length === 0 ? (
+              {mensajesCompletados.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <svg className="mx-auto h-12 w-12 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <p>No hay mensajes enviados</p>
+                  <p>No hay mensajes completados</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {diasEnviadosOrdenados.map((dayKey) => {
-                    const mensajesDelDia = mensajesEnviadosPorDia[dayKey];
-                    const isExpanded = expandedDays.has(`enviado-${dayKey}`);
+                  {diasCompletadosOrdenados.map((dayKey) => {
+                    const mensajesDelDia = mensajesCompletadosPorDia[dayKey];
+                    const isExpanded = expandedDays.has(`completado-${dayKey}`);
                     
                     return (
                       <div
@@ -992,7 +1065,7 @@ export default function MensajesProgramadosPage() {
                       >
                         {/* Encabezado del acordeón */}
                         <button
-                          onClick={() => toggleDay(`enviado-${dayKey}`)}
+                          onClick={() => toggleDay(`completado-${dayKey}`)}
                           className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
                         >
                           <div className="flex items-center gap-3">
@@ -1014,7 +1087,7 @@ export default function MensajesProgramadosPage() {
                             </div>
                           </div>
                           <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 border border-green-200">
-                            Enviado
+                            Completado
                           </span>
                         </button>
                         

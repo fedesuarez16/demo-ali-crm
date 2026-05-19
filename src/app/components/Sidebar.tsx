@@ -236,7 +236,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
           : "translate-x-0"
       )}>
       {/* Header */}
-      <div className="flex h-12  bg-slate-100 items-center justify-between px-4 border-b border-border">
+      <div className="flex h-12  bg-white items-center justify-between px-4 border-b border-border">
         {!collapsed && (
           <div className="flex items-center  gap-3">
             <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
@@ -312,7 +312,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
                           "flex  items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors",
                           "hover:bg-slate-100 hover:text-accent-foreground",
                           isActive 
-                            ? "bg-slate-100 text-accent-foreground font-medium" 
+                            ? "bg-white text-accent-foreground font-medium" 
                             : "text-muted-foreground"
                         )}
                       >

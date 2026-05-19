@@ -94,6 +94,9 @@ export default function Page() {
   const [barEstadoCampaignFilter, setBarEstadoCampaignFilter] = useState<string>('');
   const [pautas, setPautas] = useState<Pauta[]>([]);
   const [columnColors, setColumnColors] = useState<Record<string, string>>({});
+  const [hostingCost, setHostingCost] = useState<string>('');
+  const [openaiCost, setOpenaiCost] = useState<string>('');
+  const [claudeCost, setClaudeCost] = useState<string>('');
 
   useEffect(() => {
     const loadLeads = async () => {
@@ -340,7 +343,7 @@ export default function Page() {
       if (!periodSet.has(leadCalendarDate(lead))) continue;
       const raw = String((lead as any).propiedad_interes || '').trim();
       if (barEstadoCampaignFilter === '') {
-        if (leadRawToPautaCampaign.has(raw)) out.push(lead);
+        out.push(lead);
       } else if (barEstadoCampaignFilter === SIN_CAMPANA_SENTINEL) {
         if (!leadRawToPautaCampaign.has(raw)) out.push(lead);
       } else {
@@ -520,12 +523,30 @@ export default function Page() {
     const today = new Date();
     const thirtyDaysAgo = new Date(today);
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
+
     return leads.filter(lead => {
       const leadDate = new Date(lead.fechaContacto || lead.created_at || new Date());
       return leadDate >= thirtyDaysAgo;
     }).length;
   }, [leads]);
+
+  const totalMaintenance = useMemo(() => {
+    const parse = (s: string) => {
+      const n = parseFloat(s);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    };
+    return parse(hostingCost) + parse(openaiCost) + parse(claudeCost);
+  }, [hostingCost, openaiCost, claudeCost]);
+
+  const maintenanceFormatter = useMemo(
+    () => new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 2,
+    }),
+    [],
+  );
 
   if (isLoading) {
     return (
@@ -601,9 +622,9 @@ export default function Page() {
 
   return (
     <AppLayout>
-      <div className="mb-8 px-2 space-y-6">
+      <div className="mb-8 px-2 m-2 space-y-6">
          {/* Breadcrumbs */}
-         <div className="pl-16 pr-3 py-3 lg:px-3 sticky top-0 z-10   bg-slate-100 border-b border-slate-200 mb-6">
+         <div className="pl-16  pr-3 py-3 lg:px-3  z-10 sticky top-0 bg-white border-b border-slate-200 mb-6">
             <nav className="flex" aria-label="Breadcrumb">
               <ol className="inline-flex items-center space-x-1 md:space-x-3">
                 <li className="inline-flex items-center">
@@ -626,15 +647,14 @@ export default function Page() {
               </ol>
             </nav>
           </div>
-        <div>
-          <h1 className="text-xl font-semibold text-slate-800 mb-2">Dashboard</h1>
-          <p className="text-gray-600">Métricas y estadísticas de leads</p>
-        </div>
+       
 
-        {/* Cards de métricas */}
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
+        {/* ───────────── SECCIÓN 1 — RESUMEN ───────────── */}
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Resumen</h2>
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
-            <CardHeader className="flex flex-row items-center  justify-between space-y-0 pb-2">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
               <CardTitle className="text-sm font-medium">
                 Total de Leads
               </CardTitle>
@@ -653,8 +673,8 @@ export default function Page() {
                 <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
               </svg>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{totalLeads}</div>
+            <CardContent className="p-4 pt-0">
+              <div className="text-xl font-bold leading-tight">{totalLeads}</div>
               <p className="text-xs text-muted-foreground">
                 Todos los leads registrados
               </p>
@@ -662,7 +682,7 @@ export default function Page() {
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
               <CardTitle className="text-sm font-medium">
                 Últimos 7 días
               </CardTitle>
@@ -680,8 +700,8 @@ export default function Page() {
                 <path d="M2 10h20" />
               </svg>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{leadsLast7Days}</div>
+            <CardContent className="p-4 pt-0">
+              <div className="text-xl font-bold leading-tight">{leadsLast7Days}</div>
               <p className="text-xs text-muted-foreground">
                 Leads ingresados esta semana
               </p>
@@ -689,7 +709,7 @@ export default function Page() {
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
               <CardTitle className="text-sm font-medium">
                 Últimos 30 días
               </CardTitle>
@@ -706,16 +726,68 @@ export default function Page() {
                 <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
               </svg>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{leadsLast30Days}</div>
+            <CardContent className="p-4 pt-0">
+              <div className="text-xl font-bold leading-tight">{leadsLast30Days}</div>
               <p className="text-xs text-muted-foreground">
                 Leads ingresados este mes
               </p>
             </CardContent>
           </Card>
-        </div>
 
-        {/* Gráfico de leads por período */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
+              <CardTitle className="text-sm font-medium">
+                Gasto mensual
+              </CardTitle>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                className="h-4 w-4 text-muted-foreground"
+              >
+                <line x1="12" y1="1" x2="12" y2="23" />
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+              </svg>
+            </CardHeader>
+            <CardContent className="p-4 pt-0 space-y-2">
+              <div className="text-xl font-bold leading-tight tabular-nums">
+                {maintenanceFormatter.format(totalMaintenance)}
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'gasto-hosting', label: 'Hosting', value: hostingCost, setter: setHostingCost },
+                  { id: 'gasto-openai',  label: 'OpenAI',  value: openaiCost,  setter: setOpenaiCost },
+                  { id: 'gasto-claude',  label: 'Claude',  value: claudeCost,  setter: setClaudeCost },
+                ].map(({ id, label, value, setter }) => (
+                  <div key={id} className="flex flex-col gap-1">
+                    <Label htmlFor={id} className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {label}
+                    </Label>
+                    <input
+                      id={id}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={value}
+                      onChange={(e) => setter(e.target.value)}
+                      placeholder="0"
+                      className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        </section>
+
+        {/* ───────────── SECCIÓN 2 — EVOLUCIÓN ───────────── */}
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Evolución temporal</h2>
         <Card>
           <CardHeader className="space-y-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -797,79 +869,72 @@ export default function Page() {
             />
           </CardContent>
         </Card>
+        </section>
 
-        {/* Bar chart: distribución total de leads por estado (snapshot) */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Leads por Estado</CardTitle>
-            <CardDescription>
-              Distribución total del pipeline (snapshot — no depende del rango de fechas).
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartBarLeadsPorEstado
-              leads={leads}
-              columnColors={columnColors}
-            />
-          </CardContent>
-        </Card>
+        {/* ───────────── SECCIÓN 3 — PIPELINE ───────────── */}
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Pipeline del rango ({chartPeriodStart} → {chartPeriodEnd})
+          </h2>
+          <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+            {/* Bar chart unificado con filtro de campaña */}
+            <Card>
+              <CardHeader className="space-y-4">
+                <div>
+                  <CardTitle>Leads por Estado</CardTitle>
+                  <CardDescription>
+                    {effectiveBarEstadoCampaignFilter === SIN_CAMPANA_SENTINEL ? (
+                      <>Leads sin campaña asignada en el rango del dashboard.</>
+                    ) : effectiveBarEstadoCampaignFilter ? (
+                      <>
+                        Leads de la campaña{' '}
+                        <span className="font-medium text-foreground">{effectiveBarEstadoCampaignFilter}</span>
+                        {' '}en el rango del dashboard.
+                      </>
+                    ) : (
+                      <>Distribución por estado de todos los leads en el rango del dashboard.</>
+                    )}
+                  </CardDescription>
+                </div>
+                <div className="flex flex-col gap-2 sm:max-w-md">
+                  <Label htmlFor="bar-estado-campaign-filter" className="text-xs text-muted-foreground">
+                    Filtrar por campaña
+                  </Label>
+                  <select
+                    id="bar-estado-campaign-filter"
+                    aria-label="Filtrar gráfico Leads por Estado"
+                    value={barEstadoCampaignFilter}
+                    onChange={(e) => setBarEstadoCampaignFilter(e.target.value)}
+                    className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="">Todas las campañas</option>
+                    {uniqueCampaigns.map((c, idx) => (
+                      <option key={`bar-estado-camp-${idx}-${c}`} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                    <option value={SIN_CAMPANA_SENTINEL}>Sin campaña</option>
+                  </select>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ChartBarLeadsPorEstado
+                  leads={barEstadoFilteredLeads}
+                  columnColors={columnColors}
+                />
+              </CardContent>
+            </Card>
 
-        {/* Bar chart: distribución de estados por campaña en el rango */}
-        <Card>
-          <CardHeader className="space-y-4">
-            <div>
-              <CardTitle>Leads por Estado por Campaña</CardTitle>
-              <CardDescription>
-                {effectiveBarEstadoCampaignFilter === SIN_CAMPANA_SENTINEL ? (
-                  <>Leads sin campaña asignada en el rango del dashboard ({chartPeriodStart} → {chartPeriodEnd}).</>
-                ) : effectiveBarEstadoCampaignFilter ? (
-                  <>
-                    Leads de la campaña{' '}
-                    <span className="font-medium text-foreground">{effectiveBarEstadoCampaignFilter}</span>
-                    {' '}en el rango del dashboard ({chartPeriodStart} → {chartPeriodEnd}).
-                  </>
-                ) : (
-                  <>
-                    Distribución por estado de leads que matchean alguna pauta, en el rango del dashboard ({chartPeriodStart} → {chartPeriodEnd}).
-                  </>
-                )}
-              </CardDescription>
-            </div>
-            <div className="flex flex-col gap-2 sm:max-w-md">
-              <Label htmlFor="bar-estado-campaign-filter" className="text-xs text-muted-foreground">
-                Filtrar por campaña
-              </Label>
-              <select
-                id="bar-estado-campaign-filter"
-                aria-label="Filtrar gráfico Leads por Estado por Campaña"
-                value={barEstadoCampaignFilter}
-                onChange={(e) => setBarEstadoCampaignFilter(e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">Todas las campañas</option>
-                {uniqueCampaigns.map((c, idx) => (
-                  <option key={`bar-estado-camp-${idx}-${c}`} value={c}>
-                    {c}
-                  </option>
-                ))}
-                <option value={SIN_CAMPANA_SENTINEL}>Sin campaña</option>
-              </select>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ChartBarLeadsPorEstado
+            <CostoPorLeadCard
               leads={barEstadoFilteredLeads}
               columnColors={columnColors}
             />
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        <CostoPorLeadCard
-          leads={barEstadoFilteredLeads}
-          columnColors={columnColors}
-        />
-
-        {/* Gráficos de categorías en una fila */}
+        {/* ───────────── SECCIÓN 4 — ACTIVIDAD POR CATEGORÍA ───────────── */}
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Actividad por categoría</h2>
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
           <Card>
             <CardHeader>
@@ -922,9 +987,12 @@ export default function Page() {
             </CardContent>
           </Card>
         </div>
+        </section>
 
-        {/* Gráfico de leads por campaña */}
+        {/* ───────────── SECCIÓN 5 — ANÁLISIS POR CAMPAÑA ───────────── */}
         {uniqueCampaigns.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Análisis por campaña</h2>
           <Card>
             <CardHeader className="space-y-4">
               <div>
@@ -977,12 +1045,10 @@ export default function Page() {
               />
             </CardContent>
           </Card>
-        )}
 
-        {/* Gráficos individuales por campaña (máximo 6 campañas más importantes) */}
-        {uniqueCampaigns.length > 0 && (
-          <div>
-            <h2 className="text-lg font-semibold text-slate-800 mb-4">Leads por Campaña Individual</h2>
+          {/* Gráficos individuales por campaña (máximo 6 campañas más importantes) */}
+          <div className="pt-2">
+            <h3 className="text-sm font-medium text-slate-700 mb-3">Por campaña individual</h3>
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {uniqueCampaigns.slice(0, 6).map((campaign) => {
                 const campaignData = individualCampaignsData[campaign] || [];
@@ -1020,6 +1086,7 @@ export default function Page() {
               </p>
             )}
           </div>
+        </section>
         )}
       </div>
     </AppLayout>

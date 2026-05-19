@@ -657,9 +657,9 @@ export default function LeadsKanbanPage() {
     <AppLayout>
       <div className="mb-8 min-w-0 max-w-full">
         {/* Nueva topbar con breadcrumbs */}
-        <div className="sticky top-0 z-10 backdrop-blur bg-white border-b border-slate-200 mb-6">
+        <div className="sticky top-0 z-10 backdrop-blur bg-white border-b border-border mb-6">
           {/* Breadcrumbs */}
-          <div className="pl-16 pr-2 lg:px-2  bg-slate-100 py-3">
+          <div className="pl-16 pr-2 lg:px-2  bg-white py-3">
             <nav className="flex" aria-label="Breadcrumb">
               <ol className="inline-flex items-center space-x-1 md:space-x-3">
                 <li className="inline-flex items-center">
