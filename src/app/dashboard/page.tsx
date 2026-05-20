@@ -5,6 +5,7 @@ import AppLayout from "../components/AppLayout";
 import { Lead } from "../types";
 import { getAllLeads, campaignNumericFingerprint } from "../services/leadService";
 import { getKanbanColumns } from '@/app/services/columnService';
+import { getSystemCosts, updateSystemCosts, type SystemCosts } from '@/app/services/systemCostService';
 import { ChartBarLeadsPorEstado } from '@/app/components/ChartBarLeadsPorEstado';
 import { CostoPorLeadCard } from '@/app/components/CostoPorLeadCard';
 import { ChartAreaInteractive } from "@/components/ui/chart-area-interactive";
@@ -13,6 +14,7 @@ import { ChartConfig } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 interface Pauta {
@@ -97,6 +99,29 @@ export default function Page() {
   const [hostingCost, setHostingCost] = useState<string>('');
   const [openaiCost, setOpenaiCost] = useState<string>('');
   const [claudeCost, setClaudeCost] = useState<string>('');
+  const [costsSaveStatus, setCostsSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+
+  useEffect(() => {
+    const auth = localStorage.getItem('dashboard_auth');
+    if (auth === 'true') {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const correctPassword = process.env.NEXT_PUBLIC_DASHBOARD_PASSWORD || 'admin123';
+    if (passwordInput === correctPassword) {
+      setIsAuthenticated(true);
+      localStorage.setItem('dashboard_auth', 'true');
+    } else {
+      alert('Contraseña incorrecta');
+      setPasswordInput('');
+    }
+  };
+
 
   useEffect(() => {
     const loadLeads = async () => {
@@ -145,6 +170,45 @@ export default function Page() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const costs = await getSystemCosts();
+        if (cancelled) return;
+        setHostingCost(costs.hosting > 0 ? String(costs.hosting) : '');
+        setOpenaiCost(costs.openai > 0 ? String(costs.openai) : '');
+        setClaudeCost(costs.claude > 0 ? String(costs.claude) : '');
+      } catch (e) {
+        console.error('Error cargando system_costs:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const persistCosts = async (overrides?: Partial<SystemCosts>) => {
+    const parse = (s: string) => {
+      const n = parseFloat(s);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    };
+    const next: SystemCosts = {
+      hosting: overrides?.hosting ?? parse(hostingCost),
+      openai:  overrides?.openai  ?? parse(openaiCost),
+      claude:  overrides?.claude  ?? parse(claudeCost),
+    };
+    setCostsSaveStatus('saving');
+    try {
+      await updateSystemCosts(next);
+      setCostsSaveStatus('saved');
+      setTimeout(() => {
+        setCostsSaveStatus(prev => (prev === 'saved' ? 'idle' : prev));
+      }, 1500);
+    } catch (e) {
+      console.error('Error guardando system_costs:', e);
+      setCostsSaveStatus('error');
+    }
+  };
 
   const { periodDates, periodRangeClipped } = useMemo(() => {
     const days = eachDayInclusive(chartPeriodStart, chartPeriodEnd);
@@ -548,8 +612,44 @@ export default function Page() {
     [],
   );
 
+  if (!isAuthenticated) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-screen p-4">
+          <Card className="w-full max-w-md p-6">
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl">Acceso Restringido</CardTitle>
+              <CardDescription>
+                Por favor, ingrese la contraseña para acceder al Dashboard
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="password">Contraseña</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full">
+                  Ingresar
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      </AppLayout>
+    );
+  }
+
   if (isLoading) {
     return (
+
       <AppLayout>
         <div className="mb-8 m-2 space-y-6">
           {/* Breadcrumbs skeleton */}
@@ -736,8 +836,17 @@ export default function Page() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
                 Gasto mensual
+                {costsSaveStatus === 'saving' && (
+                  <span className="text-[10px] font-normal text-muted-foreground">Guardando…</span>
+                )}
+                {costsSaveStatus === 'saved' && (
+                  <span className="text-[10px] font-normal text-emerald-600">✓ Guardado</span>
+                )}
+                {costsSaveStatus === 'error' && (
+                  <span className="text-[10px] font-normal text-red-600">Error</span>
+                )}
               </CardTitle>
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -759,10 +868,10 @@ export default function Page() {
               </div>
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { id: 'gasto-hosting', label: 'Hosting', value: hostingCost, setter: setHostingCost },
-                  { id: 'gasto-openai',  label: 'OpenAI',  value: openaiCost,  setter: setOpenaiCost },
-                  { id: 'gasto-claude',  label: 'Claude',  value: claudeCost,  setter: setClaudeCost },
-                ].map(({ id, label, value, setter }) => (
+                  { id: 'gasto-hosting', label: 'Hosting', value: hostingCost, setter: setHostingCost, field: 'hosting' as const },
+                  { id: 'gasto-openai',  label: 'OpenAI',  value: openaiCost,  setter: setOpenaiCost,  field: 'openai'  as const },
+                  { id: 'gasto-claude',  label: 'Claude',  value: claudeCost,  setter: setClaudeCost,  field: 'claude'  as const },
+                ].map(({ id, label, value, setter, field }) => (
                   <div key={id} className="flex flex-col gap-1">
                     <Label htmlFor={id} className="text-[10px] uppercase tracking-wide text-muted-foreground">
                       {label}
@@ -774,6 +883,10 @@ export default function Page() {
                       step="0.01"
                       value={value}
                       onChange={(e) => setter(e.target.value)}
+                      onBlur={(e) => {
+                        const n = parseFloat(e.target.value);
+                        persistCosts({ [field]: Number.isFinite(n) && n > 0 ? n : 0 });
+                      }}
                       placeholder="0"
                       className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     />
