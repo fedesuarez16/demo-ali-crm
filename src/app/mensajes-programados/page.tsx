@@ -40,6 +40,11 @@ function labelByState(active: boolean | null, error: string | null): string {
   return active ? 'Detener seguimientos' : 'Reactivar seguimientos';
 }
 
+function labelByStateGenerico(active: boolean | null, error: string | null): string {
+  if (active === null) return error ? 'Estado no disponible' : 'Cargando...';
+  return active ? 'Detener seguimiento genérico' : 'Reactivar seguimiento genérico';
+}
+
 function SpinnerIcon() {
   return (
     <svg className="h-4 w-4 mr-2 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden>
@@ -368,7 +373,23 @@ export default function MensajesProgramadosPage() {
     return 1;
   };
 
-  const SEGUIMIENTOS_COUNT_PLANTILLA_GENERICO_DEFAULT = new Set([100, 101, 102]);
+  const SEGUIMIENTOS_COUNT_PLANTILLA_GENERICO_DEFAULT = new Set([100, 101, 102, 103, 105]);
+
+  const getMensajePreview = (count: number | null | undefined): string | null => {
+    if (count === null || count === undefined || count === 0) {
+      return 'Mensaje generado por IA (seguimiento personalizado basado en historial de conversación)';
+    }
+    const map: Record<number, string> = {
+      1: 'Hola! Solo paso a confirmar si seguís interesado/a. A veces los tiempos corren y se nos escapan oportunidades... cualquier duda que tengas, contá conmigo',
+      2: 'Hola 👋 Solo para asegurarme que recibiste bien todo. Si la info te sirvió y querés avanzar, coordinamos cuando te quede cómodo. Si no es lo que buscabas, decime y te afino la búsqueda.',
+      3: '¡Buenas! Consulto para saber si esta propiedad sigue en tu radar. Varias consultas aparecieron esta semana, avisame si querés reservar día para verla 😉',
+      4: 'Hola 👋 ¿Cómo va? Hace un mes te compartí la info. Contame si seguís buscando —tengo movimientos nuevos en cartera que quizás te cierren más.',
+      200: 'Hola! Solo paso a confirmar si seguís interesado/a. A veces los tiempos corren y se nos escapan oportunidades... cualquier duda que tengas, contá conmigo',
+      201: 'Seguimiento genérico (toque 2)',
+      999: 'Seguimiento genérico (reactivación)',
+    };
+    return map[count] ?? null;
+  };
 
   /** Valor del Select: para count 100–102 sin plantilla en BD, mostrar Generico 01 por defecto. */
   const plantillaSelectValue = (mensaje: ColaSeguimiento): string => {
@@ -406,7 +427,9 @@ export default function MensajesProgramadosPage() {
   const esSeguimientoGenericoCola = (m: ColaSeguimiento) =>
     m.seguimientos_count === 100 ||
     m.seguimientos_count === 101 ||
-    m.seguimientos_count === 102;
+    m.seguimientos_count === 102 ||
+    m.seguimientos_count === 103 ||
+    m.seguimientos_count === 105;
 
   const mensajesPrioridadCola = mensajes.filter(esSeguimientoGenericoCola);
   const mensajesPrioridadColaOrdenados = [...mensajesPrioridadCola].sort((a, b) => {
@@ -540,6 +563,24 @@ export default function MensajesProgramadosPage() {
                 {isTogglingWorkflow ? <SpinnerIcon /> : <StateIcon active={workflowActivo} />}
                 {labelByState(workflowActivo, workflowError)}
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleToggleWorkflow}
+                disabled={isTogglingWorkflow || workflowActivo === null}
+                className={
+                  workflowActivo === true
+                    ? 'text-amber-700 border-amber-300 hover:bg-amber-50 hover:text-amber-800'
+                    : ''
+                }
+                title={
+                  workflowError ??
+                  (workflowActivo === null ? 'Cargando estado del workflow…' : undefined)
+                }
+              >
+                {isTogglingWorkflow ? <SpinnerIcon /> : <StateIcon active={workflowActivo} />}
+                {labelByStateGenerico(workflowActivo, workflowError)}
+              </Button>
               <Button onClick={handleRefreshAll} variant="outline" size="sm">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -623,6 +664,14 @@ export default function MensajesProgramadosPage() {
                               </div>
                             </div>
 
+                            {(() => {
+                              const preview = getMensajePreview(mensaje.seguimientos_count);
+                              return preview ? (
+                                <p className="text-xs text-slate-500 italic bg-slate-50 border border-slate-100 rounded px-2 py-1.5 mb-2 leading-relaxed">
+                                  {preview}
+                                </p>
+                              ) : null;
+                            })()}
                             <div className={isEnviado ? 'mb-2' : 'mb-1.5'}>
                               {isEnviado ? (
                                 <label className="block text-xs font-medium text-gray-700 mb-1">Plantilla</label>
@@ -906,6 +955,14 @@ export default function MensajesProgramadosPage() {
                                             </span>
                                           </div>
                                         
+                                        {(() => {
+                                          const preview = getMensajePreview(mensaje.seguimientos_count);
+                                          return preview ? (
+                                            <p className="text-xs text-slate-500 italic bg-slate-50 border border-slate-100 rounded px-2 py-1.5 mb-2 leading-relaxed">
+                                              {preview}
+                                            </p>
+                                          ) : null;
+                                        })()}
                                         {/* Selector de Plantilla */}
                                         <div className="mb-1.5">
                                           <Select
@@ -1132,6 +1189,14 @@ export default function MensajesProgramadosPage() {
                                             </span>
                                           </div>
                                           
+                                          {(() => {
+                                            const preview = getMensajePreview(mensaje.seguimientos_count);
+                                            return preview ? (
+                                              <p className="text-xs text-slate-500 italic bg-slate-50 border border-slate-100 rounded px-2 py-1.5 mb-2 leading-relaxed">
+                                                {preview}
+                                              </p>
+                                            ) : null;
+                                          })()}
                                           {/* Selector de Plantilla */}
                                           <div className="mb-2">
                                             <label className="block text-xs font-medium text-gray-700 mb-1">

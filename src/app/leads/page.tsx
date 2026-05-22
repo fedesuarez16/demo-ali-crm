@@ -300,7 +300,9 @@ export default function LeadsKanbanPage() {
       for (const lead of selectedLeads) {
         try {
           // Obtener número de teléfono del lead
-          const remoteJid = (lead as any).whatsapp_id || lead.telefono || '';
+          const rawJid = (lead as any).whatsapp_id || lead.telefono || '';
+          // cola_seguimientos guarda remote_jid con '+'; leads.whatsapp_id lo guarda sin él
+          const remoteJid = rawJid && /^\d+$/.test(rawJid) ? `+${rawJid}` : rawJid;
           
           if (!remoteJid) {
             console.warn(`Lead ${lead.id} no tiene número de teléfono`);
