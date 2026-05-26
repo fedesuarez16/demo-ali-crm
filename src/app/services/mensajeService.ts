@@ -206,43 +206,23 @@ const getRemoteJidVariantes = (remoteJid: string): string[] => {
 };
 
 /**
- * Elimina TODOS los seguimientos de un lead por su remote_jid (cualquier estado)
- * Busca y elimina en ambas tablas: cola_seguimientos y cola_seguimientos_dos
- * Prueba múltiples variantes del remote_jid (con/sin +) para asegurar que se eliminen todos
+ * Elimina TODOS los seguimientos de un lead por su remote_jid (cualquier estado).
+ * Usa RPC de Postgres que normaliza a solo dígitos en el motor,
+ * evitando el bug de PostgREST donde '+' se decodifica como ' ' en filtros .in().
  */
 export const eliminarTodosSeguimientosPendientes = async (remoteJid: string): Promise<boolean> => {
   try {
-    let allSuccess = true;
-    const variantes = getRemoteJidVariantes(remoteJid);
-    console.log(`🗑️ Eliminando seguimientos para variantes:`, variantes);
-    
-    // Eliminar de cola_seguimientos con todas las variantes del remote_jid
-    const { error: errorCola1 } = await (getSupabase() as any)
-      .from('cola_seguimientos')
-      .delete()
-      .in('remote_jid', variantes);
-    
-    if (errorCola1) {
-      console.error('Error eliminando seguimientos de cola_seguimientos:', errorCola1.message);
-      allSuccess = false;
-    } else {
-      console.log(`✅ Seguimientos eliminados de cola_seguimientos para ${remoteJid}`);
+    console.log(`🗑️ Eliminando seguimientos para: ${remoteJid}`);
+    const { data, error } = await (getSupabase() as any)
+      .rpc('eliminar_seguimientos_por_telefono', { phone_digits: remoteJid });
+
+    if (error) {
+      console.error('Error eliminando seguimientos:', error.message);
+      return false;
     }
-    
-    // Eliminar de cola_seguimientos_dos con todas las variantes
-    const { error: errorCola2 } = await (getSupabase() as any)
-      .from('cola_seguimientos_dos')
-      .delete()
-      .in('remote_jid', variantes);
-    
-    if (errorCola2) {
-      console.error('Error eliminando seguimientos de cola_seguimientos_dos:', errorCola2.message);
-      allSuccess = false;
-    } else {
-      console.log(`✅ Seguimientos eliminados de cola_seguimientos_dos para ${remoteJid}`);
-    }
-    
-    return allSuccess;
+
+    console.log(`✅ Seguimientos eliminados: ${data} fila(s)`);
+    return true;
   } catch (e) {
     console.error('Exception eliminando todos los seguimientos:', e);
     return false;

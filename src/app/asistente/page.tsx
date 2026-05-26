@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { Pencil, Trash2 } from 'lucide-react';
 
 type ChatMessage = {
   id: string;
@@ -46,6 +47,10 @@ function AsistentePageContent() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [chunksCount, setChunksCount] = useState<number | null>(null);
   const [knowledgeText, setKnowledgeText] = useState('');
   const [knowledgeChunkSize, setKnowledgeChunkSize] = useState(1000);
@@ -136,6 +141,46 @@ function AsistentePageContent() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, sending]);
+
+  const startRename = (id: string, currentTitle: string) => {
+    setEditingId(id);
+    setEditTitle(currentTitle);
+  };
+
+  const cancelRename = () => {
+    setEditingId(null);
+    setEditTitle('');
+  };
+
+  const submitRename = async () => {
+    if (!editingId || !editTitle.trim()) {
+      cancelRename();
+      return;
+    }
+    const id = editingId;
+    cancelRename();
+    await fetch('/api/ai-chat', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversationId: id, title: editTitle.trim() }),
+    });
+    await loadConversations();
+  };
+
+  const executeDelete = async (id: string) => {
+    setDeletingId(id);
+    setConfirmDeleteId(null);
+    try {
+      await fetch(`/api/ai-chat?conversationId=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (activeConversationId === id) {
+        setActiveConversationId(null);
+        setMessages([]);
+      }
+      await loadConversations();
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const startNewChat = () => {
     setActiveConversationId(null);
@@ -259,22 +304,62 @@ function AsistentePageContent() {
                 </p>
               ) : (
                 conversations.map((c) => (
-                  <button
+                  <div
                     key={c.id}
-                    type="button"
-                    onClick={() => selectConversation(c.id)}
                     className={cn(
-                      'w-full rounded-lg px-3 py-2 text-left text-sm transition-colors',
+                      'group relative w-full rounded-lg text-left text-sm transition-colors',
                       activeConversationId === c.id
                         ? 'bg-background font-medium text-foreground shadow-sm ring-1 ring-border'
                         : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground'
                     )}
                   >
-                    <span className="line-clamp-2">{c.title}</span>
-                    <span className="mt-1 block text-[10px] text-muted-foreground">
-                      {new Date(c.updated_at).toLocaleString()}
-                    </span>
-                  </button>
+                    {editingId === c.id ? (
+                      <input
+                        autoFocus
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        onBlur={() => void submitRename()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') { e.preventDefault(); void submitRename(); }
+                          if (e.key === 'Escape') cancelRename();
+                        }}
+                        className="w-full rounded-lg bg-background px-3 py-2 text-sm text-foreground outline-none ring-2 ring-ring"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => selectConversation(c.id)}
+                        className="w-full rounded-lg px-3 py-2 text-left"
+                      >
+                        <span className="line-clamp-2 pr-10">{c.title}</span>
+                        <span className="mt-1 block text-[10px] text-muted-foreground">
+                          {new Date(c.updated_at).toLocaleString()}
+                        </span>
+                      </button>
+                    )}
+
+                    {editingId !== c.id && (
+                      <div className="absolute right-1.5 top-1.5 hidden items-center gap-0.5 group-hover:flex">
+                        <button
+                          type="button"
+                          title="Renombrar"
+                          onClick={(e) => { e.stopPropagation(); startRename(c.id, c.title); }}
+                          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        >
+                          <Pencil size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          title="Eliminar"
+                          disabled={deletingId === c.id}
+                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(c.id); }}
+                          className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ))
               )}
             </div>
@@ -529,7 +614,29 @@ function AsistentePageContent() {
           </div>
         </div>
       </div>
-    </AppLayout>
+        {/* Dialog confirmar eliminación */}
+        <Dialog open={!!confirmDeleteId} onOpenChange={(open) => { if (!open) setConfirmDeleteId(null); }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Eliminar conversación</DialogTitle>
+              <DialogDescription>
+                Esta acción no se puede deshacer. Se eliminarán todos los mensajes de la conversación.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => confirmDeleteId && void executeDelete(confirmDeleteId)}
+              >
+                Eliminar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </AppLayout>
   );
 }
 

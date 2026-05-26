@@ -120,6 +120,60 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/** PATCH: renombra una conversación existente. Body: { conversationId, title } */
+export async function PATCH(request: NextRequest) {
+  const supabase = getSupabase();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Supabase no está configurado.' }, { status: 503 });
+  }
+
+  let body: { conversationId?: string; title?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
+  }
+
+  const { conversationId, title } = body;
+  if (!conversationId || typeof title !== 'string' || !title.trim()) {
+    return NextResponse.json({ error: 'conversationId y title son requeridos.' }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from('ai_conversations')
+    .update({ title: title.trim() })
+    .eq('id', conversationId);
+
+  if (error) {
+    console.error('ai-chat PATCH:', error);
+    return NextResponse.json({ error: 'No se pudo renombrar la conversación.' }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
+/** DELETE: elimina una conversación y sus mensajes (cascade por FK). ?conversationId= */
+export async function DELETE(request: NextRequest) {
+  const supabase = getSupabase();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Supabase no está configurado.' }, { status: 503 });
+  }
+
+  const conversationId = request.nextUrl.searchParams.get('conversationId');
+  if (!conversationId) {
+    return NextResponse.json({ error: 'conversationId es requerido.' }, { status: 400 });
+  }
+
+  const { error } = await supabase.from('ai_conversations').delete().eq('id', conversationId);
+
+  if (error) {
+    console.error('ai-chat DELETE:', error);
+    return NextResponse.json({ error: 'No se pudo eliminar la conversación.' }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
 /** POST: envía mensaje del usuario y devuelve respuesta del asistente (persistido en Supabase). */
 export async function POST(request: NextRequest) {
   const openai = getOpenAI();

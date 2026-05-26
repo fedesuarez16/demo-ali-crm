@@ -612,6 +612,48 @@ export default function Page() {
     [],
   );
 
+  const arsFormatter = useMemo(
+    () => new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'ARS',
+      maximumFractionDigits: 0,
+      minimumFractionDigits: 0,
+    }),
+    [],
+  );
+
+  const ticketPromedio = useMemo(() => {
+    const withBudget = leads.filter(l => l.presupuesto > 0);
+    if (withBudget.length === 0) return null;
+    return withBudget.reduce((s, l) => s + l.presupuesto, 0) / withBudget.length;
+  }, [leads]);
+
+  const ticketPorCampana = useMemo(() => {
+    const map = new Map<string, { count: number; total: number }>();
+    uniqueCampaigns.forEach(c => map.set(c, { count: 0, total: 0 }));
+    for (const lead of leads) {
+      if (lead.presupuesto <= 0) continue;
+      const raw = ((lead as any).propiedad_interes || '').trim();
+      const camp = leadRawToPautaCampaign.get(raw);
+      if (!camp) continue;
+      const entry = map.get(camp)!;
+      entry.count++;
+      entry.total += lead.presupuesto;
+    }
+    return uniqueCampaigns
+      .map(c => {
+        const e = map.get(c)!;
+        return { campaign: c, count: e.count, total: e.total, promedio: e.count > 0 ? e.total / e.count : 0 };
+      })
+      .filter(r => r.count > 0)
+      .sort((a, b) => b.total - a.total);
+  }, [leads, uniqueCampaigns, leadRawToPautaCampaign]);
+
+  const ticketTotalCampanas = useMemo(
+    () => ticketPorCampana.reduce((s, r) => s + r.total, 0),
+    [ticketPorCampana],
+  );
+
   if (!isAuthenticated) {
     return (
       <AppLayout>
@@ -752,7 +794,7 @@ export default function Page() {
         {/* ───────────── SECCIÓN 1 — RESUMEN ───────────── */}
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Resumen</h2>
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
               <CardTitle className="text-sm font-medium">
@@ -895,7 +937,111 @@ export default function Page() {
               </div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
+              <CardTitle className="text-sm font-medium">Ticket Promedio</CardTitle>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                className="h-4 w-4 text-muted-foreground"
+              >
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+              </svg>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <div className="text-xl font-bold leading-tight tabular-nums">
+                {ticketPromedio !== null ? arsFormatter.format(ticketPromedio) : '—'}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Promedio de todos los leads con presupuesto
+              </p>
+            </CardContent>
+          </Card>
         </div>
+        </section>
+
+        {/* ───────────── SECCIÓN TICKETS ───────────── */}
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Tickets</h2>
+          <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
+                <CardTitle className="text-sm font-medium">Ticket Total de campañas</CardTitle>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  className="h-4 w-4 text-muted-foreground"
+                >
+                  <rect width="20" height="14" x="2" y="5" rx="2" />
+                  <path d="M2 10h20" />
+                </svg>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <div className="text-xl font-bold leading-tight tabular-nums">
+                  {ticketTotalCampanas > 0 ? arsFormatter.format(ticketTotalCampanas) : '—'}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Suma de presupuestos de leads con campaña asignada
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="p-4 pb-1">
+                <CardTitle className="text-sm font-medium">Ticket por campaña</CardTitle>
+                <CardDescription className="text-xs">
+                  Solo leads con presupuesto &gt; 0. Ordenado por total descendente.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 pt-2">
+                {ticketPorCampana.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sin datos de presupuesto por campaña.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="py-2 text-left font-medium">Campaña</th>
+                          <th className="py-2 text-right font-medium">Leads</th>
+                          <th className="py-2 text-right font-medium">Total ARS</th>
+                          <th className="py-2 text-right font-medium">Promedio ARS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ticketPorCampana.map(r => (
+                          <tr key={r.campaign} className="border-b last:border-b-0">
+                            <td className="py-1.5 text-left max-w-[140px] truncate" title={r.campaign}>{r.campaign}</td>
+                            <td className="py-1.5 text-right tabular-nums">{r.count}</td>
+                            <td className="py-1.5 text-right tabular-nums">{arsFormatter.format(r.total)}</td>
+                            <td className="py-1.5 text-right tabular-nums">{arsFormatter.format(r.promedio)}</td>
+                          </tr>
+                        ))}
+                        <tr className="border-t-2 font-semibold">
+                          <td className="py-1.5">Total</td>
+                          <td className="py-1.5 text-right tabular-nums">
+                            {ticketPorCampana.reduce((s, r) => s + r.count, 0)}
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums">{arsFormatter.format(ticketTotalCampanas)}</td>
+                          <td className="py-1.5 text-right tabular-nums">—</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </section>
 
         {/* ───────────── SECCIÓN 2 — EVOLUCIÓN ───────────── */}
