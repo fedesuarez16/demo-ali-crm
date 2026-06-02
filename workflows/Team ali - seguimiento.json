@@ -1,0 +1,3162 @@
+{
+  "name": "Team ali - seguimiento",
+  "description": "",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/3 15-20 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1552,
+        368
+      ],
+      "id": "ab228ebc-5363-4880-b95a-34fd503a5398",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT cs.id, cs.remote_jid, cs.chatwoot_conversation_id, COALESCE(cs.seguimientos_count, 0) AS seguimientos_count\nFROM cola_seguimientos cs\nLEFT JOIN leads l ON l.whatsapp_id = cs.remote_jid\nWHERE cs.estado = 'pendiente'\n  AND cs.fecha_programada >= CURRENT_DATE\n  AND cs.fecha_programada < CURRENT_DATE + INTERVAL '1 day'\n  AND COALESCE(cs.seguimientos_count, 0) IN (0, 1, 2, 3, 4, 5, 300, 400)\n  AND cs.chatwoot_conversation_id IS NOT NULL\n  AND cs.remote_jid NOT IN (SELECT remote_jid FROM blacklist_seguimientos)\nORDER BY cs.fecha_programada ASC\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1232,
+        368
+      ],
+      "id": "190e5767-0a45-4c7c-b74a-c5aa40236ecc",
+      "name": "SQL - Cancelar Seguimiento1",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nif (!items || items.length === 0) {\n  console.log('No hay seguimientos pendientes');\n  return [];\n}\n\nconsole.log(`${items.length} seguimientos a enviar`);\n\nreturn items.map(item => {\n  const remoteJid = item.json.remote_jid;\n  const phoneNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');\n  \n  return {\n    json: {\n      id: item.json.id,\n      phone_number: phoneNumber,\n      remote_jid: remoteJid,\n      conversation_id: item.json.chatwoot_conversation_id\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -512,
+        368
+      ],
+      "id": "8682af36-08b9-4d00-bf85-d2f50009b249",
+      "name": "Code - Verificar si hay items"
+    },
+    {
+      "parameters": {
+        "topN": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.rerankerCohere",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        -432
+      ],
+      "id": "3b42b2df-b5ef-4553-ac41-087f98bc5c4d",
+      "name": "Reranker Cohere1",
+      "credentials": {
+        "cohereApi": {
+          "id": "6mDThtf9ooEIaxHA",
+          "name": "CohereApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "=Usa esta herramienta para buscar propiedades en la base de datos.",
+        "tableName": {
+          "__rl": true,
+          "value": "documents_1",
+          "mode": "list",
+          "cachedResultName": "documents_1"
+        },
+        "topK": 10,
+        "includeDocumentMetadata": false,
+        "useReranker": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        1152,
+        -576
+      ],
+      "id": "7dcadd2f-f225-4f41-8858-5896c97f5615",
+      "name": "Supabase Vector Store1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "k63Rdkg9hyaaztWV",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1152,
+        -320
+      ],
+      "id": "643c0f8e-9031-4146-bae7-0b3d56c449f4",
+      "name": "Embeddings OpenAI1",
+      "credentials": {
+        "openAiApi": {
+          "id": "BPTkrfKD8LOqnHgE",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.contextoManual }}",
+        "options": {
+          "systemMessage": "=Eres Maga, asistente de Andrés Ali, Corredor Inmobiliario en RE/MAX Diagonal II – City Bell.\n\n═══════════════════════════════════════════════════════════════\n🎯 TU FUNCIÓN ESPECÍFICA EN ESTE FLUJO\n═══════════════════════════════════════════════════════════════\n\nEste es un mensaje de SEGUIMIENTO AUTOMÁTICO programado.\n\nTu único objetivo es:\n1. Retomar la conversación de manera natural y cordial\n2. Verificar si ya se envió la ficha de la propiedad consultada\n3. Si NO se envió aún, buscarla con \"Supabase Vector Store\" y enviarla\n4. Preguntar qué le pareció y si necesita algo más\n\n═══════════════════════════════════════════════════════════════\n📋 SECUENCIA DE ACCIÓN\n═══════════════════════════════════════════════════════════════\n\nPASO 1: REVISAR EL HISTORIAL\n- Lee TODO el contexto de conversaciones previas\n- Identifica de qué propiedad consultó el cliente\n- Verifica si ya se le envió el link de la ficha\n\nPASO 2: MENSAJE DE SEGUIMIENTO\n\nSi YA SE ENVIÓ LA FICHA:\n\"Hola! Cómo estás? Soy Maga 😊\nQuería saber qué te parecieron las opciones que te pasé y si te puedo ayudar con algo más?\"\n\nSi NO SE ENVIÓ LA FICHA (O NO ESTÁS SEGURA):\n\"Hola! Cómo estás? Soy Maga 😊\nTe paso la info de [dirección de la propiedad que consultó]:\n[USAR SUPABASE VECTOR STORE PARA BUSCAR Y ENVIAR EL LINK]\n\nCualquier cosa avisame!\"\n\nPASO 3: RESPONDER A SU REACCIÓN\n- Si muestra interés: ofrece más información\n- Si pide algo más barato/caro: NO busques alternativas, solo pregunta su presupuesto\n- Si pregunta algo específico: responde brevemente\n- Si muestra interés real: menciona que Andrés puede llamarlo\n\n═══════════════════════════════════════════════════════════════\n⚠️ REGLAS CRÍTICAS\n═══════════════════════════════════════════════════════════════\n\n✅ SÍ DEBES:\n- Ser breve, natural y cordial\n- Enviar la ficha si no se envió en conversaciones previas\n- Usar \"Supabase Vector Store\" para buscar la propiedad correcta\n- Preguntar qué le pareció si ya recibió info antes\n- Máximo 2 emojis por mensaje\n\n❌ NO DEBES:\n- Hacer múltiples preguntas de calificación\n- Pedir presupuesto si no muestra interés\n- Buscar alternativas de propiedades por tu cuenta\n- Ofrecer llamada a menos que el cliente muestre interés claro\n- Ser repetitivo o robótico\n- Enviar la misma ficha dos veces\n\n═══════════════════════════════════════════════════════════════\n🔍 CÓMO USAR SUPABASE VECTOR STORE\n═══════════════════════════════════════════════════════════════\n\nPara buscar la propiedad que el cliente consultó:\n- Identifica la dirección o características en el historial\n- Usa Supabase Vector Store con la dirección exacta\n- Envía el link COMPLETO que te devuelva la herramienta\n- Solo envía UNA ficha, la que corresponde a su consulta original\n\n═══════════════════════════════════════════════════════════════\n💬 TONO Y ESTILO\n═══════════════════════════════════════════════════════════════\n\n- Natural y cercano (como un seguimiento amigable)\n- Breve (máximo 2-3 líneas después de enviar la ficha)\n- Sin presión de venta\n- Emojis moderados (máximo 2)\n\nNO uses: \"che\", \"te copa\", \"dime\", \"hazme\", \"vale\"\n\n═══════════════════════════════════════════════════════════════\n✅ RECORDATORIO FINAL\n═══════════════════════════════════════════════════════════════\n\nEste NO es el flujo principal de calificación.\nEs solo un SEGUIMIENTO simple para:\n- Retomar contacto\n- Enviar la ficha si faltó\n- Ver si necesita algo más\n\nMantén la conversación SIMPLE y BREVE."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        -768
+      ],
+      "id": "a17bbaf7-94b0-4446-863b-141a0e50ce57",
+      "name": "RAG Agent1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const prevNode = $('Code - Verificar si hay items').item.json;\nconst historialResponse = $input.first().json;\nconst from = prevNode.remote_jid || 'desconocido';\nconst phoneNumber = prevNode.phone_number || 'desconocido';\nconst conversationId = prevNode.conversation_id || null;\nlet mensajes = [];\nif (Array.isArray(historialResponse)) { mensajes = historialResponse; }\nelse if (historialResponse.payload && Array.isArray(historialResponse.payload)) { mensajes = historialResponse.payload; }\nelse if (historialResponse.data && Array.isArray(historialResponse.data)) { mensajes = historialResponse.data; }\nif (mensajes.length === 0) { return [{ json: { contextoManual: 'SIN HISTORIAL PREVIO', sinMensajes: true, from, phoneNumber, conversationId } }]; }\nmensajes.sort((a, b) => (a.created_at || 0) - (b.created_at || 0));\nconst mensajesRecientes = mensajes.slice(-10);\nconst conversacion = mensajesRecientes.map(msg => { if (msg.message_type === 2) return null; const esCliente = msg.message_type === 0; let contenido = msg.content || ''; if (!contenido) return null; const quien = esCliente ? 'CLIENTE' : 'TU (MAGA)'; const fecha = new Date(msg.created_at * 1000); const timestamp = fecha.toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); return `[${timestamp}] ${quien}: ${contenido}`; }).filter(Boolean).join('\\n');\nconst contextoManual = `SEGUIMIENTO AUTOMATICO\\n\\n${conversacion}\\n\\nInstrucciones: Continua naturalmente, se breve.`;\nreturn [{ json: { contextoManual, totalMensajes: mensajesRecientes.length, from, phoneNumber, conversationId } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        368
+      ],
+      "id": "ce55caa1-8b36-4107-9f02-3c308022ec00",
+      "name": "Formatear Historial2"
+    },
+    {
+      "parameters": {
+        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations/{{ $json.conversation_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -320,
+        368
+      ],
+      "id": "7762c132-11a5-40d3-ac9a-852b8865b07c",
+      "name": "Obtener Historial Evolution2",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations/{{ $('SQL - Cancelar Seguimiento1').item.json.chatwoot_conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": {{ JSON.stringify($('RAG Agent1').item.json.output) }},\n  \"message_type\": \"outgoing\",\n  \"private\": false\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1648,
+        -944
+      ],
+      "id": "3608be86-2af5-4045-b8c0-dafe2351835f",
+      "name": "HTTP Request1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Xfa8MNHwcRpVe1r7",
+          "name": "Header Auth account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5",
+          "mode": "list",
+          "cachedResultName": "gpt-5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1088,
+        -208
+      ],
+      "id": "25dde4f7-ee6a-4b95-803e-e7427868ae98",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "BPTkrfKD8LOqnHgE",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "ceb58125-4a24-4075-86c9-f0a2f5959986",
+                    "leftValue": "={{ $('SQL - Cancelar Seguimiento1').item.json.seguimientos_count }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('SQL - Cancelar Seguimiento1').item.json.seguimientos_count }}",
+                    "rightValue": 0,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    },
+                    "id": "13d6bc87-b659-4c6a-90fe-8d94c266f5ca"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "4abd4a16-d734-4934-9f48-6d94f9093f98",
+                    "leftValue": "={{ $('SQL - Cancelar Seguimiento1').item.json.seguimientos_count }}",
+                    "rightValue": 1,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "a0c5a749-0876-43b1-82bc-1852ed5335e5",
+                    "leftValue": "={{ $('SQL - Cancelar Seguimiento1').item.json.seguimientos_count }}",
+                    "rightValue": "200",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "6068b380-d5f4-43b6-9515-8d889de45d4c",
+                    "leftValue": "={{ $('SQL - Cancelar Seguimiento1').item.json.seguimientos_count }}",
+                    "rightValue": 2,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "b5153ad5-7a03-4fa0-a831-c09857af30e0",
+                    "leftValue": "={{ $('SQL - Cancelar Seguimiento1').item.json.seguimientos_count }}",
+                    "rightValue": 3,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "00fa0e46-aee0-4fa2-953e-b348e3ce468e",
+                    "leftValue": "={{ $('SQL - Cancelar Seguimiento1').item.json.seguimientos_count }}",
+                    "rightValue": 4,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "b82abf84-c540-4980-8ea8-8e791c292088",
+                    "leftValue": "={{ $('SQL - Cancelar Seguimiento1').item.json.seguimientos_count }}",
+                    "rightValue": 5,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "399ea2c4-230a-49d4-9817-e85211bacf4a",
+                    "leftValue": "={{ $('SQL - Cancelar Seguimiento1').item.json.seguimientos_count }}",
+                    "rightValue": 6,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "d8db7c14-aff8-4c5a-8dc9-26dad4fc2481",
+                    "leftValue": "={{ $('SQL - Cancelar Seguimiento1').item.json.seguimientos_count }}",
+                    "rightValue": 7,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "655a67ca-52c0-49fa-befc-081fda29c896",
+                    "leftValue": "={{ $('SQL - Cancelar Seguimiento1').item.json.seguimientos_count }}",
+                    "rightValue": 8,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "2c027f37-a4d6-421b-96b3-e58e4ad05756",
+                    "leftValue": "={{ $('SQL - Cancelar Seguimiento1').item.json.seguimientos_count }}",
+                    "rightValue": 9,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "d829a104-51ff-4322-8ee7-1779a4c3a430",
+                    "leftValue": "={{ $('SQL - Cancelar Seguimiento1').item.json.seguimientos_count }}",
+                    "rightValue": 100,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "d3b00300-rule-4880-b95a-000000000001",
+                    "leftValue": "={{ $('SQL - Cancelar Seguimiento1').item.json.seguimientos_count }}",
+                    "rightValue": 300,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "d4b00400-rule-4880-b95a-000000000001",
+                    "leftValue": "={{ $('SQL - Cancelar Seguimiento1').item.json.seguimientos_count }}",
+                    "rightValue": 400,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        144,
+        208
+      ],
+      "id": "ff2d4bef-7931-4eb1-b253-4a7c19953afc",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH cs_updated AS (\n  UPDATE cola_seguimientos\n  SET seguimientos_count = 3\n  WHERE id = $1\n  RETURNING remote_jid\n)\nUPDATE leads\nSET seguimientos_count = 3\nFROM cs_updated\nWHERE leads.whatsapp_id = LTRIM(cs_updated.remote_jid, '+');",
+        "options": {
+          "queryReplacement": "={{ $('SQL - Cancelar Seguimiento1').item.json.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1536,
+        -48
+      ],
+      "id": "df8e156d-0cab-48c3-9593-6c43105390ab",
+      "name": "SQL - Marcar como Procesando2",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations/{{ $('SQL - Cancelar Seguimiento1').item.json.chatwoot_conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"Hola! Solo paso a confirmar si seguis interesado/a.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1328,
+        -48
+      ],
+      "id": "f363963c-83bd-43a5-948c-a6f2b3b9b5e7",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Xfa8MNHwcRpVe1r7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "1128023933718383",
+        "recipientPhoneNumber": "={{ $json.phoneNumber }}",
+        "template": "tercer_seguimiento|en"
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        256
+      ],
+      "id": "3dcaee0e-93d3-423f-ba1f-84ec275d7c88",
+      "name": "Send template1",
+      "webhookId": "515ac644-60ca-4054-b242-3e87a8fedcfc",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "eHcUbFu7RSJ5yw5T",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET seguimientos_count = COALESCE(seguimientos_count, 0) + 1 WHERE whatsapp_id = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';\nUPDATE cola_seguimientos SET seguimientos_count = COALESCE(seguimientos_count, 0) + 1 WHERE remote_jid = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1536,
+        256
+      ],
+      "id": "06416a06-5417-41ca-98ed-6ab2e2fff16f",
+      "name": "SQL - Marcar como Procesando4",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE cola_seguimientos SET fecha_programada = CASE WHEN seguimientos_count = 0 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 1 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 2 THEN NOW() + INTERVAL '15 days' WHEN seguimientos_count = 3 THEN NOW() + INTERVAL '3 months' WHEN seguimientos_count = 4 THEN NOW() + INTERVAL '6 months' WHEN seguimientos_count = 5 THEN NOW() + INTERVAL '1 year' ELSE fecha_programada END, estado = CASE WHEN seguimientos_count >= 5 THEN 'completado' ELSE 'pendiente' END WHERE id = {{ $('SQL - Cancelar Seguimiento1').item.json.id }} RETURNING id, remote_jid, estado, fecha_programada, seguimientos_count;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1840,
+        256
+      ],
+      "id": "9634b7a1-a479-49c2-838c-b6d4ac2f39e6",
+      "name": "SQL - Marcar como Procesando5",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations/{{ $('SQL - Cancelar Seguimiento1').item.json.chatwoot_conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"Hola! Solo para asegurarme que recibiste bien todo.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1328,
+        256
+      ],
+      "id": "eaff9561-eaf9-49ed-9bc1-960228d12c24",
+      "name": "HTTP Request2",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Xfa8MNHwcRpVe1r7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "1128023933718383",
+        "recipientPhoneNumber": "={{ $json.phoneNumber }}",
+        "template": "cuarto_seguimiento|en"
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        448
+      ],
+      "id": "7d1e2f97-a2b5-4551-926a-e7a634b969ee",
+      "name": "Send template2",
+      "webhookId": "515ac644-60ca-4054-b242-3e87a8fedcfc",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "eHcUbFu7RSJ5yw5T",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET seguimientos_count = COALESCE(seguimientos_count, 0) + 1 WHERE whatsapp_id = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';\nUPDATE cola_seguimientos SET seguimientos_count = COALESCE(seguimientos_count, 0) + 1 WHERE remote_jid = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1536,
+        448
+      ],
+      "id": "d6b08d61-f72b-4aee-a297-a9590903fb9f",
+      "name": "SQL - Marcar como Procesando6",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE cola_seguimientos SET fecha_programada = CASE WHEN seguimientos_count = 0 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 1 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 2 THEN NOW() + INTERVAL '15 days' WHEN seguimientos_count = 3 THEN NOW() + INTERVAL '3 months' WHEN seguimientos_count = 4 THEN NOW() + INTERVAL '6 months' WHEN seguimientos_count = 5 THEN NOW() + INTERVAL '1 year' ELSE fecha_programada END, estado = CASE WHEN seguimientos_count >= 5 THEN 'completado' ELSE 'pendiente' END WHERE id = {{ $('SQL - Cancelar Seguimiento1').item.json.id }} RETURNING id, remote_jid, estado, fecha_programada, seguimientos_count;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1840,
+        448
+      ],
+      "id": "0ce99b45-615c-4b90-8e5d-63a7959f684b",
+      "name": "SQL - Marcar como Procesando7",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations/{{ $('SQL - Cancelar Seguimiento1').item.json.chatwoot_conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"Consulto si esta propiedad sigue en tu radar.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1328,
+        448
+      ],
+      "id": "625a7689-a041-4b57-ac98-a5e008336185",
+      "name": "HTTP Request3",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Xfa8MNHwcRpVe1r7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "1128023933718383",
+        "recipientPhoneNumber": "={{ $json.phoneNumber }}",
+        "template": "quinto_seguimiento|en"
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        656
+      ],
+      "id": "a2ea63f8-a760-4c90-be15-af305aac6f00",
+      "name": "Send template3",
+      "webhookId": "515ac644-60ca-4054-b242-3e87a8fedcfc",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "eHcUbFu7RSJ5yw5T",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET seguimientos_count = COALESCE(seguimientos_count, 0) + 1 WHERE whatsapp_id = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';\nUPDATE cola_seguimientos SET seguimientos_count = COALESCE(seguimientos_count, 0) + 1 WHERE remote_jid = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1536,
+        656
+      ],
+      "id": "95869932-b813-4c60-8d2d-5d5cf077dea9",
+      "name": "SQL - Marcar como Procesando8",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE cola_seguimientos SET fecha_programada = CASE WHEN seguimientos_count = 0 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 1 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 2 THEN NOW() + INTERVAL '15 days' WHEN seguimientos_count = 3 THEN NOW() + INTERVAL '3 months' WHEN seguimientos_count = 4 THEN NOW() + INTERVAL '6 months' WHEN seguimientos_count = 5 THEN NOW() + INTERVAL '1 year' ELSE fecha_programada END, estado = CASE WHEN seguimientos_count >= 5 THEN 'completado' ELSE 'pendiente' END WHERE id = {{ $('SQL - Cancelar Seguimiento1').item.json.id }} RETURNING id, remote_jid, estado, fecha_programada, seguimientos_count;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1840,
+        656
+      ],
+      "id": "878dd569-0436-41a9-be83-9bdaae4c0eb4",
+      "name": "SQL - Marcar como Procesando9",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations/{{ $('SQL - Cancelar Seguimiento1').item.json.chatwoot_conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"Hace un mes te compartí info. Contame si seguis buscando.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1328,
+        656
+      ],
+      "id": "872960be-e9de-4f20-9931-f1d6b09d7e07",
+      "name": "HTTP Request4",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Xfa8MNHwcRpVe1r7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE cola_seguimientos SET fecha_programada = CASE WHEN seguimientos_count = 0 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 1 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 2 THEN NOW() + INTERVAL '15 days' WHEN seguimientos_count = 3 THEN NOW() + INTERVAL '3 months' WHEN seguimientos_count = 4 THEN NOW() + INTERVAL '6 months' WHEN seguimientos_count = 5 THEN NOW() + INTERVAL '1 year' ELSE fecha_programada END, estado = CASE WHEN seguimientos_count >= 5 THEN 'completado' ELSE 'pendiente' END WHERE id = $1 RETURNING id, remote_jid, estado, fecha_programada, seguimientos_count;",
+        "options": {
+          "queryReplacement": "={{ $('SQL - Cancelar Seguimiento1').item.json.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1840,
+        -48
+      ],
+      "id": "682c5e01-648c-4157-bb2f-f6f68de14195",
+      "name": "SQL - actualizar seguiemiento",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "1128023933718383",
+        "recipientPhoneNumber": "={{ $json.phoneNumber }}",
+        "template": "segundo_seguimiento|es_AR"
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        -48
+      ],
+      "id": "11a302f9-d534-48a6-8d5f-462e32db490e",
+      "name": "Send template",
+      "webhookId": "515ac644-60ca-4054-b242-3e87a8fedcfc",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "eHcUbFu7RSJ5yw5T",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET seguimientos_count = COALESCE(seguimientos_count, 0) + 1 WHERE whatsapp_id = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1552,
+        928
+      ],
+      "id": "198cac21-9e57-486c-a123-929aadba6f68",
+      "name": "SQL - Marcar como Procesando3",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations/{{ $json.chatwoot_conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"Hola! Solo paso a confirmar si seguis interesado/a.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1360,
+        928
+      ],
+      "id": "a22ab4e8-c144-44ac-aded-637a54354574",
+      "name": "HTTP Request5",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Xfa8MNHwcRpVe1r7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "952223914630147",
+        "recipientPhoneNumber": "={{ $json.phoneNumber }}",
+        "template": "tibio_tercero|en"
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        1120
+      ],
+      "id": "4a02d71b-9a1b-4643-95d5-1dbcc1b6fe96",
+      "name": "Send template4",
+      "webhookId": "515ac644-60ca-4054-b242-3e87a8fedcfc",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "eHcUbFu7RSJ5yw5T",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET seguimientos_count = COALESCE(seguimientos_count, 0) + 1 WHERE whatsapp_id = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1552,
+        1120
+      ],
+      "id": "7c547cd4-02d0-4644-be50-afe40acf9745",
+      "name": "SQL - Marcar como Procesando10",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE cola_seguimientos SET fecha_programada = CASE WHEN seguimientos_count = 0 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 1 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 2 THEN NOW() + INTERVAL '15 days' WHEN seguimientos_count = 3 THEN NOW() + INTERVAL '3 months' WHEN seguimientos_count = 4 THEN NOW() + INTERVAL '6 months' WHEN seguimientos_count = 5 THEN NOW() + INTERVAL '1 year' ELSE fecha_programada END, estado = CASE WHEN seguimientos_count >= 5 THEN 'completado' ELSE 'pendiente' END WHERE id = {{ $('SQL - Cancelar Seguimiento1').item.json.id }} RETURNING id, remote_jid, estado, fecha_programada, seguimientos_count;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1856,
+        1120
+      ],
+      "id": "564bb57c-9cf9-4b95-a715-1f5c46ace6f6",
+      "name": "SQL - Marcar como Procesando11",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations/{{ $('SQL - Cancelar Seguimiento1').item.json.chatwoot_conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"Solo paso a confirmar si seguis interesado/a.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        1120
+      ],
+      "id": "c42fb9ba-ee47-471f-a14a-809ff2dc6ac2",
+      "name": "HTTP Request6",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Xfa8MNHwcRpVe1r7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "952223914630147",
+        "recipientPhoneNumber": "={{ $json.phoneNumber }}",
+        "template": "tibio_cuarto|en"
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        1312
+      ],
+      "id": "99723c53-d569-4e7e-9bdd-44fae7acc693",
+      "name": "Send template5",
+      "webhookId": "515ac644-60ca-4054-b242-3e87a8fedcfc",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "eHcUbFu7RSJ5yw5T",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET seguimientos_count = COALESCE(seguimientos_count, 0) + 1 WHERE whatsapp_id = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1552,
+        1312
+      ],
+      "id": "6d91520c-9e6e-4e1a-9c01-1f2eb5a80753",
+      "name": "SQL - Marcar como Procesando12",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE cola_seguimientos SET fecha_programada = CASE WHEN seguimientos_count = 0 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 1 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 2 THEN NOW() + INTERVAL '15 days' WHEN seguimientos_count = 3 THEN NOW() + INTERVAL '3 months' WHEN seguimientos_count = 4 THEN NOW() + INTERVAL '6 months' WHEN seguimientos_count = 5 THEN NOW() + INTERVAL '1 year' ELSE fecha_programada END, estado = CASE WHEN seguimientos_count >= 5 THEN 'completado' ELSE 'pendiente' END WHERE id = {{ $('SQL - Cancelar Seguimiento1').item.json.id }} RETURNING id, remote_jid, estado, fecha_programada, seguimientos_count;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1856,
+        1312
+      ],
+      "id": "694307a9-96e1-4a20-8ea3-49016ddf1d9c",
+      "name": "SQL - Marcar como Procesando13",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations/{{ $('SQL - Cancelar Seguimiento1').item.json.chatwoot_conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"Solo paso a confirmar si seguis interesado/a.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        1312
+      ],
+      "id": "eee0a272-522f-4648-96a5-17a717ebc0b4",
+      "name": "HTTP Request7",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Xfa8MNHwcRpVe1r7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "1128023933718383",
+        "recipientPhoneNumber": "={{ $json.phoneNumber }}",
+        "template": "generico|es_AR"
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        1520
+      ],
+      "id": "25730516-34e1-4543-87a6-8bc3024bf5af",
+      "name": "Send template6",
+      "webhookId": "515ac644-60ca-4054-b242-3e87a8fedcfc",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "eHcUbFu7RSJ5yw5T",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET seguimientos_count = COALESCE(seguimientos_count, 0) + 1 WHERE whatsapp_id = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1552,
+        1520
+      ],
+      "id": "d8a53ecb-bd59-4075-977e-d29f55cd1606",
+      "name": "SQL - Marcar como Procesando14",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE cola_seguimientos SET fecha_programada = CASE WHEN seguimientos_count = 0 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 1 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 2 THEN NOW() + INTERVAL '15 days' WHEN seguimientos_count = 3 THEN NOW() + INTERVAL '3 months' WHEN seguimientos_count = 4 THEN NOW() + INTERVAL '6 months' WHEN seguimientos_count = 5 THEN NOW() + INTERVAL '1 year' ELSE fecha_programada END, estado = CASE WHEN seguimientos_count >= 5 THEN 'completado' ELSE 'pendiente' END WHERE id = {{ $('SQL - Cancelar Seguimiento1').item.json.id }} RETURNING id, remote_jid, estado, fecha_programada, seguimientos_count;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1856,
+        1520
+      ],
+      "id": "c7cd82a9-e96d-437d-a43e-f86b409f8ec5",
+      "name": "SQL - Marcar como Procesando15",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations/{{ $('SQL - Cancelar Seguimiento1').item.json.chatwoot_conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"Solo paso a confirmar si seguis interesado/a.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        1520
+      ],
+      "id": "3be0b4a1-a9d5-4d8e-a6be-3674b0120fc9",
+      "name": "HTTP Request8",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Xfa8MNHwcRpVe1r7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE cola_seguimientos SET fecha_programada = CASE WHEN seguimientos_count = 0 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 1 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 2 THEN NOW() + INTERVAL '15 days' WHEN seguimientos_count = 3 THEN NOW() + INTERVAL '3 months' WHEN seguimientos_count = 4 THEN NOW() + INTERVAL '6 months' WHEN seguimientos_count = 5 THEN NOW() + INTERVAL '1 year' ELSE fecha_programada END, estado = CASE WHEN seguimientos_count >= 5 THEN 'completado' ELSE 'pendiente' END WHERE id = {{ $('SQL - Cancelar Seguimiento1').item.json.id }} RETURNING id, remote_jid, estado, fecha_programada, seguimientos_count;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1856,
+        928
+      ],
+      "id": "ce4fc6c0-c133-4d1f-b2de-281a8493e497",
+      "name": "SQL - actualizar seguiemiento1",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "1128023933718383",
+        "recipientPhoneNumber": "={{ $json.meta.sender.phone_number }}",
+        "template": "generico|es_AR"
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        -560
+      ],
+      "id": "c1cce05d-b789-469e-a573-40cd6ffcef3b",
+      "name": "Send template7",
+      "webhookId": "515ac644-60ca-4054-b242-3e87a8fedcfc",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "eHcUbFu7RSJ5yw5T",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE cola_seguimientos SET fecha_programada = CASE WHEN seguimientos_count IS NULL THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 0 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 1 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 2 THEN NOW() + INTERVAL '15 days' WHEN seguimientos_count = 3 THEN NOW() + INTERVAL '3 months' WHEN seguimientos_count = 4 THEN NOW() + INTERVAL '6 months' WHEN seguimientos_count = 5 THEN NOW() + INTERVAL '1 year' ELSE fecha_programada END, estado = CASE WHEN seguimientos_count >= 5 THEN 'completado' ELSE 'pendiente' END WHERE id = $1 RETURNING id, remote_jid, estado, fecha_programada, seguimientos_count;",
+        "options": {
+          "queryReplacement": "={{ $('SQL - Cancelar Seguimiento1').item.json.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1936,
+        -768
+      ],
+      "id": "c4fe496f-9daa-4f7a-a47e-56644c0e0297",
+      "name": "SQL - Actualizar seguimiento programado",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH cs_updated AS (\n  UPDATE cola_seguimientos\n  SET seguimientos_count = COALESCE(seguimientos_count, 0) + 1\n  WHERE id = $1\n  RETURNING remote_jid\n)\nUPDATE leads\nSET seguimientos_count = COALESCE(seguimientos_count, 0) + 1\nFROM cs_updated\nWHERE leads.whatsapp_id = LTRIM(cs_updated.remote_jid, '+');",
+        "options": {
+          "queryReplacement": "={{ $('SQL - Cancelar Seguimiento1').item.json.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1632,
+        -768
+      ],
+      "id": "604c4577-b537-42d2-af63-eb66ff608654",
+      "name": "SQL - Actualiza seguimientos_count",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COALESCE(l.estado_chat, 1) AS estado_chat, COALESCE(l.whatsapp_id, $1) AS whatsapp_id FROM (SELECT 1) dummy LEFT JOIN leads l ON l.whatsapp_id = $1 LIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ $json.remote_jid.replace('+', '') }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1024,
+        160
+      ],
+      "id": "c558d808-5863-42d3-9b73-3170cdaaaee4",
+      "name": "SQL - Cancelar Seguimiento",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6d52bd36-b56f-411d-a5e3-2094e1ea8d73",
+              "leftValue": "={{ $json.estado_chat }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -816,
+        160
+      ],
+      "id": "fd416e1f-c589-4f28-9cd0-f417f2c48c89",
+      "name": "Is Conv Active?",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "errorMessage": "a"
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        -544,
+        176
+      ],
+      "id": "999c4679-e491-42dd-807a-4c337690660a",
+      "name": "Stop and Error"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-contact-id",
+              "leftValue": "={{ $json.contact_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            },
+            {
+              "id": "746991cf-8679-4772-b841-67ace92c234b",
+              "leftValue": "={{ $json.payload[0].id }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -976,
+        -336
+      ],
+      "id": "53084b83-bdc7-43c3-8fe8-5897a314a399",
+      "name": "IF - Encontro Contacto1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"inbox_id\": 3,\n  \"contact_id\": {{ $json.payload?.[0]?.id || $json.payload?.contact?.id }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -512,
+        -352
+      ],
+      "id": "edaafe1d-4792-49f0-a293-f00fa4a99c73",
+      "name": "Chatwoot - Crear Conversacion1"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/1 14-19 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2288,
+        -352
+      ],
+      "id": "fd6923d4-a5b1-44b4-a6cf-313ac8dec3e3",
+      "name": "Schedule Trigger1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, remote_jid, chatwoot_conversation_id, seguimientos_count FROM cola_seguimientos WHERE seguimientos_count IN (100, 101, 102, 103) LIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -2048,
+        -352
+      ],
+      "id": "cd229c6c-daab-444c-9e69-f64840bf59e8",
+      "name": "SQL - Cancelar Seguimiento2",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/contacts/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.phone_normalized }}"
+            },
+            {
+              "name": "include_contacts",
+              "value": "true"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1216,
+        -336
+      ],
+      "id": "4f977cc1-bff3-4dcc-8f68-4abae6a572c9",
+      "name": "Chatwoot - Buscar Contacto2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations/{{ $json.id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"Hola! Como estas? Soy Maga.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -224,
+        -352
+      ],
+      "id": "928d6833-8847-492a-a303-8cde81584c5f",
+      "name": "Chatwoot - Postear Mensaje"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET seguimientos_count = 200 WHERE whatsapp_id = '{{ $('SQL - Cancelar Seguimiento2').item.json.remote_jid }}';\nUPDATE cola_seguimientos SET seguimientos_count = 200 WHERE remote_jid = '{{ $('SQL - Cancelar Seguimiento2').item.json.remote_jid }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        16,
+        -496
+      ],
+      "id": "69ee1935-a74b-4ab9-a217-05b0c1277a5c",
+      "name": "SQL - Marcar como Procesando",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE cola_seguimientos SET fecha_programada = CASE WHEN seguimientos_count = 0 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 1 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 2 THEN NOW() + INTERVAL '15 days' WHEN seguimientos_count = 3 THEN NOW() + INTERVAL '3 months' WHEN seguimientos_count = 4 THEN NOW() + INTERVAL '6 months' WHEN seguimientos_count = 5 THEN NOW() + INTERVAL '1 year' ELSE fecha_programada END, estado = CASE WHEN seguimientos_count >= 5 THEN 'completado' ELSE 'pendiente' END WHERE id = {{ $('SQL - Cancelar Seguimiento2').item.json.id }} RETURNING id, remote_jid, estado, fecha_programada, seguimientos_count;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        320,
+        -496
+      ],
+      "id": "4dea5e56-647d-472e-8a2a-47a4aac27e4e",
+      "name": "SQL - Marcar como Procesando16",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const remoteJid = $('SQL - Cancelar Seguimiento2').item.json.remote_jid;\nif (remoteJid === null || remoteJid === undefined) { return [{ json: { ...$input.item.json, phone_normalized: '', phone_invalid: true } }]; }\nlet raw = String(remoteJid).replace('@s.whatsapp.net', '').replace('@c.us', '').trim();\nif (raw === '') { return [{ json: { ...$input.item.json, phone_normalized: '', phone_invalid: true } }]; }\nconst hasPlus = raw.startsWith('+');\nconst digits = raw.replace(/\\D/g, '');\nconst cleaned = hasPlus ? '+' + digits : digits;\nconst E164_REGEX = /^\\+[1-9]\\d{7,14}$/;\nlet normalized = '';\nif (digits.length === 0) { normalized = ''; } else if (hasPlus && E164_REGEX.test(cleaned)) { normalized = cleaned; } else if (digits.startsWith('54')) { normalized = '+' + digits; } else if (digits.startsWith('0')) { normalized = '+549' + digits.slice(1); } else if (digits.startsWith('9') && digits.length >= 11) { normalized = '+54' + digits; } else if (digits.length === 10) { normalized = '+549' + digits; } else { normalized = ''; }\nconst isValid = normalized !== '' && E164_REGEX.test(normalized);\nreturn [{ json: { ...$input.item.json, phone_normalized: isValid ? normalized : '', phone_invalid: !isValid } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1840,
+        -352
+      ],
+      "id": "96addcce-675c-4f7e-b9ef-3a045f3f39c2",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/contacts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"phone_number\": \"{{ $('Code in JavaScript').item.json.phone_normalized }}\",\n  \"name\": \"{{ $('Code in JavaScript').item.json.remote_jid }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -768,
+        -144
+      ],
+      "id": "3c9040bd-02ae-4ea8-8231-f0dad3215a75",
+      "name": "Chatwoot - Crear Contacto1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations/{{ $('SQL - Cancelar Seguimiento1').item.json.chatwoot_conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"Solo paso a confirmar si seguis interesado/a.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1328,
+        112
+      ],
+      "id": "e0211c22-d56f-49de-8edc-d577a1a1b28c",
+      "name": "HTTP Request9",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Xfa8MNHwcRpVe1r7",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE cola_seguimientos SET fecha_programada = CASE WHEN seguimientos_count = 0 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 1 THEN NOW() + INTERVAL '7 days' WHEN seguimientos_count = 2 THEN NOW() + INTERVAL '15 days' WHEN seguimientos_count = 3 THEN NOW() + INTERVAL '3 months' WHEN seguimientos_count = 4 THEN NOW() + INTERVAL '6 months' WHEN seguimientos_count = 5 THEN NOW() + INTERVAL '1 year' ELSE fecha_programada END, estado = CASE WHEN seguimientos_count >= 5 THEN 'completado' ELSE 'pendiente' END WHERE id = {{ $('SQL - Cancelar Seguimiento1').item.json.id }} RETURNING id, remote_jid, estado, fecha_programada, seguimientos_count;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1840,
+        112
+      ],
+      "id": "bb0e3364-0e88-40fe-b673-98790e865c16",
+      "name": "SQL - actualizar seguiemiento2",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "1128023933718383",
+        "recipientPhoneNumber": "={{ $json.phoneNumber }}",
+        "template": "segundo_seguimiento|es_AR"
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        112
+      ],
+      "id": "e5892b4a-50fe-460e-8557-294b002c904d",
+      "name": "Send template8",
+      "webhookId": "515ac644-60ca-4054-b242-3e87a8fedcfc",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "eHcUbFu7RSJ5yw5T",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET seguimientos_count = 3 WHERE whatsapp_id = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';\nUPDATE cola_seguimientos SET seguimientos_count = 3 WHERE remote_jid = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1536,
+        112
+      ],
+      "id": "41538488-ae78-4a63-a042-4b9dff26cdbb",
+      "name": "SQL - Marcar como Procesando 200",
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "f4a1c8de-0001-4b3e-9e10-phoneinvalid",
+              "leftValue": "={{ $json.phone_invalid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "5e130943-53d6-4ea2-9f9d-0bc046e426ab",
+      "name": "IF - Phone Valido",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1632,
+        -352
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE cola_seguimientos SET seguimientos_count = 999 WHERE id = $1;",
+        "options": {
+          "queryReplacement": "={{ $('SQL - Cancelar Seguimiento2').item.json.id }}"
+        }
+      },
+      "id": "cd4aa92e-d6ba-47cd-9fa8-856ccad2e7aa",
+      "name": "SQL - Marcar Phone Invalid",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1216,
+        -544
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "51fa6e5a-051f-41b7-b16a-3317aef41bbd",
+      "name": "SQL - Reset estado a frio (RAG)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2216,
+        -768
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET estado = 'frio' WHERE whatsapp_id = $1 AND estado IN ('tibio', 'caliente');",
+        "options": {
+          "queryReplacement": "={{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "550c8dcb-fc64-490a-a0ae-d96d10755693",
+      "name": "SQL - Reset estado a frio (TPL 0)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2120,
+        -48
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET estado = 'frio' WHERE whatsapp_id = $1 AND estado IN ('tibio', 'caliente');",
+        "options": {
+          "queryReplacement": "={{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "db63304d-08e3-4dfc-b2c7-c09ef9fcb744",
+      "name": "SQL - Reset estado a frio (TPL 200)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2120,
+        112
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET estado = 'frio' WHERE whatsapp_id = $1 AND estado IN ('tibio', 'caliente');",
+        "options": {
+          "queryReplacement": "={{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "17e4dfa3-94d2-4005-8bf1-ce228283de69",
+      "name": "SQL - Reset estado a frio (TPL 1)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2120,
+        256
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET estado = 'frio' WHERE whatsapp_id = $1 AND estado IN ('tibio', 'caliente');",
+        "options": {
+          "queryReplacement": "={{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "04af3d8d-b7f3-478a-9e79-00aad108c56c",
+      "name": "SQL - Reset estado a frio (TPL 2)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2120,
+        448
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET estado = 'frio' WHERE whatsapp_id = $1 AND estado IN ('tibio', 'caliente');",
+        "options": {
+          "queryReplacement": "={{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "60075efc-2e2c-48e9-a281-d77fc81087b1",
+      "name": "SQL - Reset estado a frio (TPL 3)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2120,
+        656
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET estado = 'frio' WHERE whatsapp_id = $1 AND estado IN ('tibio', 'caliente');",
+        "options": {
+          "queryReplacement": "={{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c18d2dc0-0702-40e5-9d39-7ee394daf9b0",
+      "name": "SQL - Reset estado a frio (Generico)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        600,
+        -496
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET estado = 'frio' WHERE whatsapp_id = $1 AND estado IN ('tibio', 'caliente');",
+        "options": {
+          "queryReplacement": "={{ $('SQL - Cancelar Seguimiento2').item.json.remote_jid }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "bv00a1c2-0001-4aaa-8bbb-000000000300",
+      "name": "Send template baja valor",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        1720
+      ],
+      "webhookId": "515ac644-60ca-4054-b242-3e87a8fedcfc",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "eHcUbFu7RSJ5yw5T",
+          "name": "WhatsApp account"
+        }
+      },
+      "parameters": {
+        "phoneNumberId": "1128023933718383",
+        "recipientPhoneNumber": "={{ $json.phoneNumber }}",
+        "template": "baja_valor|es_AR"
+      }
+    },
+    {
+      "id": "bv00a1c2-0002-4aaa-8bbb-000000000300",
+      "name": "HTTP Request baja valor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        1720
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Xfa8MNHwcRpVe1r7",
+          "name": "Header Auth account"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations/{{ $('SQL - Cancelar Seguimiento1').item.json.chatwoot_conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"Hola, \\u00bfc\\u00f3mo est\\u00e1s? \\ud83d\\ude0a\\nTe escribo porque la propiedad que hab\\u00edas consultado tuvo una modificaci\\u00f3n de valor y pens\\u00e9 en vos autom\\u00e1ticamente.\\n\\nQuer\\u00eda saber si segu\\u00eds con inter\\u00e9s o todav\\u00eda est\\u00e1s buscando algo en esa l\\u00ednea, as\\u00ed puedo enviarte la informaci\\u00f3n actualizada.\\n\\nMaga | Team Ali | Remax City Bell\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "bv00a1c2-0003-4aaa-8bbb-000000000300",
+      "name": "SQL - Set count 3 (baja valor)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1552,
+        1720
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads\nSET seguimientos_count = 3\nWHERE whatsapp_id = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';\n\n-- Reiniciar ciclo desde toque 3\nUPDATE cola_seguimientos\nSET seguimientos_count = 3\nWHERE remote_jid = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';",
+        "options": {}
+      }
+    },
+    {
+      "id": "bv00a1c2-0004-4aaa-8bbb-000000000300",
+      "name": "SQL - Reprogramar (baja valor)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1856,
+        1720
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE cola_seguimientos\nSET \n  fecha_programada = CASE \n    WHEN seguimientos_count = 0 THEN NOW() + INTERVAL '7 days'\n    WHEN seguimientos_count = 1 THEN NOW() + INTERVAL '7 days'\n    WHEN seguimientos_count = 2 THEN NOW() + INTERVAL '15 days'\n    WHEN seguimientos_count = 3 THEN NOW() + INTERVAL '3 months'\n    WHEN seguimientos_count = 4 THEN NOW() + INTERVAL '6 months'\n    WHEN seguimientos_count = 5 THEN NOW() + INTERVAL '1 year'\n    ELSE fecha_programada\n  END,\n  estado = CASE\n    WHEN seguimientos_count >= 5 THEN 'completado'\n    ELSE 'pendiente'\n  END\nWHERE id = {{ $('SQL - Cancelar Seguimiento1').item.json.id }}\nRETURNING id, remote_jid, estado, fecha_programada, seguimientos_count;",
+        "options": {}
+      }
+    },
+    {
+      "id": "bv00a1c2-0005-4aaa-8bbb-000000000300",
+      "name": "SQL - Reset estado frio (baja valor)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2120,
+        1720
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET estado = 'frío' WHERE whatsapp_id = $1 AND estado IN ('tibio', 'caliente');",
+        "options": {
+          "queryReplacement": "={{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "id": "pv00a1c2-0001-4aaa-8bbb-000000000400",
+      "name": "Send template plantilla venta",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        1920
+      ],
+      "webhookId": "515ac644-60ca-4054-b242-3e87a8fedcfc",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "eHcUbFu7RSJ5yw5T",
+          "name": "WhatsApp account"
+        }
+      },
+      "parameters": {
+        "phoneNumberId": "1128023933718383",
+        "recipientPhoneNumber": "={{ $json.phoneNumber }}",
+        "template": "plantilla_venta|es_AR"
+      }
+    },
+    {
+      "id": "pv00a1c2-0002-4aaa-8bbb-000000000400",
+      "name": "HTTP Request plantilla venta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        1920
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Xfa8MNHwcRpVe1r7",
+          "name": "Header Auth account"
+        }
+      },
+      "parameters": {
+        "method": "POST",
+        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations/{{ $('SQL - Cancelar Seguimiento1').item.json.chatwoot_conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api_access_token",
+              "value": "axxJevEaPpRy4VJTfHS93LQr"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"Hola, \\u00bfc\\u00f3mo est\\u00e1s?\\nSoy Maga, asistente de Andr\\u00e9s Ali de RE\\/MAX City Bell \\ud83d\\ude0a\\n\\nRecordaba que hace un tiempo hab\\u00edamos hablado y me comentaste que para avanzar con una compra primero necesitabas vender tu propiedad.\\n\\nTe escribo porque hoy una buena estrategia y comercializaci\\u00f3n hacen la diferencia en el mercado.\\n\\nSi te parece, coordinamos una reuni\\u00f3n, llamada o visita y realizamos una cotizaci\\u00f3n sin cargo para evaluar posibilidades reales.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "pv00a1c2-0003-4aaa-8bbb-000000000400",
+      "name": "SQL - Set count 3 (plantilla venta)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1552,
+        1920
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads\nSET seguimientos_count = 3\nWHERE whatsapp_id = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';\n\n-- Reiniciar ciclo desde toque 3\nUPDATE cola_seguimientos\nSET seguimientos_count = 3\nWHERE remote_jid = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';",
+        "options": {}
+      }
+    },
+    {
+      "id": "pv00a1c2-0004-4aaa-8bbb-000000000400",
+      "name": "SQL - Reprogramar (plantilla venta)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1856,
+        1920
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE cola_seguimientos\nSET \n  fecha_programada = CASE \n    WHEN seguimientos_count = 0 THEN NOW() + INTERVAL '7 days'\n    WHEN seguimientos_count = 1 THEN NOW() + INTERVAL '7 days'\n    WHEN seguimientos_count = 2 THEN NOW() + INTERVAL '15 days'\n    WHEN seguimientos_count = 3 THEN NOW() + INTERVAL '3 months'\n    WHEN seguimientos_count = 4 THEN NOW() + INTERVAL '6 months'\n    WHEN seguimientos_count = 5 THEN NOW() + INTERVAL '1 year'\n    ELSE fecha_programada\n  END,\n  estado = CASE\n    WHEN seguimientos_count >= 5 THEN 'completado'\n    ELSE 'pendiente'\n  END\nWHERE id = {{ $('SQL - Cancelar Seguimiento1').item.json.id }}\nRETURNING id, remote_jid, estado, fecha_programada, seguimientos_count;",
+        "options": {}
+      }
+    },
+    {
+      "id": "pv00a1c2-0005-4aaa-8bbb-000000000400",
+      "name": "SQL - Reset estado frio (plantilla venta)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2120,
+        1920
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "YT3mNrhEyWrQj9o3",
+          "name": "Postgres account"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET estado = 'frío' WHERE whatsapp_id = $1 AND estado IN ('tibio', 'caliente');",
+        "options": {
+          "queryReplacement": "={{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "SQL - Cancelar Seguimiento1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Cancelar Seguimiento1": {
+      "main": [
+        [
+          {
+            "node": "Code - Verificar si hay items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Verificar si hay items": {
+      "main": [
+        [
+          {
+            "node": "Obtener Historial Evolution2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reranker Cohere1": {
+      "ai_reranker": [
+        [
+          {
+            "node": "Supabase Vector Store1",
+            "type": "ai_reranker",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Vector Store1": {
+      "ai_tool": [
+        [
+          {
+            "node": "RAG Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI1": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Supabase Vector Store1",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener Historial Evolution2": {
+      "main": [
+        [
+          {
+            "node": "Formatear Historial2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatear Historial2": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG Agent1": {
+      "main": [
+        [
+          {
+            "node": "SQL - Actualiza seguimientos_count",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "RAG Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "RAG Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "RAG Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send template",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send template8",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send template1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send template2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send template3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [
+          {
+            "node": "Send template baja valor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send template plantilla venta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Marcar como Procesando2": {
+      "main": [
+        [
+          {
+            "node": "SQL - actualizar seguiemiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send template1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Marcar como Procesando4": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send template2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Marcar como Procesando6": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send template3": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Marcar como Procesando8": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request4": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send template": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Marcar como Procesando3": {
+      "main": [
+        [
+          {
+            "node": "SQL - actualizar seguiemiento1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request5": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send template4": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Marcar como Procesando10": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request6": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send template5": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Marcar como Procesando12": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando13",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request7": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send template6": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Marcar como Procesando14": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando15",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request8": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando14",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Actualiza seguimientos_count": {
+      "main": [
+        [
+          {
+            "node": "SQL - Actualizar seguimiento programado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Cancelar Seguimiento": {
+      "main": [
+        [
+          {
+            "node": "Is Conv Active?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Conv Active?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Stop and Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Encontro Contacto1": {
+      "main": [
+        [
+          {
+            "node": "Chatwoot - Crear Conversacion1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Chatwoot - Crear Contacto1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot - Crear Conversacion1": {
+      "main": [
+        [
+          {
+            "node": "Chatwoot - Postear Mensaje",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send template7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "SQL - Cancelar Seguimiento2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Cancelar Seguimiento2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot - Buscar Contacto2": {
+      "main": [
+        [
+          {
+            "node": "IF - Encontro Contacto1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Marcar como Procesando": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando16",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot - Postear Mensaje": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chatwoot - Crear Contacto1": {
+      "main": [
+        [
+          {
+            "node": "Chatwoot - Crear Conversacion1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request9": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar como Procesando 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send template8": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Marcar como Procesando 200": {
+      "main": [
+        [
+          {
+            "node": "SQL - actualizar seguiemiento2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "IF - Phone Valido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Phone Valido": {
+      "main": [
+        [
+          {
+            "node": "SQL - Marcar Phone Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Chatwoot - Buscar Contacto2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Actualizar seguimiento programado": {
+      "main": [
+        [
+          {
+            "node": "SQL - Reset estado a frio (RAG)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - actualizar seguiemiento": {
+      "main": [
+        [
+          {
+            "node": "SQL - Reset estado a frio (TPL 0)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - actualizar seguiemiento2": {
+      "main": [
+        [
+          {
+            "node": "SQL - Reset estado a frio (TPL 200)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Marcar como Procesando5": {
+      "main": [
+        [
+          {
+            "node": "SQL - Reset estado a frio (TPL 1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Marcar como Procesando7": {
+      "main": [
+        [
+          {
+            "node": "SQL - Reset estado a frio (TPL 2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Marcar como Procesando9": {
+      "main": [
+        [
+          {
+            "node": "SQL - Reset estado a frio (TPL 3)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Marcar como Procesando16": {
+      "main": [
+        [
+          {
+            "node": "SQL - Reset estado a frio (Generico)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send template baja valor": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request baja valor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request baja valor": {
+      "main": [
+        [
+          {
+            "node": "SQL - Set count 3 (baja valor)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Set count 3 (baja valor)": {
+      "main": [
+        [
+          {
+            "node": "SQL - Reprogramar (baja valor)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Reprogramar (baja valor)": {
+      "main": [
+        [
+          {
+            "node": "SQL - Reset estado frio (baja valor)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send template plantilla venta": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request plantilla venta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request plantilla venta": {
+      "main": [
+        [
+          {
+            "node": "SQL - Set count 3 (plantilla venta)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Set count 3 (plantilla venta)": {
+      "main": [
+        [
+          {
+            "node": "SQL - Reprogramar (plantilla venta)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL - Reprogramar (plantilla venta)": {
+      "main": [
+        [
+          {
+            "node": "SQL - Reset estado frio (plantilla venta)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Argentina/Buenos_Aires"
+  },
+  "staticData": {
+    "node:Schedule Trigger": {
+      "recurrenceRules": [
+        16
+      ]
+    },
+    "node:Schedule Trigger1": {
+      "recurrenceRules": []
+    }
+  },
+  "id": "LbBE3PePXgn3mhZc"
+}
