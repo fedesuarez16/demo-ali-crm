@@ -7,6 +7,7 @@ import { getAllLeads, campaignNumericFingerprint } from "../services/leadService
 import { getKanbanColumns } from '@/app/services/columnService';
 import { getSystemCosts, updateSystemCosts, type SystemCosts } from '@/app/services/systemCostService';
 import { ChartBarLeadsPorEstado } from '@/app/components/ChartBarLeadsPorEstado';
+import { ChartBarTicketPorCampana } from '@/app/components/ChartBarTicketPorCampana';
 import { CostoPorLeadCard } from '@/app/components/CostoPorLeadCard';
 import { ChartAreaInteractive } from "@/components/ui/chart-area-interactive";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -622,6 +623,16 @@ export default function Page() {
     [],
   );
 
+  const usdFormatter = useMemo(
+    () => new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+      minimumFractionDigits: 0,
+    }),
+    [],
+  );
+
   const ticketPromedio = useMemo(() => {
     const withBudget = leads.filter(l => l.presupuesto > 0);
     if (withBudget.length === 0) return null;
@@ -987,13 +998,14 @@ export default function Page() {
                   <path d="M2 10h20" />
                 </svg>
               </CardHeader>
-              <CardContent className="p-4 pt-0">
+              <CardContent className="p-4 pt-0 space-y-3">
                 <div className="text-xl font-bold leading-tight tabular-nums">
-                  {ticketTotalCampanas > 0 ? arsFormatter.format(ticketTotalCampanas) : '—'}
+                  {ticketTotalCampanas > 0 ? usdFormatter.format(ticketTotalCampanas) : '—'}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Suma de presupuestos de leads con campaña asignada
                 </p>
+                <ChartBarTicketPorCampana data={ticketPorCampana} className="w-full" />
               </CardContent>
             </Card>
 
@@ -1009,34 +1021,34 @@ export default function Page() {
                   <p className="text-sm text-muted-foreground">Sin datos de presupuesto por campaña.</p>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="py-2 text-left font-medium">Campaña</th>
-                          <th className="py-2 text-right font-medium">Leads</th>
-                          <th className="py-2 text-right font-medium">Total ARS</th>
-                          <th className="py-2 text-right font-medium">Promedio ARS</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ticketPorCampana.map(r => (
-                          <tr key={r.campaign} className="border-b last:border-b-0">
-                            <td className="py-1.5 text-left max-w-[140px] truncate" title={r.campaign}>{r.campaign}</td>
-                            <td className="py-1.5 text-right tabular-nums">{r.count}</td>
-                            <td className="py-1.5 text-right tabular-nums">{arsFormatter.format(r.total)}</td>
-                            <td className="py-1.5 text-right tabular-nums">{arsFormatter.format(r.promedio)}</td>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="py-2 text-left font-medium">Campaña</th>
+                            <th className="py-2 text-right font-medium">Leads</th>
+                            <th className="py-2 text-right font-medium">Total USD</th>
+                            <th className="py-2 text-right font-medium">Promedio USD</th>
                           </tr>
-                        ))}
-                        <tr className="border-t-2 font-semibold">
-                          <td className="py-1.5">Total</td>
-                          <td className="py-1.5 text-right tabular-nums">
-                            {ticketPorCampana.reduce((s, r) => s + r.count, 0)}
-                          </td>
-                          <td className="py-1.5 text-right tabular-nums">{arsFormatter.format(ticketTotalCampanas)}</td>
-                          <td className="py-1.5 text-right tabular-nums">—</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {ticketPorCampana.map(r => (
+                            <tr key={r.campaign} className="border-b last:border-b-0">
+                              <td className="py-1.5 text-left max-w-[140px] truncate" title={r.campaign}>{r.campaign}</td>
+                              <td className="py-1.5 text-right tabular-nums">{r.count}</td>
+                              <td className="py-1.5 text-right tabular-nums">{usdFormatter.format(r.total)}</td>
+                              <td className="py-1.5 text-right tabular-nums">{usdFormatter.format(r.promedio)}</td>
+                            </tr>
+                          ))}
+                          <tr className="border-t-2 font-semibold">
+                            <td className="py-1.5">Total</td>
+                            <td className="py-1.5 text-right tabular-nums">
+                              {ticketPorCampana.reduce((s, r) => s + r.count, 0)}
+                            </td>
+                            <td className="py-1.5 text-right tabular-nums">{usdFormatter.format(ticketTotalCampanas)}</td>
+                            <td className="py-1.5 text-right tabular-nums">—</td>
+                          </tr>
+                        </tbody>
+                      </table>
                   </div>
                 )}
               </CardContent>
