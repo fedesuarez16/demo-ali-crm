@@ -83,9 +83,11 @@ export default function MensajesProgramadosPage() {
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [expandedPipelines, setExpandedPipelines] = useState<Set<string>>(new Set());
   const [genericosExpanded, setGenericosExpanded] = useState(false);
-  const [workflowActivo, setWorkflowActivo] = useState<boolean | null>(null);
+  const [workflowActivoSeguimientos, setWorkflowActivoSeguimientos] = useState<boolean | null>(null);
+  const [workflowActivoGenerico, setWorkflowActivoGenerico] = useState<boolean | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
-  const [isTogglingWorkflow, setIsTogglingWorkflow] = useState(false);
+  const [isTogglingSeguimientos, setIsTogglingSeguimientos] = useState(false);
+  const [isTogglingGenerico, setIsTogglingGenerico] = useState(false);
 
   useEffect(() => {
     void Promise.all([loadMensajes(), loadWorkflowState()]);
@@ -108,14 +110,17 @@ export default function MensajesProgramadosPage() {
       const res = await fetch('/api/n8n/seguimiento-workflow', { method: 'GET', cache: 'no-store' });
       const data = await res.json();
       if (res.ok) {
-        setWorkflowActivo(data.active);
+        setWorkflowActivoSeguimientos(data.active);
+        setWorkflowActivoGenerico(data.active);
         setWorkflowError(null);
       } else {
-        setWorkflowActivo(null);
+        setWorkflowActivoSeguimientos(null);
+        setWorkflowActivoGenerico(null);
         setWorkflowError(data.error ?? 'No se pudo cargar el estado del workflow');
       }
     } catch {
-      setWorkflowActivo(null);
+      setWorkflowActivoSeguimientos(null);
+      setWorkflowActivoGenerico(null);
       setWorkflowError('No se pudo cargar el estado del workflow');
     }
   };
@@ -141,23 +146,23 @@ export default function MensajesProgramadosPage() {
     }
   };
 
-  const handleToggleWorkflow = async () => {
-    if (workflowActivo === null) return;
-    if (workflowActivo === true) {
+  const handleToggleSeguimientos = async () => {
+    if (workflowActivoSeguimientos === null) return;
+    if (workflowActivoSeguimientos === true) {
       const ok = window.confirm('¿Detener el envío automático de seguimientos? Los mensajes pendientes no se borran, simplemente dejan de enviarse hasta que reactives el workflow.');
       if (!ok) return;
     }
-    setIsTogglingWorkflow(true);
+    setIsTogglingSeguimientos(true);
     try {
       const res = await fetch('/api/n8n/seguimiento-workflow', {
         method: 'POST',
         cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: workflowActivo ? 'deactivate' : 'activate' }),
+        body: JSON.stringify({ action: workflowActivoSeguimientos ? 'deactivate' : 'activate' }),
       });
       const data = await res.json();
       if (res.ok) {
-        setWorkflowActivo(data.active);
+        setWorkflowActivoSeguimientos(data.active);
         setWorkflowError(null);
       } else {
         window.alert('No se pudo cambiar el estado: ' + (data.error ?? res.statusText));
@@ -165,7 +170,35 @@ export default function MensajesProgramadosPage() {
     } catch {
       window.alert('Error de red al cambiar el estado del workflow.');
     } finally {
-      setIsTogglingWorkflow(false);
+      setIsTogglingSeguimientos(false);
+    }
+  };
+
+  const handleToggleGenerico = async () => {
+    if (workflowActivoGenerico === null) return;
+    if (workflowActivoGenerico === true) {
+      const ok = window.confirm('¿Detener el envío automático de seguimientos genéricos? Los mensajes pendientes no se borran, simplemente dejan de enviarse hasta que reactives el workflow.');
+      if (!ok) return;
+    }
+    setIsTogglingGenerico(true);
+    try {
+      const res = await fetch('/api/n8n/seguimiento-workflow', {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: workflowActivoGenerico ? 'deactivate' : 'activate' }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setWorkflowActivoGenerico(data.active);
+        setWorkflowError(null);
+      } else {
+        window.alert('No se pudo cambiar el estado: ' + (data.error ?? res.statusText));
+      }
+    } catch {
+      window.alert('Error de red al cambiar el estado del workflow.');
+    } finally {
+      setIsTogglingGenerico(false);
     }
   };
 
@@ -548,38 +581,38 @@ export default function MensajesProgramadosPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleToggleWorkflow}
-                disabled={isTogglingWorkflow || workflowActivo === null}
+                onClick={handleToggleSeguimientos}
+                disabled={isTogglingSeguimientos || workflowActivoSeguimientos === null}
                 className={
-                  workflowActivo === true
+                  workflowActivoSeguimientos === true
                     ? 'text-amber-700 border-amber-300 hover:bg-amber-50 hover:text-amber-800'
                     : ''
                 }
                 title={
                   workflowError ??
-                  (workflowActivo === null ? 'Cargando estado del workflow…' : undefined)
+                  (workflowActivoSeguimientos === null ? 'Cargando estado del workflow…' : undefined)
                 }
               >
-                {isTogglingWorkflow ? <SpinnerIcon /> : <StateIcon active={workflowActivo} />}
-                {labelByState(workflowActivo, workflowError)}
+                {isTogglingSeguimientos ? <SpinnerIcon /> : <StateIcon active={workflowActivoSeguimientos} />}
+                {labelByState(workflowActivoSeguimientos, workflowError)}
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleToggleWorkflow}
-                disabled={isTogglingWorkflow || workflowActivo === null}
+                onClick={handleToggleGenerico}
+                disabled={isTogglingGenerico || workflowActivoGenerico === null}
                 className={
-                  workflowActivo === true
+                  workflowActivoGenerico === true
                     ? 'text-amber-700 border-amber-300 hover:bg-amber-50 hover:text-amber-800'
                     : ''
                 }
                 title={
                   workflowError ??
-                  (workflowActivo === null ? 'Cargando estado del workflow…' : undefined)
+                  (workflowActivoGenerico === null ? 'Cargando estado del workflow…' : undefined)
                 }
               >
-                {isTogglingWorkflow ? <SpinnerIcon /> : <StateIcon active={workflowActivo} />}
-                {labelByStateGenerico(workflowActivo, workflowError)}
+                {isTogglingGenerico ? <SpinnerIcon /> : <StateIcon active={workflowActivoGenerico} />}
+                {labelByStateGenerico(workflowActivoGenerico, workflowError)}
               </Button>
               <Button onClick={handleRefreshAll} variant="outline" size="sm">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
