@@ -462,7 +462,11 @@ export default function MensajesProgramadosPage() {
     m.seguimientos_count === 101 ||
     m.seguimientos_count === 102 ||
     m.seguimientos_count === 103 ||
-    m.seguimientos_count === 105;
+    m.seguimientos_count === 105 ||
+    m.seguimientos_count === 300 ||
+    m.seguimientos_count === 301 ||
+    m.seguimientos_count === 400 ||
+    m.seguimientos_count === 401;
 
   const mensajesPrioridadCola = mensajes.filter(esSeguimientoGenericoCola);
   const mensajesPrioridadColaOrdenados = [...mensajesPrioridadCola].sort((a, b) => {
@@ -824,7 +828,7 @@ export default function MensajesProgramadosPage() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 <span className="text-xs font-semibold">
-                                  {fechaProgramada ? formatTimeOnly(fechaProgramada) : 'Sin fecha'}
+                                  {fechaProgramada ? formatDateShort(fechaProgramada) : 'Sin fecha'}
                                 </span>
                                 <svg className="h-3 w-3 text-blue-600 flex-shrink-0 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
