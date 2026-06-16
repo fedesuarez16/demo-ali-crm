@@ -629,7 +629,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"content\": \"Hola! Solo paso a confirmar si seguis interesado/a.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "jsonBody": "={\n  \"content\": \"Hola! Solo paso a confirmar si seguís interesado/a. A veces los tiempos corren y se nos escapan oportunidades... cualquier duda que tengas, contá conmigo\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -728,7 +728,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"content\": \"Hola! Solo para asegurarme que recibiste bien todo.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "jsonBody": "={\n  \"content\": \"Hola 👋 Solo para asegurarme que recibiste bien todo. Si la info te sirvió y querés avanzar, coordinamos cuando te quede cómodo. Si no es lo que buscabas, decime y te afino la búsqueda.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -827,7 +827,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"content\": \"Consulto si esta propiedad sigue en tu radar.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "jsonBody": "={\n  \"content\": \"¡Buenas! Consulto para saber si esta propiedad sigue en tu radar. Varias consultas aparecieron esta semana, avisame si querés reservar día para verla 😉\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -926,7 +926,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"content\": \"Hace un mes te compartí info. Contame si seguis buscando.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "jsonBody": "={\n  \"content\": \"Hola 👋 ¿Cómo va? Hace un mes te compartí la info. Contame si seguís buscando —tengo movimientos nuevos en cartera que quizás te cierren más.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -1027,7 +1027,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"content\": \"Hola! Solo paso a confirmar si seguis interesado/a.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "jsonBody": "={\n  \"content\": \"Hola! Solo paso a confirmar si seguís interesado/a. A veces los tiempos corren y se nos escapan oportunidades... cualquier duda que tengas, contá conmigo\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -1126,7 +1126,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"content\": \"Solo paso a confirmar si seguis interesado/a.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "jsonBody": "={\n  \"content\": \"¡Buenas! Tercer seguimiento del ciclo tibio enviado. Consultamos si la propiedad sigue en sus planes 😊\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -1225,7 +1225,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"content\": \"Solo paso a confirmar si seguis interesado/a.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "jsonBody": "={\n  \"content\": \"Hola 👋 Cuarto seguimiento del ciclo tibio enviado. Recordamos que estamos disponibles para cualquier consulta.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -1324,7 +1324,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"content\": \"Solo paso a confirmar si seguis interesado/a.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "jsonBody": "={\n  \"content\": \"Hola! Quinto seguimiento del ciclo tibio enviado. Último contacto del ciclo activo.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -1777,7 +1777,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"content\": \"Solo paso a confirmar si seguis interesado/a.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "jsonBody": "={\n  \"content\": \"Hola! Solo paso a confirmar si seguís interesado/a. A veces los tiempos corren y se nos escapan oportunidades... cualquier duda que tengas, contá conmigo\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -2144,9 +2144,10 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"content\": \"Hola, \\u00bfc\\u00f3mo est\\u00e1s? \\ud83d\\ude0a\\nTe escribo porque la propiedad que hab\\u00edas consultado tuvo una modificaci\\u00f3n de valor y pens\\u00e9 en vos autom\\u00e1ticamente.\\n\\nQuer\\u00eda saber si segu\\u00eds con inter\\u00e9s o todav\\u00eda est\\u00e1s buscando algo en esa l\\u00ednea, as\\u00ed puedo enviarte la informaci\\u00f3n actualizada.\\n\\nMaga | Team Ali | Remax City Bell\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "jsonBody": "{\n  \"content\": \"Hola, \\u00bfc\\u00f3mo est\\u00e1s? \\ud83d\\ude0a\\nTe escribo porque la propiedad que hab\\u00edas consultado tuvo una modificaci\\u00f3n de valor y pens\\u00e9 en vos autom\\u00e1ticamente.\\n\\nQuer\\u00eda saber si segu\\u00eds con inter\\u00e9s o todav\\u00eda est\\u00e1s buscando algo en esa l\\u00ednea, as\\u00ed puedo enviarte la informaci\\u00f3n actualizada.\\n\\nMaga | Team Ali | Remax City Bell\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
         "options": {}
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "id": "bv00a1c2-0003-4aaa-8bbb-000000000300",
@@ -2165,7 +2166,7 @@
       },
       "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE leads\nSET seguimientos_count = 3\nWHERE whatsapp_id = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';\n\n-- Reiniciar ciclo desde toque 3\nUPDATE cola_seguimientos\nSET seguimientos_count = 3\nWHERE remote_jid = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';",
+        "query": "UPDATE leads\nSET seguimientos_count = 3\nWHERE whatsapp_id = LTRIM('{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}', '+');\n\n-- Reiniciar ciclo desde toque 3\nUPDATE cola_seguimientos\nSET seguimientos_count = 3\nWHERE remote_jid = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';",
         "options": {}
       }
     },
@@ -2234,7 +2235,7 @@
       "parameters": {
         "phoneNumberId": "1128023933718383",
         "recipientPhoneNumber": "={{ $json.phoneNumber }}",
-        "template": "plantilla_venta|es_AR"
+        "template": "plantilla_venta_def|es_AR"
       }
     },
     {
@@ -2268,9 +2269,10 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"content\": \"Hola, \\u00bfc\\u00f3mo est\\u00e1s?\\nSoy Maga, asistente de Andr\\u00e9s Ali de RE\\/MAX City Bell \\ud83d\\ude0a\\n\\nRecordaba que hace un tiempo hab\\u00edamos hablado y me comentaste que para avanzar con una compra primero necesitabas vender tu propiedad.\\n\\nTe escribo porque hoy una buena estrategia y comercializaci\\u00f3n hacen la diferencia en el mercado.\\n\\nSi te parece, coordinamos una reuni\\u00f3n, llamada o visita y realizamos una cotizaci\\u00f3n sin cargo para evaluar posibilidades reales.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
+        "jsonBody": "{\n  \"content\": \"Hola, \\u00bfc\\u00f3mo est\\u00e1s?\\nSoy Maga, asistente de Andr\\u00e9s Ali de RE\\/MAX City Bell \\ud83d\\ude0a\\n\\nRecordaba que hace un tiempo hab\\u00edamos hablado y me comentaste que para avanzar con una compra primero necesitabas vender tu propiedad.\\n\\nTe escribo porque hoy una buena estrategia y comercializaci\\u00f3n hacen la diferencia en el mercado.\\n\\nSi te parece, coordinamos una reuni\\u00f3n, llamada o visita y realizamos una cotizaci\\u00f3n sin cargo para evaluar posibilidades reales.\",\n  \"message_type\": \"outgoing\",\n  \"private\": true\n}",
         "options": {}
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "id": "pv00a1c2-0003-4aaa-8bbb-000000000400",
@@ -2289,7 +2291,7 @@
       },
       "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE leads\nSET seguimientos_count = 3\nWHERE whatsapp_id = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';\n\n-- Reiniciar ciclo desde toque 3\nUPDATE cola_seguimientos\nSET seguimientos_count = 3\nWHERE remote_jid = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';",
+        "query": "UPDATE leads\nSET seguimientos_count = 3\nWHERE whatsapp_id = LTRIM('{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}', '+');\n\n-- Reiniciar ciclo desde toque 3\nUPDATE cola_seguimientos\nSET seguimientos_count = 3\nWHERE remote_jid = '{{ $('SQL - Cancelar Seguimiento1').item.json.remote_jid }}';",
         "options": {}
       }
     },

@@ -112,8 +112,8 @@ export async function GET(request, { params }) {
       // No mostrar mensajes de actividad
       if (msg.message_type === 2) return false;
       
-      // No mostrar mensajes sin contenido
-      if (!msg.content || msg.content.trim() === '') return false;
+      // No mostrar mensajes sin contenido ni adjuntos
+      if ((!msg.content || msg.content.trim() === '') && (!msg.attachments || msg.attachments.length === 0)) return false;
       
       // Filtrar mensajes borrados - no mostrar mensajes que contengan "deleted" o estén marcados como borrados
       // NOTA: No filtramos mensajes privados (msg.private === true) porque pueden ser mensajes

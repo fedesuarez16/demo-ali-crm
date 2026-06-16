@@ -869,10 +869,23 @@ const ChatConversation = ({ conversation, onBack }) => {
                   }
                   
                   // Obtener el tipo de contenido del audio
-                  const audioContentType = audioAttachment?.content_type || 
-                                         message.content_type || 
+                  const audioContentType = audioAttachment?.content_type ||
+                                         message.content_type ||
                                          'audio/ogg; codecs=opus'; // WhatsApp usa OGG Opus por defecto
-                  
+
+                  // Detectar imagen
+                  const hasImage = !hasAudio && message.attachments?.some(att =>
+                    att.file_type === 'image' || (att.content_type && att.content_type.startsWith('image/'))
+                  );
+
+                  // Detectar video
+                  const hasVideo = !hasAudio && message.attachments?.some(att =>
+                    att.file_type === 'video' || (att.content_type && att.content_type.startsWith('video/'))
+                  );
+
+                  // Detectar archivo genérico (sticker, documento, etc.)
+                  const hasAttachment = !hasAudio && !hasImage && !hasVideo && message.attachments?.length > 0;
+
                   const isDeleting = deletingMessageId === message.id;
                   
                   const outgoing = isOutgoing(message);
@@ -899,17 +912,14 @@ const ChatConversation = ({ conversation, onBack }) => {
                           : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
                       }`}
                     >
-                        {/* Mostrar reproductor de audio si hay audio */}
+                        {/* Audio con URL reproducible */}
                         {hasAudio && audioUrl ? (
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                              <audio 
-                                controls 
+                              <audio
+                                controls
                                 className="flex-1 min-w-[200px] h-8"
-                                style={{
-                                  maxWidth: '100%',
-                                  outline: 'none'
-                                }}
+                                style={{ maxWidth: '100%', outline: 'none' }}
                                 preload="metadata"
                               >
                                 <source src={audioUrl} type={audioContentType} />
@@ -922,29 +932,58 @@ const ChatConversation = ({ conversation, onBack }) => {
                             </div>
                             <div className="flex items-center justify-between gap-2">
                               {audioAttachment?.file_size && (
-                                <span className={`text-xs ${
-                                  isOutgoing(message) ? 'text-green-100' : 'text-gray-500'
-                                }`}>
+                                <span className={`text-xs ${outgoing ? 'text-green-100' : 'text-gray-500'}`}>
                                   {(audioAttachment.file_size / 1024).toFixed(1)} KB
                                 </span>
                               )}
                               {audioAttachment?.duration && (
-                                <span className={`text-xs ${
-                                  isOutgoing(message) ? 'text-green-100' : 'text-gray-500'
-                                }`}>
+                                <span className={`text-xs ${outgoing ? 'text-green-100' : 'text-gray-500'}`}>
                                   {Math.floor(audioAttachment.duration / 1000)}s
                                 </span>
                               )}
                             </div>
-                            {/* Mostrar contenido de texto si existe (puede ser una descripción) */}
                             {message.content && message.content.trim() && (
                               <p className="text-xs italic mt-1 opacity-75">{message.content}</p>
                             )}
                           </div>
+                        ) : hasAudio ? (
+                          /* Audio sin URL (mensaje de voz de WhatsApp sin acceso al archivo) */
+                          <div className={`flex items-center gap-2 py-1 ${outgoing ? 'text-green-100' : 'text-gray-500'}`}>
+                            <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 15c1.66 0 3-1.34 3-3V6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V6zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                            </svg>
+                            <span className="text-sm">Mensaje de voz</span>
+                          </div>
+                        ) : hasImage ? (
+                          /* Imagen */
+                          <div className={`flex items-center gap-2 py-1 ${outgoing ? 'text-green-100' : 'text-gray-500'}`}>
+                            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="text-sm">Imagen</span>
+                          </div>
+                        ) : hasVideo ? (
+                          /* Video */
+                          <div className={`flex items-center gap-2 py-1 ${outgoing ? 'text-green-100' : 'text-gray-500'}`}>
+                            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            <span className="text-sm">Video</span>
+                          </div>
+                        ) : hasAttachment ? (
+                          /* Archivo genérico (sticker, documento, etc.) */
+                          <div className={`flex items-center gap-2 py-1 ${outgoing ? 'text-green-100' : 'text-gray-500'}`}>
+                            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                            </svg>
+                            <span className="text-sm">
+                              {message.attachments[0]?.file_type === 'sticker' ? 'Sticker' : 'Archivo adjunto'}
+                            </span>
+                          </div>
                         ) : (
-                          /* Mostrar contenido de texto normal */
+                          /* Texto normal */
                           message.content && message.content.trim() && (
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                           )
                         )}
                         
