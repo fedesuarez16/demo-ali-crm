@@ -59,6 +59,8 @@ function AsistentePageContent() {
   const [knowledgeNotice, setKnowledgeNotice] = useState<{ type: 'ok' | 'error'; text: string } | null>(
     null
   );
+  const [confirmClearChunks, setConfirmClearChunks] = useState(false);
+  const [clearingChunks, setClearingChunks] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -244,6 +246,29 @@ function AsistentePageContent() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     void sendMessage();
+  };
+
+  const handleClearChunks = async () => {
+    setClearingChunks(true);
+    setKnowledgeNotice(null);
+    setConfirmClearChunks(false);
+    try {
+      const res = await fetch(
+        `/api/ai-knowledge?assistantId=${encodeURIComponent(assistantId)}`,
+        { method: 'DELETE' }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al borrar');
+      setKnowledgeNotice({ type: 'ok', text: 'Todo el conocimiento fue eliminado.' });
+      await refreshChunksCount();
+    } catch (e) {
+      setKnowledgeNotice({
+        type: 'error',
+        text: e instanceof Error ? e.message : 'Error desconocido',
+      });
+    } finally {
+      setClearingChunks(false);
+    }
   };
 
   const handleKnowledgeUpload = async () => {
@@ -505,7 +530,10 @@ function AsistentePageContent() {
                 onOpenChange={(open) => {
                   if (open) {
                     setKnowledgeNotice(null);
+                    setConfirmClearChunks(false);
                     void refreshChunksCount();
+                  } else {
+                    setConfirmClearChunks(false);
                   }
                 }}
               >
@@ -588,22 +616,59 @@ function AsistentePageContent() {
                       </div>
                     )}
                   </div>
-                  <DialogFooter className="gap-2 sm:gap-0">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => void refreshChunksCount()}
-                      disabled={knowledgeLoading}
-                    >
-                      Actualizar contador
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={() => void handleKnowledgeUpload()}
-                      disabled={!knowledgeText.trim() || knowledgeLoading}
-                    >
-                      {knowledgeLoading ? 'Cargando…' : 'Cargar a chunks'}
-                    </Button>
+                  <DialogFooter className="flex-col gap-2 sm:flex-row sm:gap-0">
+                    <div className="flex flex-1 justify-start">
+                      {confirmClearChunks ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-destructive font-medium">¿Borrar todo?</span>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => void handleClearChunks()}
+                            disabled={clearingChunks}
+                          >
+                            {clearingChunks ? 'Borrando…' : 'Sí, borrar'}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setConfirmClearChunks(false)}
+                            disabled={clearingChunks}
+                          >
+                            Cancelar
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30"
+                          onClick={() => setConfirmClearChunks(true)}
+                          disabled={knowledgeLoading || clearingChunks || chunksCount === 0}
+                        >
+                          Borrar todo el conocimiento
+                        </Button>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => void refreshChunksCount()}
+                        disabled={knowledgeLoading}
+                      >
+                        Actualizar contador
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => void handleKnowledgeUpload()}
+                        disabled={!knowledgeText.trim() || knowledgeLoading}
+                      >
+                        {knowledgeLoading ? 'Cargando…' : 'Cargar a chunks'}
+                      </Button>
+                    </div>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>

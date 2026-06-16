@@ -132,3 +132,31 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * DELETE /api/ai-knowledge?assistantId=xxx
+ * Elimina todos los chunks de conocimiento del asistente indicado.
+ */
+export async function DELETE(request: NextRequest) {
+  const supabase = getSupabase();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Supabase no está configurado.' }, { status: 503 });
+  }
+
+  const assistantId = request.nextUrl.searchParams.get('assistantId');
+  if (!assistantId) {
+    return NextResponse.json({ error: 'El campo assistantId es requerido.' }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from('ai_knowledge_chunks')
+    .delete()
+    .eq('assistant_id', assistantId);
+
+  if (error) {
+    console.error('ai-knowledge DELETE:', error);
+    return NextResponse.json({ error: 'No se pudo eliminar el conocimiento.' }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
+}
+
