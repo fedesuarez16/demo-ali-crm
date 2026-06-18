@@ -1,4 +1,43 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) throw new Error('Supabase env vars missing');
+  return createClient(url, key);
+}
+
+export async function PATCH(request, { params }) {
+  try {
+    const { id: conversationId, messageId } = await params;
+    const { content } = await request.json();
+
+    if (!conversationId || !messageId) {
+      return NextResponse.json({ error: 'IDs requeridos: conversationId, messageId' }, { status: 400 });
+    }
+
+    if (!content || !content.trim()) {
+      return NextResponse.json({ error: 'Contenido requerido' }, { status: 400 });
+    }
+
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from('message_overrides')
+      .upsert({
+        message_id: String(messageId),
+        conversation_id: String(conversationId),
+        content: content.trim(),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'message_id' });
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ error: 'Error al editar el mensaje', message: error.message }, { status: 500 });
+  }
+}
 
 export async function DELETE(request, { params }) {
   try {

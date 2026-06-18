@@ -19,6 +19,10 @@ const ChatConversation = ({ conversation, onBack }) => {
   const [deletingMessageId, setDeletingMessageId] = useState(null); // ID del mensaje que se está borrando
   const [isCreatingLead, setIsCreatingLead] = useState(false); // Estado para controlar si se está creando un lead
   const [phoneNumber, setPhoneNumber] = useState(null); // Guardar el número de teléfono extraído para poder crear el lead
+  const [editingMessageId, setEditingMessageId] = useState(null);
+  const [editingContent, setEditingContent] = useState('');
+  const [editingLoading, setEditingLoading] = useState(false);
+  const [messageOverrides, setMessageOverrides] = useState({});
 
   // Función para obtener el número de teléfono del contacto (misma lógica que ChatList.js)
   const getContactPhone = (conversation) => {
@@ -393,6 +397,18 @@ const ChatConversation = ({ conversation, onBack }) => {
     }
   };
 
+  // Cargar overrides de mensajes editados desde Supabase
+  useEffect(() => {
+    if (!conversation?.id) {
+      setMessageOverrides({});
+      return;
+    }
+    fetch(`/api/chats/${conversation.id}/messages/overrides`)
+      .then(r => r.ok ? r.json() : { overrides: {} })
+      .then(data => setMessageOverrides(data.overrides || {}))
+      .catch(() => setMessageOverrides({}));
+  }, [conversation?.id]);
+
   // Scroll al final cuando se cargan nuevos mensajes
   useEffect(() => {
     scrollToBottom();
@@ -609,6 +625,38 @@ const ChatConversation = ({ conversation, onBack }) => {
       alert('Error al borrar el mensaje. Por favor, intenta de nuevo.');
     } finally {
       setDeletingMessageId(null);
+    }
+  };
+
+  const startEditing = (message) => {
+    setEditingMessageId(message.id);
+    setEditingContent(messageOverrides[String(message.id)] ?? message.content ?? '');
+  };
+
+  const cancelEditing = () => {
+    setEditingMessageId(null);
+    setEditingContent('');
+  };
+
+  const saveEdit = async (messageId) => {
+    if (!editingContent.trim() || !conversation?.id) return;
+    setEditingLoading(true);
+    try {
+      const response = await fetch(`/api/chats/${conversation.id}/messages/${messageId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: editingContent.trim() }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Error al editar');
+      setMessageOverrides(prev => ({ ...prev, [String(messageId)]: editingContent.trim() }));
+      setEditingMessageId(null);
+      setEditingContent('');
+    } catch (err) {
+      console.error('Error editing message:', err);
+      alert('Error al editar el mensaje. Por favor, intenta de nuevo.');
+    } finally {
+      setEditingLoading(false);
     }
   };
 
@@ -893,16 +941,32 @@ const ChatConversation = ({ conversation, onBack }) => {
                   return (
                   <div
                     key={message.id}
-                    className={`flex ${outgoing ? 'justify-end' : 'justify-start'} mb-2`}
-                      onDoubleClick={() => {
-                        // Solo permitir borrar con doble click
-                        if (!isDeleting) {
-                          deleteMessage(message.id);
-                        }
-                      }}
-                      style={{ cursor: 'pointer' }}
-                      title="Doble click para borrar este mensaje"
+                    className={`flex ${outgoing ? 'justify-end' : 'justify-start'} mb-2 group`}
                   >
+                    {!hasAudio && !hasImage && !hasVideo && !hasAttachment && message.content && (
+                      <div className={`flex items-end gap-1 mb-1 opacity-0 group-hover:opacity-100 transition-opacity ${outgoing ? 'order-first mr-1' : 'order-last ml-1'}`}>
+                        <button
+                          type="button"
+                          onClick={() => { if (!isDeleting && !editingMessageId) startEditing(message); }}
+                          className="p-1 rounded bg-white shadow-sm text-gray-400 hover:text-blue-500 transition-colors"
+                          title="Editar mensaje"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { if (!isDeleting) deleteMessage(message.id); }}
+                          className="p-1 rounded bg-white shadow-sm text-gray-400 hover:text-red-500 transition-colors"
+                          title="Borrar mensaje"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
                     <div
                         className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg transition-opacity ${
                           isDeleting ? 'opacity-50' : ''
@@ -981,9 +1045,57 @@ const ChatConversation = ({ conversation, onBack }) => {
                             </span>
                           </div>
                         ) : (
-                          /* Texto normal */
-                          message.content && message.content.trim() && (
-                            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                          editingMessageId === message.id ? (
+                            <div>
+                              <textarea
+                                value={editingContent}
+                                onChange={(e) => setEditingContent(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    if (!editingLoading && editingContent.trim()) saveEdit(message.id);
+                                  }
+                                  if (e.key === 'Escape') cancelEditing();
+                                }}
+                                className={`w-full text-sm rounded p-1.5 resize-none min-h-[60px] outline-none border ${
+                                  outgoing
+                                    ? 'bg-green-400 text-white placeholder-green-200 border-green-300'
+                                    : 'bg-gray-50 text-gray-800 border-gray-300'
+                                }`}
+                                // eslint-disable-next-line jsx-a11y/no-autofocus
+                                autoFocus
+                                disabled={editingLoading}
+                              />
+                              <div className="flex gap-1.5 mt-1.5">
+                                <button
+                                  onClick={() => saveEdit(message.id)}
+                                  disabled={editingLoading || !editingContent.trim()}
+                                  className={`text-xs px-2 py-0.5 rounded font-medium disabled:opacity-50 ${
+                                    outgoing
+                                      ? 'bg-white/25 hover:bg-white/40 text-white'
+                                      : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                  }`}
+                                >
+                                  {editingLoading ? '...' : 'Guardar'}
+                                </button>
+                                <button
+                                  onClick={cancelEditing}
+                                  disabled={editingLoading}
+                                  className={`text-xs px-2 py-0.5 rounded ${
+                                    outgoing ? 'text-green-100 hover:bg-white/10' : 'text-gray-500 hover:bg-gray-100'
+                                  }`}
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            (() => {
+                              const displayed = messageOverrides[String(message.id)] ?? message.content;
+                              return displayed && displayed.trim() && (
+                                <p className="text-sm whitespace-pre-wrap">{displayed}</p>
+                              );
+                            })()
                           )
                         )}
                         
