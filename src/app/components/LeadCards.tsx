@@ -803,12 +803,17 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                                 </h4>
                               </div>
                               <div className="flex items-center gap-1">
-                                <span 
+                                <span
                                   className="inline-flex items-center px-1 py-0.5 rounded-md text-[10px] font-medium border"
                                   style={getStatusBadgeColor(lead.estado)}
                                 >
                                   {lead.estado}
                                 </span>
+                                {lead.toque_register && (
+                                  <span className="inline-flex items-center px-1 py-0.5 rounded-md text-[10px] font-medium border bg-indigo-50 text-indigo-700 border-indigo-200">
+                                    {lead.toque_register}
+                                  </span>
+                                )}
                               </div>
                               <div className="h-px bg-slate-100"></div>
                               <div className="text-[10px] text-gray-600 space-y-1">

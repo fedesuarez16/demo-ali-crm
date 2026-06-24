@@ -38,6 +38,7 @@ const LeadEditSidebar: React.FC<LeadEditSidebarProps> = ({
     cantidadAmbientes: 0,
     motivoInteres: 'otro',
     observaciones: '',
+    toque_register: undefined,
   });
 
   const [isSaving, setIsSaving] = useState(false);
@@ -160,6 +161,7 @@ const LeadEditSidebar: React.FC<LeadEditSidebarProps> = ({
         cantidadAmbientes: lead.cantidadAmbientes || 0,
         motivoInteres: lead.motivoInteres,
         observaciones: lead.observaciones || '',
+        toque_register: lead.toque_register ?? undefined,
       });
     } else {
       // Reset para nuevo lead
@@ -175,6 +177,7 @@ const LeadEditSidebar: React.FC<LeadEditSidebarProps> = ({
         cantidadAmbientes: 0,
         motivoInteres: 'otro',
         observaciones: '',
+        toque_register: undefined,
       });
     }
     setErrors({});
@@ -478,6 +481,32 @@ const LeadEditSidebar: React.FC<LeadEditSidebarProps> = ({
                   rows={4}
                   className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
                 />
+              </CardContent>
+            </Card>
+
+            {/* Toque Register */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Toque</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <Label htmlFor="toque_register">Toque</Label>
+                  <Select
+                    value={formData.toque_register ?? '__none__'}
+                    onValueChange={(v) => handleChange('toque_register', v === '__none__' ? null : v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sin asignar" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Sin asignar</SelectItem>
+                      <SelectItem value="Gen100">Gen100</SelectItem>
+                      <SelectItem value="Gen200">Gen200</SelectItem>
+                      <SelectItem value="Gen400">Gen400</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </CardContent>
             </Card>
           </div>

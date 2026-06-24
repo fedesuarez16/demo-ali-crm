@@ -327,6 +327,7 @@ const mapLeadRow = (row: any): Lead => {
     estado_chat: (row.estado_chat === null || row.estado_chat === undefined || row.estado_chat === 1 || row.estado_chat === '1') ? 1 : 0,
     // chatwoot_conversation_id para calificación automática basada en mensajes
     chatwoot_conversation_id: row.chatwoot_conversation_id ?? undefined,
+    toque_register: row.toque_register ?? undefined,
   };
 };
 
@@ -902,6 +903,7 @@ export const createLead = async (leadData: Partial<Lead>): Promise<Lead | null> 
       seguimientos_count: leadData.seguimientos_count ?? 0,
       notas: leadData.notas ?? null,
       estado_chat: leadData.estado_chat ?? null,
+      toque_register: leadData.toque_register ?? null,
     };
     
     // Calificar automáticamente el lead SIEMPRE (a menos que se especifique manualmente un estado diferente)
@@ -1194,7 +1196,10 @@ export const updateLead = async (leadId: string, leadData: Partial<Lead>): Promi
       dataToUpdate.estado_chat = (estadoChatValue === 1 || estadoChatStr === '1') ? 1 : 0;
       console.log(`📝 Actualizando estado_chat a: ${dataToUpdate.estado_chat} (tipo: ${typeof dataToUpdate.estado_chat})`);
     }
-    
+    if (leadData.toque_register !== undefined) {
+      dataToUpdate.toque_register = leadData.toque_register;
+    }
+
     // Recalificar automáticamente si:
     // 1. El estado actual es inválido ('inicial' o 'activo')
     // 2. Se actualiza chatwoot_conversation_id y el estado es 'frío' o 'tibio'
