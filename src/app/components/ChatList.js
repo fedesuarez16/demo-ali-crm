@@ -1446,6 +1446,11 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
                   return (
                     <>
                       <SeguimientosCount lead={lead} />
+                      {lead?.toque_register && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          {lead.toque_register}
+                        </span>
+                      )}
                       <EditablePropiedadInteres lead={lead} />
                       <ChatActionsMenu 
                         chat={chat} 

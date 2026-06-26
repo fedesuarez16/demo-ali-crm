@@ -36,6 +36,7 @@ function AsistentePageContent() {
   const assistants = [
     { id: 'tasador', label: 'Tasador' },
     { id: 'ventas', label: 'Ventas' },
+    { id: 'modelos', label: 'Modelos' },
   ] as const;
 
   const [assistantId, setAssistantId] = useState<(typeof assistants)[number]['id']>('tasador');
@@ -121,7 +122,7 @@ function AsistentePageContent() {
   // /asistente?assistantId=tasador | /asistente?assistantId=ventas
   useEffect(() => {
     const fromUrl = searchParams?.get('assistantId');
-    if (fromUrl === 'tasador' || fromUrl === 'ventas') {
+    if (fromUrl === 'tasador' || fromUrl === 'ventas' || fromUrl === 'modelos') {
       setAssistantId(fromUrl);
     }
   }, [searchParams]);
