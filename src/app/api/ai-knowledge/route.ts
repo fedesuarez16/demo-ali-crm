@@ -41,8 +41,31 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Supabase no está configurado.' }, { status: 503 });
   }
 
-  const assistantId = request.nextUrl.searchParams.get('assistantId');
+  const searchParams = request.nextUrl.searchParams;
+  const assistantId = searchParams.get('assistantId');
 
+  // ?list=true → devuelve array de chunks (sin embedding) para listar en UI
+  if (searchParams.has('list')) {
+    let q = (supabase as any)
+      .from('ai_knowledge_chunks')
+      .select('id, content, created_at')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (assistantId) q = q.eq('assistant_id', assistantId);
+
+    const { data, error } = await q;
+
+    if (error) {
+      return NextResponse.json(
+        { error: 'No se pudieron listar los chunks.' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(data ?? []);
+  }
+
+  // Comportamiento original: devuelve { chunksCount }
   let q = supabase.from('ai_knowledge_chunks').select('id', { count: 'exact', head: true });
   if (assistantId) q = q.eq('assistant_id', assistantId);
 
@@ -133,8 +156,8 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * DELETE /api/ai-knowledge?assistantId=xxx
- * Elimina todos los chunks de conocimiento del asistente indicado.
+ * DELETE /api/ai-knowledge?chunkId=xxx  → elimina un chunk individual
+ * DELETE /api/ai-knowledge?assistantId=xxx → elimina todos los chunks del asistente
  */
 export async function DELETE(request: NextRequest) {
   const supabase = getSupabase();
@@ -142,9 +165,31 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Supabase no está configurado.' }, { status: 503 });
   }
 
-  const assistantId = request.nextUrl.searchParams.get('assistantId');
+  const searchParams = request.nextUrl.searchParams;
+  const chunkId = searchParams.get('chunkId');
+  const assistantId = searchParams.get('assistantId');
+
+  // Borrado individual de un chunk
+  if (chunkId) {
+    const { error } = await (supabase as any)
+      .from('ai_knowledge_chunks')
+      .delete()
+      .eq('id', chunkId);
+
+    if (error) {
+      console.error('ai-knowledge DELETE chunk:', error);
+      return NextResponse.json({ error: 'No se pudo eliminar el chunk.' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  }
+
+  // Borrado masivo por asistente (comportamiento original)
   if (!assistantId) {
-    return NextResponse.json({ error: 'El campo assistantId es requerido.' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Se requiere chunkId o assistantId.' },
+      { status: 400 }
+    );
   }
 
   const { error } = await supabase

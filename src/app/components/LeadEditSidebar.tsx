@@ -502,7 +502,7 @@ const LeadEditSidebar: React.FC<LeadEditSidebarProps> = ({
                     <SelectContent>
                       <SelectItem value="__none__">Sin asignar</SelectItem>
                       <SelectItem value="Gen100">Gen100</SelectItem>
-                      <SelectItem value="Gen200">Gen200</SelectItem>
+                      <SelectItem value="Gen300">Gen300</SelectItem>
                       <SelectItem value="Gen400">Gen400</SelectItem>
                     </SelectContent>
                   </Select>

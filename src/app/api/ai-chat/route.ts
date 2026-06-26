@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
 
   const assistantId = typeof body.assistantId === 'string' && body.assistantId.trim().length > 0 ? body.assistantId.trim() : 'tasador';
 
-  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+  const model = process.env.OPENAI_MODEL || 'gpt-4.1';
   let conversationId =
     typeof body.conversationId === 'string' && body.conversationId.length > 0
       ? body.conversationId

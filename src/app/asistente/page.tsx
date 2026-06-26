@@ -61,6 +61,7 @@ function AsistentePageContent() {
   );
   const [confirmClearChunks, setConfirmClearChunks] = useState(false);
   const [clearingChunks, setClearingChunks] = useState(false);
+  const [chunks, setChunks] = useState<Array<{ id: string; content: string; created_at: string }>>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -246,6 +247,34 @@ function AsistentePageContent() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     void sendMessage();
+  };
+
+  const loadChunks = async (aid: string) => {
+    try {
+      const res = await fetch(
+        `/api/ai-knowledge?assistantId=${encodeURIComponent(aid)}&list=true`
+      );
+      const data = await res.json();
+      if (res.ok && Array.isArray(data)) setChunks(data);
+      else setChunks([]);
+    } catch {
+      setChunks([]);
+    }
+  };
+
+  const handleDeleteChunk = async (chunkId: string) => {
+    try {
+      const res = await fetch(
+        `/api/ai-knowledge?chunkId=${encodeURIComponent(chunkId)}`,
+        { method: 'DELETE' }
+      );
+      if (res.ok) {
+        setChunks((prev) => prev.filter((c) => c.id !== chunkId));
+        void refreshChunksCount();
+      }
+    } catch {
+      // silencioso — el chunk sigue visible si falla
+    }
   };
 
   const handleClearChunks = async () => {
@@ -532,6 +561,7 @@ function AsistentePageContent() {
                     setKnowledgeNotice(null);
                     setConfirmClearChunks(false);
                     void refreshChunksCount();
+                    void loadChunks(assistantId);
                   } else {
                     setConfirmClearChunks(false);
                   }
@@ -566,6 +596,40 @@ function AsistentePageContent() {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-2">
+                    {/* Lista de chunks existentes */}
+                    <div>
+                      <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                        Chunks cargados
+                      </p>
+                      {chunks.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic">Sin chunks</p>
+                      ) : (
+                        <div className="max-h-[240px] overflow-y-auto rounded-md border border-input divide-y divide-border">
+                          {chunks.map((chunk) => (
+                            <div
+                              key={chunk.id}
+                              className="flex items-start justify-between gap-2 px-3 py-2"
+                            >
+                              <p className="flex-1 text-xs text-foreground break-words">
+                                {chunk.content.length > 100
+                                  ? `${chunk.content.slice(0, 100)}…`
+                                  : chunk.content}
+                              </p>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="shrink-0 h-6 w-6 text-muted-foreground hover:text-destructive"
+                                onClick={() => void handleDeleteChunk(chunk.id)}
+                                title="Eliminar chunk"
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       <label className="space-y-1.5">
                         <span className="text-xs font-medium text-muted-foreground">
