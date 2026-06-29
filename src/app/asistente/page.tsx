@@ -16,6 +16,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Pencil, Trash2 } from 'lucide-react';
+import ModelosTemplatesDialog from '../components/ModelosTemplatesDialog';
 
 type ChatMessage = {
   id: string;
@@ -430,7 +431,11 @@ function AsistentePageContent() {
               </h1>
               <p className="truncate text-xs text-muted-foreground">
                 OpenAI · historial en Supabase
-                {chunksCount != null ? ` · ${chunksCount} chunks de conocimiento` : ''}
+                {assistantId === 'modelos'
+                  ? ' · rellena plantillas'
+                  : chunksCount != null
+                    ? ` · ${chunksCount} chunks de conocimiento`
+                    : ''}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -556,6 +561,9 @@ function AsistentePageContent() {
                 disabled={sending}
                 className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
               />
+              {assistantId === 'modelos' ? (
+                <ModelosTemplatesDialog assistantId={assistantId} disabled={sending} />
+              ) : (
               <Dialog
                 onOpenChange={(open) => {
                   if (open) {
@@ -737,6 +745,7 @@ function AsistentePageContent() {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+              )}
               <Button type="submit" disabled={sending || !input.trim()} className="shrink-0 self-end">
                 Enviar
               </Button>

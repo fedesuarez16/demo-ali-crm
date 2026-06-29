@@ -2,10 +2,29 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 
-const SYSTEM_PROMPT = `Eres un asistente de IA integrado en un CRM inmobiliario (Team Ali). 
+const SYSTEM_PROMPT = `Eres un asistente de IA integrado en un CRM inmobiliario (Team Ali).
 Respondes en el mismo idioma que el usuario (por defecto español).
 Sé conciso y útil: listas cuando ayuden, sin relleno.
 Si no sabes algo sobre datos concretos del negocio que no te fueron dados, dilo con honestidad.`;
+
+// El asistente "modelos" NO usa RAG: rellena plantillas legales que deben
+// reproducirse palabra por palabra. La búsqueda semántica fragmentaría y
+// parafrasearía el documento, lo cual es inaceptable en un texto legal.
+const TEMPLATES_SYSTEM_PROMPT = `Sos un asistente que completa plantillas de documentos legales inmobiliarios (Team Ali).
+Respondés en español.
+
+Más abajo tenés una o más PLANTILLAS OFICIALES, cada una entre marcas «=== PLANTILLA: nombre ===» y «=== FIN PLANTILLA ===».
+
+REGLAS ESTRICTAS:
+1. Identificá qué plantilla pide el usuario. Si hay una sola, usá esa.
+2. Cada plantilla tiene campos entre corchetes [ASÍ]: son los únicos datos que tenés que completar.
+3. Si faltan datos, pedíselos al usuario en una lista clara y enumerada (un ítem por corchete pendiente). NO inventes datos, NO asumas, NO uses valores de ejemplo.
+4. Cuando tengas TODOS los datos, devolvé el documento COMPLETO y TEXTUAL, reemplazando cada corchete por su dato. Conservá saltos de línea, mayúsculas, puntuación y orden EXACTOS de la plantilla.
+5. Prohibido parafrasear, resumir, acortar, "mejorar" o cambiar UNA sola palabra fuera de los corchetes.
+6. Si el usuario te pasa todos los datos de una, devolvé directamente el documento completo sin más preguntas.
+7. Si un corchete admite el mismo dato repetido en varios lugares (ej. una dirección que aparece dos veces), completalo en todas sus apariciones.`;
+
+const MODELOS_ASSISTANT_ID = 'modelos';
 
 const MAX_CONTEXT_MESSAGES = 40;
 const TITLE_MAX = 72;
@@ -66,6 +85,30 @@ async function getKnowledgeContext(openai: OpenAI, supabase: any, query: string,
     .join('\n\n---\n\n');
 
   return { context, used: used.map(({ id, similarity }: any) => ({ id, similarity })) };
+}
+
+/** Trae todas las plantillas del asistente y las arma como bloque verbatim. */
+async function getTemplatesBlock(supabase: any, assistantId: string) {
+  const { data, error } = await supabase
+    .from('ai_templates')
+    .select('name, content')
+    .eq('assistant_id', assistantId)
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.warn('ai-chat templates lookup error:', error);
+    return { block: '', count: 0 };
+  }
+  if (!Array.isArray(data) || data.length === 0) return { block: '', count: 0 };
+
+  const block = data
+    .map(
+      (t: any) =>
+        `=== PLANTILLA: ${String(t.name)} ===\n${String(t.content)}\n=== FIN PLANTILLA ===`
+    )
+    .join('\n\n');
+
+  return { block, count: data.length };
 }
 
 /** GET: lista conversaciones, o mensajes si ?conversationId= */
@@ -276,21 +319,31 @@ export async function POST(request: NextRequest) {
 
     const tail = rows.slice(-MAX_CONTEXT_MESSAGES);
 
-    // RAG: buscar contexto relevante desde ai_knowledge_chunks (si existe)
-    let knowledgeContext = '';
-    try {
-      const k = await getKnowledgeContext(openai, supabase, content, assistantId);
-      knowledgeContext = k.context;
-    } catch (e) {
-      console.warn('ai-chat knowledge lookup failed:', e);
+    // El asistente "modelos" rellena plantillas verbatim → NO usa RAG.
+    let systemPrompt: string;
+    if (assistantId === MODELOS_ASSISTANT_ID) {
+      const { block, count } = await getTemplatesBlock(supabase, assistantId);
+      systemPrompt = count
+        ? `${TEMPLATES_SYSTEM_PROMPT}\n\n${block}`
+        : `${TEMPLATES_SYSTEM_PROMPT}\n\nNota: todavía no hay plantillas cargadas para este asistente. Pedile al usuario que cargue una desde el botón "Plantillas" antes de generar documentos.`;
+    } else {
+      // RAG: buscar contexto relevante desde ai_knowledge_chunks (si existe)
+      let knowledgeContext = '';
+      try {
+        const k = await getKnowledgeContext(openai, supabase, content, assistantId);
+        knowledgeContext = k.context;
+      } catch (e) {
+        console.warn('ai-chat knowledge lookup failed:', e);
+      }
+
+      const ragInstruction = knowledgeContext
+        ? `\n\nIMPORTANTE: Tenés acceso a \"Fuentes internas\" (texto de la empresa) debajo. Para cotizar o afirmar datos del negocio, basate en esas fuentes. Si la pregunta requiere datos que no aparecen en las fuentes, pedí la info faltante antes de cotizar. No inventes números.\n\nFuentes internas:\n${knowledgeContext}`
+        : `\n\nNota: No hay \"Fuentes internas\" cargadas todavía (ai_knowledge_chunks). Si el usuario pide una cotización que requiera datos propios del negocio, pedí los datos necesarios o explicá qué falta.`;
+      systemPrompt = `${SYSTEM_PROMPT}${ragInstruction}`;
     }
 
-    const ragInstruction = knowledgeContext
-      ? `\n\nIMPORTANTE: Tenés acceso a \"Fuentes internas\" (texto de la empresa) debajo. Para cotizar o afirmar datos del negocio, basate en esas fuentes. Si la pregunta requiere datos que no aparecen en las fuentes, pedí la info faltante antes de cotizar. No inventes números.\n\nFuentes internas:\n${knowledgeContext}`
-      : `\n\nNota: No hay \"Fuentes internas\" cargadas todavía (ai_knowledge_chunks). Si el usuario pide una cotización que requiera datos propios del negocio, pedí los datos necesarios o explicá qué falta.`;
-
     const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      { role: 'system', content: `${SYSTEM_PROMPT}${ragInstruction}` },
+      { role: 'system', content: systemPrompt },
       ...tail
         .filter((m) => m.role === 'user' || m.role === 'assistant')
         .map((m) => ({
@@ -302,7 +355,8 @@ export async function POST(request: NextRequest) {
     const completion = await openai.chat.completions.create({
       model,
       messages: openaiMessages,
-      temperature: 0.7,
+      // Documentos legales se reproducen textual → temperatura baja para "modelos".
+      temperature: assistantId === MODELOS_ASSISTANT_ID ? 0.1 : 0.7,
     });
 
     const assistantText = completion.choices[0]?.message?.content?.trim() || '';
