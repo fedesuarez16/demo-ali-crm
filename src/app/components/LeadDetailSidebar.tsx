@@ -341,10 +341,8 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
           seguimientoData.fecha_ultima_interaccion = lead.fechaContacto;
         }
 
-        if ((lead as any).chatwoot_conversation_id) {
-          seguimientoData.chatwoot_conversation_id = (lead as any).chatwoot_conversation_id;
-        }
-
+        // leads no tiene columna chatwoot_conversation_id: los seguimientos del CRM
+        // se agendan sin conv_id y n8n lo resuelve contra Chatwoot al procesarlos
         const result = await programarSeguimiento(seguimientoData);
 
         if (result.success) {
