@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useId, useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
+import React, { useMemo } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { ChartContainer } from '@/components/ui/chart';
 import type { ChartConfig } from '@/components/ui/chart';
 
@@ -13,24 +13,33 @@ const USD_FORMATTER = new Intl.NumberFormat('es-AR', {
 });
 
 const chartConfig: ChartConfig = {
-  total: { label: 'Total USD', color: '#10B981' },
+  count: { label: 'Consultas', color: '#10B981' },
 };
 
-interface BarDatum {
-  campaign: string;
+export interface HistogramBin {
+  from: number;
+  to: number;
   count: number;
-  total: number;
-  promedio: number;
-  gradientId: string;
 }
 
-export interface ChartBarTicketPorCampanaProps {
-  data: { campaign: string; count: number; total: number; promedio: number }[];
+export interface ChartHistogramPresupuestosProps {
+  bins: HistogramBin[];
   className?: string;
 }
 
+function formatK(value: number): string {
+  if (value >= 1000 && value % 1000 === 0) {
+    return `${(value / 1000).toLocaleString('es-AR')}k`;
+  }
+  return value.toLocaleString('es-AR');
+}
+
+interface BinDatum extends HistogramBin {
+  label: string;
+}
+
 interface TooltipPayloadEntry {
-  payload?: BarDatum;
+  payload?: BinDatum;
 }
 
 interface CustomTooltipProps {
@@ -51,46 +60,29 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
           style={{ background: '#10B981' }}
           aria-hidden="true"
         />
-        {datum.campaign}
+        {USD_FORMATTER.format(datum.from)} – {USD_FORMATTER.format(datum.to)}
       </div>
       <div className="flex items-center justify-between gap-4 text-slate-600">
-        <span>Total</span>
-        <span className="tabular-nums font-semibold text-slate-900">
-          {USD_FORMATTER.format(datum.total)}
-        </span>
-      </div>
-      <div className="flex items-center justify-between gap-4 text-slate-600">
-        <span>Leads</span>
+        <span>Consultas</span>
         <span className="tabular-nums font-semibold text-slate-900">{datum.count}</span>
-      </div>
-      <div className="flex items-center justify-between gap-4 text-slate-600">
-        <span>Promedio</span>
-        <span className="tabular-nums font-semibold text-slate-900">
-          {USD_FORMATTER.format(datum.promedio)}
-        </span>
       </div>
     </div>
   );
 }
 
-export function ChartBarTicketPorCampana({
-  data,
+export function ChartHistogramPresupuestos({
+  bins,
   className,
-}: ChartBarTicketPorCampanaProps) {
-  const reactId = useId();
-  const gradientPrefix = `bar-gradient-${reactId.replace(/[:]/g, '')}`;
-
-  const chartData = useMemo<BarDatum[]>(() => {
-    return data.map(d => ({
-      ...d,
-      gradientId: `${gradientPrefix}-${d.campaign.replace(/[^a-zA-Z0-9]/g, '_')}`,
-    }));
-  }, [data, gradientPrefix]);
+}: ChartHistogramPresupuestosProps) {
+  const chartData = useMemo<BinDatum[]>(
+    () => bins.map(b => ({ ...b, label: `${formatK(b.from)}–${formatK(b.to)}` })),
+    [bins],
+  );
 
   if (chartData.length === 0) {
     return (
       <div className="flex h-[300px] w-full items-center justify-center text-sm text-muted-foreground">
-        Sin datos de presupuesto por campaña.
+        Sin presupuestos para la selección actual.
       </div>
     );
   }
@@ -105,18 +97,17 @@ export function ChartBarTicketPorCampana({
       <BarChart
         data={chartData}
         margin={{ top: 16, right: 16, left: 0, bottom: rotated ? 56 : 16 }}
+        barCategoryGap="12%"
       >
         <defs>
-          {chartData.map(d => (
-            <linearGradient key={d.gradientId} id={d.gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor="#10B981" stopOpacity={0.95} />
-              <stop offset="100%" stopColor="#10B981" stopOpacity={0.55} />
-            </linearGradient>
-          ))}
+          <linearGradient id="histogram-presupuestos-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#10B981" stopOpacity={0.95} />
+            <stop offset="100%" stopColor="#10B981" stopOpacity={0.55} />
+          </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
         <XAxis
-          dataKey="campaign"
+          dataKey="label"
           tickLine={false}
           axisLine={false}
           tickMargin={8}
@@ -130,19 +121,15 @@ export function ChartBarTicketPorCampana({
           tickLine={false}
           axisLine={false}
           tickMargin={8}
-          width={80}
-          tickFormatter={(v: number) => USD_FORMATTER.format(v)}
+          width={40}
+          allowDecimals={false}
           tick={{ fill: '#64748b', fontSize: 12 }}
         />
         <Tooltip
           cursor={{ fill: 'rgba(148, 163, 184, 0.10)' }}
           content={<CustomTooltip />}
         />
-        <Bar dataKey="total" radius={[6, 6, 0, 0]}>
-          {chartData.map((d) => (
-            <Cell key={d.campaign} fill={`url(#${d.gradientId})`} />
-          ))}
-        </Bar>
+        <Bar dataKey="count" fill="url(#histogram-presupuestos-fill)" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ChartContainer>
   );

@@ -7,7 +7,8 @@ import { getAllLeads, campaignNumericFingerprint } from "../services/leadService
 import { getKanbanColumns } from '@/app/services/columnService';
 import { getSystemCosts, updateSystemCosts, type SystemCosts } from '@/app/services/systemCostService';
 import { ChartBarLeadsPorEstado } from '@/app/components/ChartBarLeadsPorEstado';
-import { ChartBarTicketPorCampana } from '@/app/components/ChartBarTicketPorCampana';
+import { ChartHistogramPresupuestos } from '@/app/components/ChartHistogramPresupuestos';
+import type { HistogramBin } from '@/app/components/ChartHistogramPresupuestos';
 import { CostoPorLeadCard } from '@/app/components/CostoPorLeadCard';
 import { ChartAreaInteractive } from "@/components/ui/chart-area-interactive";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -101,6 +102,8 @@ export default function Page() {
   const [openaiCost, setOpenaiCost] = useState<string>('');
   const [claudeCost, setClaudeCost] = useState<string>('');
   const [costsSaveStatus, setCostsSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [ticketCampaignFilter, setTicketCampaignFilter] = useState<string>('');
+  const [ticketBinSize, setTicketBinSize] = useState<number>(10000);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
 
@@ -665,6 +668,51 @@ export default function Page() {
     [ticketPorCampana],
   );
 
+  // Campaña seleccionada para la distribución; se ignora si dejó de existir
+  const effectiveTicketCampaign = useMemo(() => {
+    if (!ticketCampaignFilter) return '';
+    return uniqueCampaigns.includes(ticketCampaignFilter) ? ticketCampaignFilter : '';
+  }, [ticketCampaignFilter, uniqueCampaigns]);
+
+  const presupuestosSeleccion = useMemo(() => {
+    const out: number[] = [];
+    for (const lead of leads) {
+      if (lead.presupuesto <= 0) continue;
+      const raw = ((lead as any).propiedad_interes || '').trim();
+      const camp = leadRawToPautaCampaign.get(raw);
+      if (!camp) continue;
+      if (effectiveTicketCampaign && camp !== effectiveTicketCampaign) continue;
+      out.push(lead.presupuesto);
+    }
+    return out;
+  }, [leads, leadRawToPautaCampaign, effectiveTicketCampaign]);
+
+  const histogramaPresupuestos = useMemo<HistogramBin[]>(() => {
+    if (presupuestosSeleccion.length === 0) return [];
+    const bin = ticketBinSize >= 1000 ? ticketBinSize : 10000;
+    const min = Math.floor(Math.min(...presupuestosSeleccion) / bin) * bin;
+    const max = Math.max(...presupuestosSeleccion);
+    // Tope de segmentos para que un rango chico no genere miles de barras;
+    // el excedente se acumula en el último segmento
+    const MAX_BINS = 40;
+    const binCount = Math.min(Math.floor((max - min) / bin) + 1, MAX_BINS);
+    const bins: HistogramBin[] = Array.from({ length: binCount }, (_, i) => ({
+      from: min + i * bin,
+      to: min + (i + 1) * bin,
+      count: 0,
+    }));
+    for (const p of presupuestosSeleccion) {
+      const idx = Math.min(Math.floor((p - min) / bin), binCount - 1);
+      bins[idx].count++;
+    }
+    return bins;
+  }, [presupuestosSeleccion, ticketBinSize]);
+
+  const ticketTotalSeleccion = useMemo(
+    () => presupuestosSeleccion.reduce((s, p) => s + p, 0),
+    [presupuestosSeleccion],
+  );
+
   if (!isAuthenticated) {
     return (
       <AppLayout>
@@ -983,7 +1031,14 @@ export default function Page() {
           <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
-                <CardTitle className="text-sm font-medium">Ticket Total de campañas</CardTitle>
+                <div>
+                  <CardTitle className="text-sm font-medium">Distribución de presupuestos</CardTitle>
+                  <CardDescription className="text-xs">
+                    {effectiveTicketCampaign
+                      ? <>Campaña: <span className="font-medium text-foreground">{effectiveTicketCampaign}</span></>
+                      : 'Todas las campañas'}
+                  </CardDescription>
+                </div>
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 24 24"
@@ -999,22 +1054,75 @@ export default function Page() {
                 </svg>
               </CardHeader>
               <CardContent className="p-4 pt-0 space-y-3">
-                <div className="text-xl font-bold leading-tight tabular-nums">
-                  {ticketTotalCampanas > 0 ? usdFormatter.format(ticketTotalCampanas) : '—'}
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <div className="text-xl font-bold leading-tight tabular-nums">
+                      {ticketTotalSeleccion > 0 ? usdFormatter.format(ticketTotalSeleccion) : '—'}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {effectiveTicketCampaign
+                        ? 'Suma de presupuestos de la campaña seleccionada'
+                        : 'Suma de presupuestos de leads con campaña asignada'}
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    Rango (USD)
+                    <input
+                      type="number"
+                      min={1000}
+                      step={1000}
+                      value={ticketBinSize}
+                      onChange={(e) => {
+                        const n = parseInt(e.target.value, 10);
+                        setTicketBinSize(Number.isFinite(n) ? n : 10000);
+                      }}
+                      className="h-7 w-24 rounded-md border border-input bg-background px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </label>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Suma de presupuestos de leads con campaña asignada
-                </p>
-                <ChartBarTicketPorCampana data={ticketPorCampana} className="w-full" />
+                <ChartHistogramPresupuestos bins={histogramaPresupuestos} className="w-full" />
+                {histogramaPresupuestos.length > 0 && (
+                  <div className="max-h-48 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-card">
+                        <tr className="border-b">
+                          <th className="py-2 text-left font-medium">Rango de búsqueda</th>
+                          <th className="py-2 text-right font-medium">Cantidad de consultas</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {histogramaPresupuestos.map(b => (
+                          <tr key={b.from} className="border-b last:border-b-0">
+                            <td className="py-1.5 text-left tabular-nums">
+                              {usdFormatter.format(b.from)} – {usdFormatter.format(b.to)}
+                            </td>
+                            <td className="py-1.5 text-right tabular-nums">{b.count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader className="p-4 pb-1">
-                <CardTitle className="text-sm font-medium">Ticket por campaña</CardTitle>
-                <CardDescription className="text-xs">
-                  Solo leads con presupuesto &gt; 0. Ordenado por total descendente.
-                </CardDescription>
+              <CardHeader className="flex flex-row items-start justify-between space-y-0 p-4 pb-1">
+                <div>
+                  <CardTitle className="text-sm font-medium">Ticket por campaña</CardTitle>
+                  <CardDescription className="text-xs">
+                    Solo leads con presupuesto &gt; 0. Clic en una campaña para ver su distribución.
+                  </CardDescription>
+                </div>
+                {effectiveTicketCampaign && (
+                  <button
+                    type="button"
+                    onClick={() => setTicketCampaignFilter('')}
+                    className="rounded-md border border-input px-2 py-1 text-xs text-muted-foreground shadow-sm hover:bg-slate-50"
+                  >
+                    Ver todas
+                  </button>
+                )}
               </CardHeader>
               <CardContent className="p-4 pt-2">
                 {ticketPorCampana.length === 0 ? (
@@ -1032,7 +1140,15 @@ export default function Page() {
                         </thead>
                         <tbody>
                           {ticketPorCampana.map(r => (
-                            <tr key={r.campaign} className="border-b last:border-b-0">
+                            <tr
+                              key={r.campaign}
+                              onClick={() =>
+                                setTicketCampaignFilter(prev => (prev === r.campaign ? '' : r.campaign))
+                              }
+                              className={`border-b last:border-b-0 cursor-pointer transition-colors hover:bg-slate-50 ${
+                                effectiveTicketCampaign === r.campaign ? 'bg-emerald-50' : ''
+                              }`}
+                            >
                               <td className="py-1.5 text-left max-w-[140px] truncate" title={r.campaign}>{r.campaign}</td>
                               <td className="py-1.5 text-right tabular-nums">{r.count}</td>
                               <td className="py-1.5 text-right tabular-nums">{usdFormatter.format(r.total)}</td>
