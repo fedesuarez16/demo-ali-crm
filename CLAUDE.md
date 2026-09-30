@@ -19,9 +19,11 @@ There is no test runner configured. Both `package-lock.json` and `pnpm-lock.yaml
 ```
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY      # server-only; /api/gastos reads the metrics_* views (anon has no SELECT)
 CHATWOOT_URL
 CHATWOOT_ACCOUNT_ID
 CHATWOOT_API_TOKEN
+ANTHROPIC_ADMIN_KEY            # server-only Admin API key (sk-ant-admin...); /api/gastos/anthropic reads the org cost_report
 OPENAI_API_KEY                 # used by /api/ai-chat and embeddings
 OPENAI_EMBEDDING_MODEL         # optional, default text-embedding-3-small (1536 dims)
 WHATSAPP_ACCESS_TOKEN          # Meta Cloud API (optional features)

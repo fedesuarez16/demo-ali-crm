@@ -17,9 +17,10 @@ export interface SystemCosts {
   hosting: number;
   openai:  number;
   claude:  number;
+  mantenimiento: number;
 }
 
-const ZERO: SystemCosts = { hosting: 0, openai: 0, claude: 0 };
+const ZERO: SystemCosts = { hosting: 0, openai: 0, claude: 0, mantenimiento: 0 };
 
 function toNumber(v: unknown): number {
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
@@ -34,7 +35,7 @@ export async function getSystemCosts(): Promise<SystemCosts> {
   const supabase = getSupabase();
   const { data, error } = await (supabase as any)
     .from('system_costs')
-    .select('hosting, openai, claude')
+    .select('hosting, openai, claude, mantenimiento')
     .eq('id', 1)
     .maybeSingle();
 
@@ -48,6 +49,7 @@ export async function getSystemCosts(): Promise<SystemCosts> {
     hosting: toNumber(data.hosting),
     openai:  toNumber(data.openai),
     claude:  toNumber(data.claude),
+    mantenimiento: toNumber(data.mantenimiento),
   };
 }
 
@@ -57,6 +59,7 @@ export async function updateSystemCosts(costs: SystemCosts): Promise<SystemCosts
     hosting: toNumber(costs.hosting),
     openai:  toNumber(costs.openai),
     claude:  toNumber(costs.claude),
+    mantenimiento: toNumber(costs.mantenimiento),
     updated_at: new Date().toISOString(),
   };
 
@@ -64,7 +67,7 @@ export async function updateSystemCosts(costs: SystemCosts): Promise<SystemCosts
     .from('system_costs')
     .update(payload)
     .eq('id', 1)
-    .select('hosting, openai, claude')
+    .select('hosting, openai, claude, mantenimiento')
     .single();
 
   if (error) {
@@ -76,5 +79,6 @@ export async function updateSystemCosts(costs: SystemCosts): Promise<SystemCosts
     hosting: toNumber(data.hosting),
     openai:  toNumber(data.openai),
     claude:  toNumber(data.claude),
+    mantenimiento: toNumber(data.mantenimiento),
   };
 }

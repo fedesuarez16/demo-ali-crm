@@ -3,92 +3,40 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import AppLayout from "../components/AppLayout";
 import { Lead } from "../types";
-import { getAllLeads, campaignNumericFingerprint } from "../services/leadService";
+import { getAllLeads } from "../services/leadService";
 import { getKanbanColumns } from '@/app/services/columnService';
-import { getSystemCosts, updateSystemCosts, type SystemCosts } from '@/app/services/systemCostService';
 import { ChartBarLeadsPorEstado } from '@/app/components/ChartBarLeadsPorEstado';
 import { ChartHistogramPresupuestos } from '@/app/components/ChartHistogramPresupuestos';
 import type { HistogramBin } from '@/app/components/ChartHistogramPresupuestos';
-import { CostoPorLeadCard } from '@/app/components/CostoPorLeadCard';
+import { DashboardAuthGate } from '@/app/components/DashboardAuthGate';
+import { PeriodoSelector } from '@/app/components/PeriodoSelector';
 import { ChartAreaInteractive } from "@/components/ui/chart-area-interactive";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartConfig } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-
-interface Pauta {
-  id: number;
-  texto: string;
-  activo?: boolean;
-  created_at?: string;
-}
-
-function isPautaActiva(p: Pauta): boolean {
-  return p.activo !== false;
-}
-
-/** YYYY-MM-DD en calendario local (evita desfase UTC de toISOString) */
-function toDateInputValue(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function normalizeCampaignText(name: string): string {
-  if (!name) return '';
-  let normalized = name.toLowerCase().trim();
-  normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  normalized = normalized.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  return normalized;
-}
-
-function parseDateInput(s: string): Date {
-  const [y, m, d] = s.split('-').map(Number);
-  return new Date(y, (m || 1) - 1, d || 1);
-}
-
-/** Días consecutivos inclusive, ordenados; si inicio > fin se intercambian */
-function eachDayInclusive(startStr: string, endStr: string): string[] {
-  let start = parseDateInput(startStr);
-  let end = parseDateInput(endStr);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
-  if (start > end) [start, end] = [end, start];
-  const out: string[] = [];
-  const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-  while (cur <= endDay) {
-    out.push(toDateInputValue(cur));
-    cur.setDate(cur.getDate() + 1);
-  }
-  return out;
-}
-
-function leadCalendarDate(lead: Lead): string {
-  const raw = lead.fechaContacto || lead.created_at;
-  if (!raw) return toDateInputValue(new Date());
-  const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return toDateInputValue(new Date());
-  return toDateInputValue(d);
-}
-
-function defaultPeriodEnd(): string {
-  return toDateInputValue(new Date());
-}
-
-function defaultPeriodStart(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 29);
-  return toDateInputValue(d);
-}
-
-const MAX_CHART_DAYS = 731;
-const SIN_CAMPANA_SENTINEL = '__sin_campana__';
+import {
+  type Pauta,
+  SIN_CAMPANA_SENTINEL,
+  buildLeadCampaignMap,
+  campaignsFromPautas,
+  defaultPeriodEnd,
+  defaultPeriodStart,
+  filterLeadsByPeriodAndCampaign,
+  leadCalendarDate,
+  resolvePeriodDates,
+} from '@/app/utils/periodo';
 
 export default function Page() {
+  return (
+    <DashboardAuthGate seccion="el Dashboard">
+      <DashboardContent />
+    </DashboardAuthGate>
+  );
+}
+
+function DashboardContent() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [chartPeriodStart, setChartPeriodStart] = useState(defaultPeriodStart);
@@ -98,35 +46,8 @@ export default function Page() {
   const [barEstadoCampaignFilter, setBarEstadoCampaignFilter] = useState<string>('');
   const [pautas, setPautas] = useState<Pauta[]>([]);
   const [columnColors, setColumnColors] = useState<Record<string, string>>({});
-  const [hostingCost, setHostingCost] = useState<string>('');
-  const [openaiCost, setOpenaiCost] = useState<string>('');
-  const [claudeCost, setClaudeCost] = useState<string>('');
-  const [costsSaveStatus, setCostsSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [ticketCampaignFilter, setTicketCampaignFilter] = useState<string>('');
   const [ticketBinSize, setTicketBinSize] = useState<number>(10000);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [passwordInput, setPasswordInput] = useState('');
-
-  useEffect(() => {
-    const auth = localStorage.getItem('dashboard_auth');
-    if (auth === 'true') {
-      setIsAuthenticated(true);
-    }
-  }, []);
-
-  const handlePasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const correctPassword = process.env.NEXT_PUBLIC_DASHBOARD_PASSWORD || 'admin123';
-    if (passwordInput === correctPassword) {
-      setIsAuthenticated(true);
-      localStorage.setItem('dashboard_auth', 'true');
-    } else {
-      alert('Contraseña incorrecta');
-      setPasswordInput('');
-    }
-  };
-
-
   useEffect(() => {
     const loadLeads = async () => {
       setIsLoading(true);
@@ -175,59 +96,10 @@ export default function Page() {
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const costs = await getSystemCosts();
-        if (cancelled) return;
-        setHostingCost(costs.hosting > 0 ? String(costs.hosting) : '');
-        setOpenaiCost(costs.openai > 0 ? String(costs.openai) : '');
-        setClaudeCost(costs.claude > 0 ? String(costs.claude) : '');
-      } catch (e) {
-        console.error('Error cargando system_costs:', e);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const persistCosts = async (overrides?: Partial<SystemCosts>) => {
-    const parse = (s: string) => {
-      const n = parseFloat(s);
-      return Number.isFinite(n) && n > 0 ? n : 0;
-    };
-    const next: SystemCosts = {
-      hosting: overrides?.hosting ?? parse(hostingCost),
-      openai:  overrides?.openai  ?? parse(openaiCost),
-      claude:  overrides?.claude  ?? parse(claudeCost),
-    };
-    setCostsSaveStatus('saving');
-    try {
-      await updateSystemCosts(next);
-      setCostsSaveStatus('saved');
-      setTimeout(() => {
-        setCostsSaveStatus(prev => (prev === 'saved' ? 'idle' : prev));
-      }, 1500);
-    } catch (e) {
-      console.error('Error guardando system_costs:', e);
-      setCostsSaveStatus('error');
-    }
-  };
-
-  const { periodDates, periodRangeClipped } = useMemo(() => {
-    const days = eachDayInclusive(chartPeriodStart, chartPeriodEnd);
-    if (days.length === 0) {
-      const fallback = eachDayInclusive(defaultPeriodStart(), defaultPeriodEnd());
-      return { periodDates: fallback, periodRangeClipped: false };
-    }
-    if (days.length <= MAX_CHART_DAYS) {
-      return { periodDates: days, periodRangeClipped: false };
-    }
-    return {
-      periodDates: days.slice(days.length - MAX_CHART_DAYS),
-      periodRangeClipped: true,
-    };
-  }, [chartPeriodStart, chartPeriodEnd]);
+  const { periodDates, periodRangeClipped } = useMemo(
+    () => resolvePeriodDates(chartPeriodStart, chartPeriodEnd),
+    [chartPeriodStart, chartPeriodEnd],
+  );
 
   // Agrupar leads por fecha (rango seleccionado en "Leads por Período")
   const leadsByDate = useMemo(() => {
@@ -313,51 +185,13 @@ export default function Page() {
   }, [leads, periodDates]);
 
   // Campañas oficiales: salen de la tabla pautas (idealmente activas)
-  const uniqueCampaigns = useMemo(() => {
-    const texts = pautas
-      .filter(isPautaActiva)
-      .map((p) => String(p.texto || '').trim())
-      .filter(Boolean);
-    return [...new Set(texts)].sort((a, b) => a.localeCompare(b, 'es'));
-  }, [pautas]);
+  const uniqueCampaigns = useMemo(() => campaignsFromPautas(pautas), [pautas]);
 
   // Mapeo lead.propiedad_interes → campaña oficial (pauta.texto)
-  const leadRawToPautaCampaign = useMemo(() => {
-    const pautaByNormalized = new Map<string, string>();
-    const pautaByFingerprint = new Map<string, string>();
-
-    for (const campaign of uniqueCampaigns) {
-      const norm = normalizeCampaignText(campaign);
-      if (norm) pautaByNormalized.set(norm, campaign);
-      const fp = campaignNumericFingerprint(campaign);
-      if (fp) pautaByFingerprint.set(fp, campaign);
-    }
-
-    const map = new Map<string, string>();
-    for (const lead of leads) {
-      const raw = String((lead as any).propiedad_interes || '').trim();
-      if (!raw) continue;
-
-      // 1) match exacto (case-insensitive / normalizado)
-      const normLead = normalizeCampaignText(raw);
-      const byNorm = pautaByNormalized.get(normLead);
-      if (byNorm) {
-        map.set(raw, byNorm);
-        continue;
-      }
-
-      // 2) match por huella numérica (une variantes como "466 e/ 24 y 25" con "466 ENTRE 24 Y 25")
-      const fpLead = campaignNumericFingerprint(raw);
-      if (fpLead) {
-        const byFp = pautaByFingerprint.get(fpLead);
-        if (byFp) {
-          map.set(raw, byFp);
-          continue;
-        }
-      }
-    }
-    return map;
-  }, [leads, uniqueCampaigns]);
+  const leadRawToPautaCampaign = useMemo(
+    () => buildLeadCampaignMap(leads, uniqueCampaigns),
+    [leads, uniqueCampaigns],
+  );
 
   const leadsByCampaign = useMemo(() => {
     const dates = periodDates;
@@ -404,22 +238,10 @@ export default function Page() {
     }
   }, [campaignChartFilter, uniqueCampaigns]);
 
-  const barEstadoFilteredLeads = useMemo<Lead[]>(() => {
-    const periodSet = new Set(periodDates);
-    const out: Lead[] = [];
-    for (const lead of leads) {
-      if (!periodSet.has(leadCalendarDate(lead))) continue;
-      const raw = String((lead as any).propiedad_interes || '').trim();
-      if (barEstadoCampaignFilter === '') {
-        out.push(lead);
-      } else if (barEstadoCampaignFilter === SIN_CAMPANA_SENTINEL) {
-        if (!leadRawToPautaCampaign.has(raw)) out.push(lead);
-      } else {
-        if (leadRawToPautaCampaign.get(raw) === barEstadoCampaignFilter) out.push(lead);
-      }
-    }
-    return out;
-  }, [leads, periodDates, leadRawToPautaCampaign, barEstadoCampaignFilter]);
+  const barEstadoFilteredLeads = useMemo<Lead[]>(
+    () => filterLeadsByPeriodAndCampaign(leads, periodDates, leadRawToPautaCampaign, barEstadoCampaignFilter),
+    [leads, periodDates, leadRawToPautaCampaign, barEstadoCampaignFilter],
+  );
 
   const effectiveBarEstadoCampaignFilter = useMemo<string>(() => {
     if (!barEstadoCampaignFilter) return '';
@@ -564,14 +386,6 @@ export default function Page() {
     },
   };
 
-  const applyPresetDays = (days: number) => {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - (days - 1));
-    setChartPeriodStart(toDateInputValue(start));
-    setChartPeriodEnd(toDateInputValue(end));
-  };
-
   const periodDayCount = periodDates.length;
 
   // Calcular totales
@@ -597,24 +411,6 @@ export default function Page() {
       return leadDate >= thirtyDaysAgo;
     }).length;
   }, [leads]);
-
-  const totalMaintenance = useMemo(() => {
-    const parse = (s: string) => {
-      const n = parseFloat(s);
-      return Number.isFinite(n) && n > 0 ? n : 0;
-    };
-    return parse(hostingCost) + parse(openaiCost) + parse(claudeCost);
-  }, [hostingCost, openaiCost, claudeCost]);
-
-  const maintenanceFormatter = useMemo(
-    () => new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 2,
-      minimumFractionDigits: 2,
-    }),
-    [],
-  );
 
   const arsFormatter = useMemo(
     () => new Intl.NumberFormat('es-AR', {
@@ -712,41 +508,6 @@ export default function Page() {
     () => presupuestosSeleccion.reduce((s, p) => s + p, 0),
     [presupuestosSeleccion],
   );
-
-  if (!isAuthenticated) {
-    return (
-      <AppLayout>
-        <div className="flex items-center justify-center min-h-screen p-4">
-          <Card className="w-full max-w-md p-6">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl">Acceso Restringido</CardTitle>
-              <CardDescription>
-                Por favor, ingrese la contraseña para acceder al Dashboard
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handlePasswordSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="password">Contraseña</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={passwordInput}
-                    onChange={(e) => setPasswordInput(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                  />
-                </div>
-                <Button type="submit" className="w-full">
-                  Ingresar
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-      </AppLayout>
-    );
-  }
 
   if (isLoading) {
     return (
@@ -853,7 +614,7 @@ export default function Page() {
         {/* ───────────── SECCIÓN 1 — RESUMEN ───────────── */}
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Resumen</h2>
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
               <CardTitle className="text-sm font-medium">
@@ -932,68 +693,6 @@ export default function Page() {
               <p className="text-xs text-muted-foreground">
                 Leads ingresados este mes
               </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                Gasto mensual
-                {costsSaveStatus === 'saving' && (
-                  <span className="text-[10px] font-normal text-muted-foreground">Guardando…</span>
-                )}
-                {costsSaveStatus === 'saved' && (
-                  <span className="text-[10px] font-normal text-emerald-600">✓ Guardado</span>
-                )}
-                {costsSaveStatus === 'error' && (
-                  <span className="text-[10px] font-normal text-red-600">Error</span>
-                )}
-              </CardTitle>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                className="h-4 w-4 text-muted-foreground"
-              >
-                <line x1="12" y1="1" x2="12" y2="23" />
-                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-              </svg>
-            </CardHeader>
-            <CardContent className="p-4 pt-0 space-y-2">
-              <div className="text-xl font-bold leading-tight tabular-nums">
-                {maintenanceFormatter.format(totalMaintenance)}
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: 'gasto-hosting', label: 'Hosting', value: hostingCost, setter: setHostingCost, field: 'hosting' as const },
-                  { id: 'gasto-openai',  label: 'OpenAI',  value: openaiCost,  setter: setOpenaiCost,  field: 'openai'  as const },
-                  { id: 'gasto-claude',  label: 'Claude',  value: claudeCost,  setter: setClaudeCost,  field: 'claude'  as const },
-                ].map(({ id, label, value, setter, field }) => (
-                  <div key={id} className="flex flex-col gap-1">
-                    <Label htmlFor={id} className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      {label}
-                    </Label>
-                    <input
-                      id={id}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={value}
-                      onChange={(e) => setter(e.target.value)}
-                      onBlur={(e) => {
-                        const n = parseFloat(e.target.value);
-                        persistCosts({ [field]: Number.isFinite(n) && n > 0 ? n : 0 });
-                      }}
-                      placeholder="0"
-                      className="h-7 w-full rounded-md border border-input bg-background px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    />
-                  </div>
-                ))}
-              </div>
             </CardContent>
           </Card>
 
@@ -1189,63 +888,14 @@ export default function Page() {
                 </CardDescription>
               </div>
             </div>
-            <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50/80 p-3 sm:p-4">
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="dash-period-start" className="text-xs text-muted-foreground">
-                    Desde
-                  </Label>
-                  <input
-                    id="dash-period-start"
-                    type="date"
-                    value={chartPeriodStart}
-                    onChange={(e) => setChartPeriodStart(e.target.value)}
-                    className="h-9 rounded-md border border-input bg-background px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="dash-period-end" className="text-xs text-muted-foreground">
-                    Hasta
-                  </Label>
-                  <input
-                    id="dash-period-end"
-                    type="date"
-                    value={chartPeriodEnd}
-                    onChange={(e) => setChartPeriodEnd(e.target.value)}
-                    className="h-9 rounded-md border border-input bg-background px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <span className="mr-1 self-center text-xs text-muted-foreground">Atajos:</span>
-                <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => applyPresetDays(7)}>
-                  7 días
-                </Button>
-                <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => applyPresetDays(30)}>
-                  30 días
-                </Button>
-                <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => applyPresetDays(90)}>
-                  90 días
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs"
-                  onClick={() => {
-                    setChartPeriodStart(defaultPeriodStart());
-                    setChartPeriodEnd(defaultPeriodEnd());
-                  }}
-                >
-                  Por defecto (30 días)
-                </Button>
-              </div>
-              {periodRangeClipped && (
-                <p className="text-xs text-amber-700">
-                  El rango supera {MAX_CHART_DAYS} días; el gráfico muestra solo los últimos {MAX_CHART_DAYS} días hasta la fecha &quot;Hasta&quot;.
-                </p>
-              )}
-            </div>
+            <PeriodoSelector
+              idPrefix="dash"
+              start={chartPeriodStart}
+              end={chartPeriodEnd}
+              onStartChange={setChartPeriodStart}
+              onEndChange={setChartPeriodEnd}
+              clipped={periodRangeClipped}
+            />
           </CardHeader>
           <CardContent>
             <ChartAreaInteractive
@@ -1263,7 +913,7 @@ export default function Page() {
           <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
             Pipeline del rango ({chartPeriodStart} → {chartPeriodEnd})
           </h2>
-          <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+          <div className="grid gap-4 grid-cols-1">
             {/* Bar chart unificado con filtro de campaña */}
             <Card>
               <CardHeader className="space-y-4">
@@ -1311,11 +961,6 @@ export default function Page() {
                 />
               </CardContent>
             </Card>
-
-            <CostoPorLeadCard
-              leads={barEstadoFilteredLeads}
-              columnColors={columnColors}
-            />
           </div>
         </section>
 
