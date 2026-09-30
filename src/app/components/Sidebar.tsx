@@ -131,7 +131,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
   }, []);
 
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(menuCategories.map((c) => [c.name, true]))
+    // Grupos externos (PropSearch) arrancan plegados
+    Object.fromEntries(menuCategories.map((c) => [c.name, !c.external]))
   );
 
   const toggleCategory = (name: string) => {
@@ -237,7 +238,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
         </div>
 
         {/* Navigation */}
-        <ScrollArea className="flex-1">
+        {/* Radix envuelve el contenido en display:table, lo que rompe el truncate y desborda el ancho */}
+        <ScrollArea className="min-h-0 flex-1 [&_[data-radix-scroll-area-viewport]>div]:!block">
           <nav className={cn('py-3', collapsed ? 'px-2' : 'px-3')}>
             {menuCategories.map((category, index) => {
               const isOpen = openCategories[category.name];
