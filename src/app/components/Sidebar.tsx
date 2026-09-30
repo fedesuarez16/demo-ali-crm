@@ -3,7 +3,36 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import {
+  LayoutDashboard,
+  Wallet,
+  Users,
+  MessageSquare,
+  Clock,
+  Building2,
+  SearchCheck,
+  Megaphone,
+  Calculator,
+  BookOpen,
+  LayoutTemplate,
+  Search,
+  MessageSquarePlus,
+  Home,
+  Database,
+  Map as MapIcon,
+  Globe,
+  TreePine,
+  FileText,
+  FolderOpen,
+  Sparkles,
+  BarChart3,
+  ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
+  ArrowUpRight,
+  Menu,
+  type LucideIcon,
+} from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import LogoutButton from '@/app/components/LogoutButton';
@@ -11,390 +40,271 @@ import LogoutButton from '@/app/components/LogoutButton';
 interface MenuItem {
   name: string;
   path: string;
-  icon: React.ReactNode;
+  icon: LucideIcon;
+  external?: boolean;
 }
 
 interface MenuCategory {
   name: string;
   items: MenuItem[];
+  // Icono y link que se muestran cuando la sidebar está colapsada (grupos externos largos)
+  collapsedIcon?: LucideIcon;
+  collapsedPath?: string;
+  external?: boolean;
 }
 
 interface SidebarProps {
   onCollapse?: (collapsed: boolean) => void;
 }
 
+const PROPSEARCH_URL = 'https://remax-team-ali-scrapper.vercel.app';
+
+const menuCategories: MenuCategory[] = [
+  {
+    name: 'General',
+    items: [
+      { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+      { name: 'Gastos', path: '/gastos', icon: Wallet },
+      { name: 'Leads', path: '/leads', icon: Users },
+    ],
+  },
+  {
+    name: 'Mensajería',
+    items: [
+      { name: 'Chats', path: '/chat', icon: MessageSquare },
+      { name: 'Mensajes Programados', path: '/mensajes-programados', icon: Clock },
+    ],
+  },
+  {
+    name: 'Cartera',
+    items: [
+      { name: 'Propiedades', path: '/propiedades', icon: Building2 },
+      { name: 'Búsquedas', path: '/propiedades/busquedas', icon: SearchCheck },
+      { name: 'Campañas Activas', path: '/campanas-activas', icon: Megaphone },
+    ],
+  },
+  {
+    name: 'Asistentes',
+    items: [
+      { name: 'Cotizaciones', path: '/asistente?assistantId=tasador', icon: Calculator },
+      { name: 'Documentación', path: '/asistente?assistantId=ventas', icon: BookOpen },
+      { name: 'Modelos', path: '/asistente?assistantId=modelos', icon: LayoutTemplate },
+    ],
+  },
+  {
+    name: 'PropSearch',
+    external: true,
+    collapsedIcon: Search,
+    collapsedPath: `${PROPSEARCH_URL}/chat`,
+    items: [
+      { name: 'Nueva búsqueda', path: `${PROPSEARCH_URL}/chat`, icon: MessageSquarePlus },
+      { name: 'Todas las propiedades', path: `${PROPSEARCH_URL}/properties`, icon: Home },
+      { name: 'Buscar en DB', path: `${PROPSEARCH_URL}/search`, icon: Database },
+      { name: 'Mapa', path: `${PROPSEARCH_URL}/map`, icon: MapIcon },
+      { name: 'Fuentes', path: `${PROPSEARCH_URL}/sources`, icon: Globe },
+      { name: 'Barrios cerrados', path: `${PROPSEARCH_URL}/barrios`, icon: TreePine },
+      { name: 'Ficha propio', path: `${PROPSEARCH_URL}/ficha-propio`, icon: FileText },
+      { name: 'Carpetas', path: `${PROPSEARCH_URL}/historial`, icon: FolderOpen },
+      { name: 'Limpieza', path: `${PROPSEARCH_URL}/limpieza`, icon: Sparkles },
+      { name: 'Métricas', path: `${PROPSEARCH_URL}/metricas`, icon: BarChart3 },
+    ].map((item) => ({ ...item, external: true })),
+  },
+];
+
 const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
-  // En mobile, la sidebar debe estar cerrada por defecto
-  // En desktop, abierta por defecto
-  // Usar true por defecto para evitar problemas de hidratación (mobile-first)
+  // Mobile-first: cerrada por defecto para evitar problemas de hidratación;
+  // en desktop se abre al montar.
   const [collapsed, setCollapsed] = useState(true);
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
-  
-  // Ajustar según el tamaño de la ventana solo al montar (una sola vez)
+
   useEffect(() => {
     setMounted(true);
     if (typeof window !== 'undefined') {
       const isDesktop = window.innerWidth >= 1024;
-      if (isDesktop) {
-        setCollapsed(false);
-        if (onCollapse) onCollapse(false);
-      } else {
-        setCollapsed(true);
-        if (onCollapse) onCollapse(true);
-      }
+      setCollapsed(!isDesktop);
+      if (onCollapse) onCollapse(!isDesktop);
     }
     // Intencionalmente solo al montar: incluir onCollapse causa un loop porque
     // AppLayout redefine la función en cada render y resetea el estado en mobile.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const menuCategories: MenuCategory[] = [
-    {
-      name: 'General',
-      items: [
-        {
-          name: 'Dashboard',
-          path: '/dashboard',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-          ),
-        },
-
-        {
-          name: 'Gastos',
-          path: '/gastos',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          ),
-        },
-
-        {
-          name: 'Leads',
-          path: '/leads',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-          ),
-        },
-
-      ],
-    },
-
-    {
-      name: 'Mensajería',
-      items: [
-
-        {
-          name: 'Chats',
-          path: '/chat',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-            </svg>
-          ),
-        },
-        
-       
-        {
-          name: 'Mensajes Programados',
-          path: '/mensajes-programados',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          ),
-        },
-        
-       
-      ],
-    },
-
-
-   
-    {
-      name: 'Cartera',
-      items: [
-       
-       
-        {
-          name: 'Propiedades',
-          path: '/propiedades',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8a4 4 0 014-4h10a4 4 0 014 4v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 12h.01M11 12h.01M15 12h.01" />
-            </svg>
-          ),
-        },
-        {
-          name: 'Búsquedas',
-          path: '/propiedades/busquedas',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-          ),
-        },
-        {
-          name: 'Campanas Activas',
-          path: '/campanas-activas',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3v18M6 8l5-5 5 5M5 13h4m6 0h4m-9 4h6m-3-4v7" />
-            </svg>
-          ),
-        },
-      ],
-    },
-
-    {
-      name: 'Asistentes',
-      items: [
-        {
-          name: 'Cotizaciones',
-          path: '/asistente?assistantId=tasador',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l2 2 4-4m5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          ),
-        },
-        {
-          name: 'Documentación',
-          path: '/asistente?assistantId=ventas',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
-          ),
-        },
-        {
-          name: 'Modelos',
-          path: '/asistente?assistantId=modelos',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
-            </svg>
-          ),
-        },
-      ],
-    },
-    
-  ];
-
-  // Estado para expandir/colapsar categorías (Inbound / Outbound / General)
-  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = {};
-    menuCategories.forEach((category) => {
-      initial[category.name] = true;
-    });
-    return initial;
-  });
+  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(menuCategories.map((c) => [c.name, true]))
+  );
 
   const toggleCategory = (name: string) => {
-    setOpenCategories((prev) => ({
-      ...prev,
-      [name]: !prev[name],
-    }));
+    setOpenCategories((prev) => ({ ...prev, [name]: !prev[name] }));
   };
 
-  const toggleSidebar = () => {
-    const newCollapsedState = !collapsed;
-    console.log('🔄 Toggle sidebar:', { from: collapsed, to: newCollapsedState });
-    setCollapsed(newCollapsedState);
-    if (onCollapse) {
-      onCollapse(newCollapsedState);
+  const setCollapsedState = (value: boolean) => {
+    setCollapsed(value);
+    if (onCollapse) onCollapse(value);
+  };
+
+  const renderLink = (item: MenuItem) => {
+    const Icon = item.icon;
+    const isActive = !item.external && pathname === item.path;
+    const className = cn(
+      'group relative flex items-center rounded-md text-[13px] transition-colors',
+      collapsed ? 'h-9 w-9 justify-center mx-auto' : 'h-8 gap-2.5 px-2.5',
+      isActive
+        ? 'bg-neutral-100 text-neutral-900 font-medium'
+        : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900'
+    );
+    const content = (
+      <>
+        {isActive && !collapsed && (
+          <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-neutral-900" />
+        )}
+        <Icon
+          className={cn('h-4 w-4 shrink-0', isActive ? 'text-neutral-900' : 'text-neutral-400 group-hover:text-neutral-700')}
+          strokeWidth={1.75}
+        />
+        {!collapsed && <span className="flex-1 truncate">{item.name}</span>}
+        {!collapsed && item.external && (
+          <ArrowUpRight className="h-3 w-3 shrink-0 text-neutral-300 opacity-0 transition-opacity group-hover:opacity-100" />
+        )}
+      </>
+    );
+
+    if (item.external) {
+      return (
+        <a
+          key={item.path}
+          href={item.path}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={collapsed ? item.name : undefined}
+          className={className}
+        >
+          {content}
+        </a>
+      );
     }
+    return (
+      <Link key={item.path} href={item.path} title={collapsed ? item.name : undefined} className={className}>
+        {content}
+      </Link>
+    );
   };
 
   return (
     <>
-      {/* Botón flotante para abrir sidebar - Solo en mobile y solo cuando la sidebar está cerrada */}
+      {/* Botón flotante para abrir sidebar - solo mobile y con la sidebar cerrada */}
       {collapsed && (
         <button
-          onClick={toggleSidebar}
-          className="lg:hidden fixed top-3 left-3 z-[100] bg-black text-white rounded-lg p-2.5 shadow-2xl transition-transform duration-150 active:scale-95"
+          onClick={() => setCollapsedState(false)}
+          className="lg:hidden fixed top-3 left-3 z-[100] rounded-lg border border-neutral-200 bg-white p-2 text-neutral-700 shadow-sm transition-transform active:scale-95"
           aria-label="Abrir menú"
         >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
+          <Menu className="h-5 w-5" />
         </button>
       )}
 
       {/* Overlay para cerrar sidebar en mobile */}
       {mounted && !collapsed && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black/50 z-[90]"
-          onClick={() => {
-            setCollapsed(true);
-            if (onCollapse) onCollapse(true);
-          }}
-        />
+        <div className="lg:hidden fixed inset-0 z-[90] bg-black/40 backdrop-blur-[1px]" onClick={() => setCollapsedState(true)} />
       )}
 
-      {/* Sidebar */}
-      <div className={cn(
-        "flex h-screen flex-col bg-card border-r border-border transition-all duration-300 z-[95]",
-        // Ancho según estado
-        collapsed ? "w-16" : "w-[13.6rem]",
-        // En desktop: siempre visible, fixed
-        "lg:fixed lg:left-0 lg:top-0",
-        // En mobile: overlay que se desliza desde la izquierda, NO ocupa espacio cuando está cerrada
-        "fixed left-0 top-0",
-        // Transform: en mobile, oculta cuando collapsed=true, visible cuando collapsed=false
-        // IMPORTANTE: El orden importa - primero el transform mobile, luego el override de desktop
-        collapsed 
-          ? "-translate-x-full lg:translate-x-0" 
-          : "translate-x-0"
-      )}>
-      {/* Header */}
-      <div className="flex h-12  bg-white items-center justify-between px-4 border-b border-border">
-        {!collapsed && (
-          <div className="flex items-center  gap-3">
-            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
-              A
-            </div>
-            <div className="font-semibold text-smtext-foreground">Team Ali</div>
-          </div>
+      <aside
+        className={cn(
+          'fixed left-0 top-0 z-[95] flex h-screen flex-col border-r border-neutral-200 bg-white transition-all duration-300',
+          collapsed ? 'w-16 -translate-x-full lg:translate-x-0' : 'w-[13.6rem] translate-x-0'
         )}
-        <Button 
-          onClick={toggleSidebar}
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-        >
-          {collapsed ? (
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          ) : (
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+      >
+        {/* Header */}
+        <div className={cn('flex h-14 items-center border-b border-neutral-100', collapsed ? 'justify-center px-2' : 'justify-between px-4')}>
+          {!collapsed && (
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-neutral-900 text-xs font-semibold text-white">
+                TA
+              </div>
+              <div className="min-w-0 leading-tight">
+                <p className="truncate text-sm font-semibold text-neutral-900">Team Ali</p>
+                <p className="truncate text-[11px] text-neutral-400">CRM inmobiliario</p>
+              </div>
+            </div>
           )}
-        </Button>
-      </div>
+          <button
+            onClick={() => setCollapsedState(!collapsed)}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
+            aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
+          >
+            {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+          </button>
+        </div>
 
-      {/* Navigation */}
-      <ScrollArea className="flex-1  px-3 py-4">
-        <nav className="space-y-4 ">
-          {menuCategories.map((category) => {
-            const isOpen = openCategories[category.name];
-            return (
-              <div key={category.name} className="space-y-2 ">
-                {/* Category Label (con desplegable) */}
-                {!collapsed && (
+        {/* Navigation */}
+        <ScrollArea className="flex-1">
+          <nav className={cn('py-3', collapsed ? 'px-2' : 'px-3')}>
+            {menuCategories.map((category, index) => {
+              const isOpen = openCategories[category.name];
+
+              if (collapsed) {
+                // Grupos largos (PropSearch) se resumen en un único botón negro
+                const CollapsedIcon = category.collapsedIcon;
+                return (
+                  <div key={category.name} className={cn('space-y-1', index > 0 && 'mt-3 border-t border-neutral-100 pt-3')}>
+                    {CollapsedIcon ? (
+                      <a
+                        href={category.collapsedPath}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={category.name}
+                        className="mx-auto flex h-9 w-9 items-center justify-center rounded-md bg-black text-white transition-colors hover:bg-neutral-800"
+                      >
+                        <CollapsedIcon className="h-4 w-4" strokeWidth={1.75} />
+                      </a>
+                    ) : (
+                      category.items.map(renderLink)
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <div key={category.name} className={cn(index > 0 && 'mt-5')}>
                   <button
                     type="button"
                     onClick={() => toggleCategory(category.name)}
-                    className="flex w-full items-center justify-between px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+                    className={cn(
+                      'group mb-1 flex w-full items-center justify-between transition-colors',
+                      category.external
+                        ? 'h-9 rounded-md bg-black px-2.5 text-[13px] font-medium text-white hover:bg-neutral-800'
+                        : 'px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-neutral-400 hover:text-neutral-700'
+                    )}
                   >
-                    <span>{category.name}</span>
-                    <svg
-                      className={cn(
-                        "h-3 w-3 transition-transform",
-                        isOpen ? "rotate-90" : "rotate-0"
-                      )}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
+                    <span className="flex items-center gap-2.5">
+                      {category.collapsedIcon && <category.collapsedIcon className="h-4 w-4 shrink-0" strokeWidth={1.75} />}
+                      {category.name}
+                    </span>
+                    <ChevronDown className={cn('h-3 w-3 transition-transform', !isOpen && '-rotate-90')} />
                   </button>
-                )}
-                
-                {/* Category Items */}
-                <div className="space-y-1 ">
-                  {category.items.map((item) => {
-                    const isActive = pathname === item.path;
-                    const shouldShow = collapsed || isOpen;
-                    if (!shouldShow) return null;
-                    
-                    return (
-                      <Link
-                        key={item.path}
-                        href={item.path}
-                        className={cn(
-                          "flex  items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors",
-                          "hover:bg-slate-100 hover:text-accent-foreground",
-                          isActive 
-                            ? "bg-white text-accent-foreground font-medium" 
-                            : "text-muted-foreground"
-                        )}
-                      >
-                        <div className="flex h-4 w-4 items-center justify-center">
-                          {item.icon}
-                        </div>
-                        {!collapsed && (
-                          <span className="truncate">{item.name}</span>
-                        )}
-                      </Link>
-                    );
-                  })}
+                  {isOpen && <div className="space-y-0.5">{category.items.map(renderLink)}</div>}
                 </div>
+              );
+            })}
+          </nav>
+        </ScrollArea>
+
+        {/* Footer */}
+        {!collapsed && (
+          <div className="border-t border-neutral-100 p-3">
+            <div className="flex items-center gap-2.5 rounded-md px-1.5 py-1.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-xs font-semibold text-neutral-600">
+                UA
               </div>
-            );
-          })}
-        </nav>
-      </ScrollArea>
-
-      {/* Acceso a PropSearch (app externa) */}
-      <div className="px-3 pb-3">
-        <a
-          href="https://remax-team-ali-scrapper.vercel.app/chat"
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Abrir PropSearch en una pestaña nueva"
-          className={cn(
-            "flex items-center rounded-lg bg-black py-2 text-[13px] font-medium text-white transition-colors hover:bg-neutral-800",
-            collapsed ? "justify-center px-2" : "gap-3 px-3"
-          )}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
-          </svg>
-          {!collapsed && (
-            <>
-              <span className="flex-1 truncate">PropSearch</span>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-            </>
-          )}
-        </a>
-      </div>
-
-      {/* Footer */}
-      {!collapsed && (
-        <div className="border-t border-border p-4 bg-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-              <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
+              <div className="min-w-0 flex-1 leading-tight">
+                <p className="truncate text-[13px] font-medium text-neutral-900">Usuario admin</p>
+                <p className="truncate text-[11px] text-neutral-400">Admin</p>
+              </div>
+              <LogoutButton />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">Usuario admin</p>
-              <p className="text-xs text-muted-foreground">Admin</p>
-            </div>
-            <LogoutButton />
           </div>
-        </div>
-      )}
-      </div>
+        )}
+      </aside>
     </>
   );
 };
