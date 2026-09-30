@@ -36,6 +36,8 @@ function formatK(value: number): string {
 
 interface BinDatum extends HistogramBin {
   label: string;
+  /** Etiqueta corta del eje X: solo el inicio del rango */
+  tick: string;
 }
 
 interface TooltipPayloadEntry {
@@ -75,7 +77,7 @@ export function ChartHistogramPresupuestos({
   className,
 }: ChartHistogramPresupuestosProps) {
   const chartData = useMemo<BinDatum[]>(
-    () => bins.map(b => ({ ...b, label: `${formatK(b.from)}–${formatK(b.to)}` })),
+    () => bins.map(b => ({ ...b, label: `${formatK(b.from)}–${formatK(b.to)}`, tick: formatK(b.from) })),
     [bins],
   );
 
@@ -87,8 +89,6 @@ export function ChartHistogramPresupuestos({
     );
   }
 
-  const rotated = chartData.length > 8;
-
   return (
     <ChartContainer
       config={chartConfig}
@@ -96,7 +96,7 @@ export function ChartHistogramPresupuestos({
     >
       <BarChart
         data={chartData}
-        margin={{ top: 16, right: 16, left: 0, bottom: rotated ? 56 : 16 }}
+        margin={{ top: 16, right: 16, left: 0, bottom: 8 }}
         barCategoryGap="12%"
       >
         <defs>
@@ -107,15 +107,14 @@ export function ChartHistogramPresupuestos({
         </defs>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
         <XAxis
-          dataKey="label"
+          dataKey="tick"
           tickLine={false}
           axisLine={false}
           tickMargin={8}
-          interval={0}
-          angle={rotated ? -35 : 0}
-          textAnchor={rotated ? 'end' : 'middle'}
-          height={rotated ? 64 : 32}
-          tick={{ fill: '#64748b', fontSize: 12 }}
+          interval="preserveStartEnd"
+          minTickGap={12}
+          height={28}
+          tick={{ fill: '#64748b', fontSize: 11 }}
         />
         <YAxis
           tickLine={false}

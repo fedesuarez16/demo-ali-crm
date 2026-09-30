@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import AppLayout from '../components/AppLayout';
 import { getSystemCosts, updateSystemCosts, type SystemCosts } from '@/app/services/systemCostService';
-import { DashboardAuthGate } from '@/app/components/DashboardAuthGate';
+import { PanelLockButton } from '@/app/components/PanelLockButton';
 import { PeriodoSelector } from '@/app/components/PeriodoSelector';
 import { ChartAreaInteractive } from '@/components/ui/chart-area-interactive';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -105,7 +105,7 @@ const gastoDiarioChartConfig: ChartConfig = {
   apify: { label: 'Apify', color: '#10B981' },
 };
 
-function GastosContent() {
+export default function GastosPage() {
   const [periodStart, setPeriodStart] = useState(defaultPeriodStart);
   const [periodEnd, setPeriodEnd] = useState(defaultPeriodEnd);
   const [hostingCost, setHostingCost] = useState<string>('');
@@ -292,15 +292,18 @@ function GastosContent() {
                 Montos en USD · {periodDayCount} {periodDayCount === 1 ? 'día' : 'días'}
               </p>
             </div>
-            <PeriodoSelector
-              idPrefix="gastos"
-              variant="inline"
-              start={periodStart}
-              end={periodEnd}
-              onStartChange={setPeriodStart}
-              onEndChange={setPeriodEnd}
-              clipped={periodRangeClipped}
-            />
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              <PeriodoSelector
+                idPrefix="gastos"
+                variant="inline"
+                start={periodStart}
+                end={periodEnd}
+                onStartChange={setPeriodStart}
+                onEndChange={setPeriodEnd}
+                clipped={periodRangeClipped}
+              />
+              <PanelLockButton />
+            </div>
           </header>
 
           {externosError && (
@@ -614,13 +617,5 @@ function GastosContent() {
         </div>
       </div>
     </AppLayout>
-  );
-}
-
-export default function Page() {
-  return (
-    <DashboardAuthGate seccion="Gastos">
-      <GastosContent />
-    </DashboardAuthGate>
   );
 }

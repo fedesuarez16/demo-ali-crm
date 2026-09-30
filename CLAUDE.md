@@ -23,6 +23,7 @@ SUPABASE_SERVICE_ROLE_KEY      # server-only; /api/gastos reads the metrics_* vi
 CHATWOOT_URL
 CHATWOOT_ACCOUNT_ID
 CHATWOOT_API_TOKEN
+DASHBOARD_PASSWORD             # server-only; shared password for /dashboard, /gastos and /api/gastos (fails closed if unset)
 ANTHROPIC_ADMIN_KEY            # server-only Admin API key (sk-ant-admin...); /api/gastos/anthropic reads the org cost_report
 OPENAI_API_KEY                 # used by /api/ai-chat and embeddings
 OPENAI_EMBEDDING_MODEL         # optional, default text-embedding-3-small (1536 dims)
@@ -88,6 +89,10 @@ The main n8n workflow (`Team ali - agente`, id `ejW2YR1lNj3dYsGc`) is stored as 
 - **`git push` to `main`** — `.github/workflows/sync-n8n.yml` runs the script in CI when `workflows/**` or `scripts/sync-n8n.mjs` changes.
 
 The script strips fields n8n rejects on `PUT` (`id`, `active`, `tags`, `pinData`, `versionId`, `meta`, `triggerCount`, `shared`, and UI-internal keys inside `settings` like `binaryMode`, `callerPolicy`, `timeSavedMode`, `availableInMCP`). It never touches the `active` state — toggle that from the UI. Archived workflows are skipped with a warning. To revert a bad sync, use n8n's UI **Workflow history → Restore**, then re-export and replace the JSON. Full details in `DOCUMENTATION.md` §13.
+
+### Panel access is a second lock on top of login
+
+`/dashboard`, `/gastos` and `/api/gastos/**` share one password (`DASHBOARD_PASSWORD`), independent of the Supabase user login. `src/middleware.ts` verifies an HMAC-signed httpOnly cookie (`panel_session`, 12 h, see `src/lib/panelAuth.ts`) and redirects pages to `/acceso-panel?next=`; APIs get 401. The cookie is issued by `POST /api/panel-auth` only to logged-in users; one login opens both sections. To protect another route, add it to `PANEL_SECTIONS` (and the middleware matcher if it's an API).
 
 ### RLS is open
 

@@ -13,6 +13,7 @@ interface ChartAreaInteractiveProps {
   config: ChartConfig
   dateKey?: string
   valueKey?: string
+  className?: string
 }
 
 export function ChartAreaInteractive({
@@ -20,6 +21,7 @@ export function ChartAreaInteractive({
   config,
   dateKey = "date",
   valueKey = "value",
+  className = "h-[350px] w-full",
 }: ChartAreaInteractiveProps) {
   const [activeDate, setActiveDate] = React.useState<string | null>(null)
 
@@ -51,7 +53,7 @@ export function ChartAreaInteractive({
   }
 
   return (
-    <ChartContainer config={config} className="h-[350px] w-full">
+    <ChartContainer config={config} className={className}>
       <AreaChart
         data={chartData}
         onMouseLeave={() => setActiveDate(null)}

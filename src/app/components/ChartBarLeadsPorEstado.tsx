@@ -162,7 +162,56 @@ export function ChartBarLeadsPorEstado({
     );
   }
 
-  const rotated = data.length > 8;
+  // Con muchos estados, barras horizontales: las etiquetas largas se leen enteras
+  const horizontal = data.length > 8;
+
+  if (horizontal) {
+    const rowHeight = 28;
+    return (
+      <ChartContainer
+        config={chartConfig}
+        className={`w-full${className ? ` ${className}` : ''}`}
+        style={{ height: data.length * rowHeight + 32 }}
+      >
+        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 24, left: 0, bottom: 4 }} barCategoryGap={6}>
+          <defs>
+            {data.map(d => (
+              <linearGradient key={d.gradientId} id={d.gradientId} x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%"   stopColor={d.color} stopOpacity={0.55} />
+                <stop offset="100%" stopColor={d.color} stopOpacity={0.95} />
+              </linearGradient>
+            ))}
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+          <XAxis
+            type="number"
+            tickLine={false}
+            axisLine={false}
+            allowDecimals={false}
+            tick={{ fill: '#64748b', fontSize: 11 }}
+          />
+          <YAxis
+            type="category"
+            dataKey="label"
+            tickLine={false}
+            axisLine={false}
+            interval={0}
+            width={190}
+            tick={{ fill: '#475569', fontSize: 12 }}
+          />
+          <Tooltip
+            cursor={{ fill: 'rgba(148, 163, 184, 0.10)' }}
+            content={<CustomTooltip />}
+          />
+          <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+            {data.map((d) => (
+              <Cell key={d.estado} fill={`url(#${d.gradientId})`} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ChartContainer>
+    );
+  }
 
   return (
     <ChartContainer
@@ -171,7 +220,7 @@ export function ChartBarLeadsPorEstado({
     >
       <BarChart
         data={data}
-        margin={{ top: 16, right: 16, left: 0, bottom: rotated ? 56 : 16 }}
+        margin={{ top: 16, right: 16, left: 0, bottom: 16 }}
       >
         <defs>
           {data.map(d => (
@@ -188,9 +237,7 @@ export function ChartBarLeadsPorEstado({
           axisLine={false}
           tickMargin={8}
           interval={0}
-          angle={rotated ? -35 : 0}
-          textAnchor={rotated ? 'end' : 'middle'}
-          height={rotated ? 64 : 32}
+          height={32}
           tick={{ fill: '#64748b', fontSize: 12 }}
         />
         <YAxis

@@ -351,6 +351,32 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
         </nav>
       </ScrollArea>
 
+      {/* Acceso a PropSearch (app externa) */}
+      <div className="px-3 pb-3">
+        <a
+          href="https://remax-team-ali-scrapper.vercel.app/chat"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Abrir PropSearch en una pestaña nueva"
+          className={cn(
+            "flex items-center rounded-lg bg-black py-2 text-[13px] font-medium text-white transition-colors hover:bg-neutral-800",
+            collapsed ? "justify-center px-2" : "gap-3 px-3"
+          )}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
+          </svg>
+          {!collapsed && (
+            <>
+              <span className="flex-1 truncate">PropSearch</span>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </>
+          )}
+        </a>
+      </div>
+
       {/* Footer */}
       {!collapsed && (
         <div className="border-t border-border p-4 bg-slate-100">

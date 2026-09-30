@@ -8,14 +8,13 @@ import { getKanbanColumns } from '@/app/services/columnService';
 import { ChartBarLeadsPorEstado } from '@/app/components/ChartBarLeadsPorEstado';
 import { ChartHistogramPresupuestos } from '@/app/components/ChartHistogramPresupuestos';
 import type { HistogramBin } from '@/app/components/ChartHistogramPresupuestos';
-import { DashboardAuthGate } from '@/app/components/DashboardAuthGate';
+import { PanelLockButton } from '@/app/components/PanelLockButton';
 import { PeriodoSelector } from '@/app/components/PeriodoSelector';
 import { ChartAreaInteractive } from "@/components/ui/chart-area-interactive";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartConfig } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import Link from 'next/link';
-import { Label } from '@/components/ui/label';
 import {
   type Pauta,
   SIN_CAMPANA_SENTINEL,
@@ -26,17 +25,41 @@ import {
   filterLeadsByPeriodAndCampaign,
   leadCalendarDate,
   resolvePeriodDates,
+  toDateInputValue,
 } from '@/app/utils/periodo';
 
-export default function Page() {
+type DashboardTab = 'resumen' | 'campanas' | 'presupuestos';
+
+const TABS: { id: DashboardTab; label: string }[] = [
+  { id: 'resumen', label: 'Resumen' },
+  { id: 'campanas', label: 'Campañas' },
+  { id: 'presupuestos', label: 'Presupuestos' },
+];
+
+function isDashboardTab(v: string): v is DashboardTab {
+  return TABS.some((t) => t.id === v);
+}
+
+function estadoKey(lead: Lead): string {
+  return (lead.estado || '').toLowerCase().trim();
+}
+
+const selectClass =
+  'h-8 rounded-md border border-input bg-background px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+function Kpi({ label, value, hint }: { label: string; value: React.ReactNode; hint?: React.ReactNode }) {
   return (
-    <DashboardAuthGate seccion="el Dashboard">
-      <DashboardContent />
-    </DashboardAuthGate>
+    <Card className="shadow-none">
+      <CardContent className="p-5">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <div className="mt-1 text-2xl font-semibold tracking-tight tabular-nums text-slate-900">{value}</div>
+        {hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>}
+      </CardContent>
+    </Card>
   );
 }
 
-function DashboardContent() {
+export default function DashboardPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [chartPeriodStart, setChartPeriodStart] = useState(defaultPeriodStart);
@@ -48,6 +71,17 @@ function DashboardContent() {
   const [columnColors, setColumnColors] = useState<Record<string, string>>({});
   const [ticketCampaignFilter, setTicketCampaignFilter] = useState<string>('');
   const [ticketBinSize, setTicketBinSize] = useState<number>(10000);
+  const [tab, setTab] = useState<DashboardTab>('resumen');
+
+  useEffect(() => {
+    const fromHash = window.location.hash.replace('#', '');
+    if (isDashboardTab(fromHash)) setTab(fromHash);
+  }, []);
+
+  const selectTab = (next: DashboardTab) => {
+    setTab(next);
+    window.history.replaceState(null, '', `#${next}`);
+  };
   useEffect(() => {
     const loadLeads = async () => {
       setIsLoading(true);
@@ -388,39 +422,34 @@ function DashboardContent() {
 
   const periodDayCount = periodDates.length;
 
-  // Calcular totales
   const totalLeads = leads.length;
-  const leadsLast7Days = useMemo(() => {
-    const today = new Date();
-    const sevenDaysAgo = new Date(today);
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
-    return leads.filter(lead => {
-      const leadDate = new Date(lead.fechaContacto || lead.created_at || new Date());
-      return leadDate >= sevenDaysAgo;
-    }).length;
-  }, [leads]);
 
-  const leadsLast30Days = useMemo(() => {
-    const today = new Date();
-    const thirtyDaysAgo = new Date(today);
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    return leads.filter(lead => {
-      const leadDate = new Date(lead.fechaContacto || lead.created_at || new Date());
-      return leadDate >= thirtyDaysAgo;
-    }).length;
-  }, [leads]);
-
-  const arsFormatter = useMemo(
-    () => new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
-      maximumFractionDigits: 0,
-      minimumFractionDigits: 0,
-    }),
-    [],
-  );
+  const kpisPeriodo = useMemo(() => {
+    const periodSet = new Set(periodDates);
+    // Período anterior de igual duración, para comparar
+    const prevSet = new Set<string>();
+    if (periodDates.length > 0) {
+      const first = new Date(`${periodDates[0]}T00:00:00`);
+      for (let i = 1; i <= periodDates.length; i++) {
+        const d = new Date(first);
+        d.setDate(d.getDate() - i);
+        prevSet.add(toDateInputValue(d));
+      }
+    }
+    let actual = 0, anterior = 0, calientes = 0, llamadas = 0, visitas = 0;
+    for (const lead of leads) {
+      const dia = leadCalendarDate(lead);
+      if (prevSet.has(dia)) anterior++;
+      if (!periodSet.has(dia)) continue;
+      actual++;
+      const est = estadoKey(lead);
+      if (est === 'caliente' || est === 'calientes') calientes++;
+      else if (est === 'llamada' || est === 'llamadas') llamadas++;
+      else if (est === 'visita' || est === 'visitas') visitas++;
+    }
+    const variacion = anterior > 0 ? (actual - anterior) / anterior : null;
+    return { actual, anterior, variacion, calientes, llamadas, visitas };
+  }, [leads, periodDates]);
 
   const usdFormatter = useMemo(
     () => new Intl.NumberFormat('es-AR', {
@@ -509,617 +538,395 @@ function DashboardContent() {
     [presupuestosSeleccion],
   );
 
-  if (isLoading) {
+  const pct = (n: number, total: number) => (total > 0 ? `${Math.round((n / total) * 100)}%` : '—');
+
+  const variacionLabel = (() => {
+    const v = kpisPeriodo.variacion;
+    if (v === null) return <>Sin datos del período anterior</>;
+    const up = v >= 0;
     return (
-
-      <AppLayout>
-        <div className="mb-8 m-2 space-y-6">
-          {/* Breadcrumbs skeleton */}
-          <div className="pl-16 pr-2 py-2 lg:px-2  bg-slate-100 z-10 backdrop-blur  border-b border-slate-200 mb-6">
-            <Skeleton className="h-4 w-48" />
-          </div>
-
-          {/* Header skeleton */}
-          <div className="px-2">
-            <Skeleton className="h-8 w-32 mb-2" />
-            <Skeleton className="h-4 w-64" />
-          </div>
-
-          {/* Cards skeleton */}
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 px-2">
-            {[1, 2, 3].map((i) => (
-              <Card key={i}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-4 w-4 rounded" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-8 w-16 mb-2" />
-                  <Skeleton className="h-3 w-32" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Main chart skeleton */}
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-48 mb-2" />
-              <Skeleton className="h-4 w-96" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-[300px] w-full" />
-            </CardContent>
-          </Card>
-
-          {/* Bar chart estado skeleton */}
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-6 w-48 mb-2" />
-              <Skeleton className="h-4 w-72" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-[300px] w-full" />
-            </CardContent>
-          </Card>
-
-          {/* Category charts skeleton */}
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 px-2">
-            {[1, 2, 3].map((i) => (
-              <Card key={i}>
-                <CardHeader>
-                  <Skeleton className="h-6 w-32 mb-2" />
-                  <Skeleton className="h-4 w-64" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-[200px] w-full" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </AppLayout>
+      <span className={up ? 'text-emerald-600' : 'text-red-600'}>
+        {up ? '↑' : '↓'} {Math.abs(Math.round(v * 100))}% vs. período anterior
+      </span>
     );
-  }
+  })();
 
   return (
     <AppLayout>
-      <div className="mb-8 px-2 m-2 space-y-6">
-         {/* Breadcrumbs */}
-         <div className="pl-16  pr-3 py-3 lg:px-3  z-10 sticky top-0 bg-white border-b border-slate-200 mb-6">
-            <nav className="flex" aria-label="Breadcrumb">
-              <ol className="inline-flex items-center space-x-1 md:space-x-3">
-                <li className="inline-flex items-center">
-                  <Link href="/" className="inline-flex items-center text-sm font-medium text-gray-700 hover:text-gray-600">
-                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
-                    </svg>
-                    Inicio
-                  </Link>
-                </li>
-                <li>
-                  <div className="flex items-center">
-                    <svg className="w-6  h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"></path>
-                    </svg>
-                    <span className="ml-1 text-sm font-medium text-gray-500 md:ml-2">Dashboard</span>
-                  </div>
-                </li>
-               
-              </ol>
-            </nav>
-          </div>
-       
-
-        {/* ───────────── SECCIÓN 1 — RESUMEN ───────────── */}
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Resumen</h2>
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
-              <CardTitle className="text-sm font-medium">
-                Total de Leads
-              </CardTitle>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                className="h-4 w-4 text-muted-foreground"
-              >
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <div className="text-xl font-bold leading-tight">{totalLeads}</div>
-              <p className="text-xs text-muted-foreground">
-                Todos los leads registrados
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
-              <CardTitle className="text-sm font-medium">
-                Últimos 7 días
-              </CardTitle>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                className="h-4 w-4 text-muted-foreground"
-              >
-                <rect width="20" height="14" x="2" y="5" rx="2" />
-                <path d="M2 10h20" />
-              </svg>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <div className="text-xl font-bold leading-tight">{leadsLast7Days}</div>
-              <p className="text-xs text-muted-foreground">
-                Leads ingresados esta semana
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
-              <CardTitle className="text-sm font-medium">
-                Últimos 30 días
-              </CardTitle>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                className="h-4 w-4 text-muted-foreground"
-              >
-                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-              </svg>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <div className="text-xl font-bold leading-tight">{leadsLast30Days}</div>
-              <p className="text-xs text-muted-foreground">
-                Leads ingresados este mes
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
-              <CardTitle className="text-sm font-medium">Ticket Promedio</CardTitle>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                className="h-4 w-4 text-muted-foreground"
-              >
-                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-              </svg>
-            </CardHeader>
-            <CardContent className="p-4 pt-0">
-              <div className="text-xl font-bold leading-tight tabular-nums">
-                {ticketPromedio !== null ? arsFormatter.format(ticketPromedio) : '—'}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Promedio de todos los leads con presupuesto
-              </p>
-            </CardContent>
-          </Card>
+      <div className="mb-12 m-2 px-2 space-y-8">
+        {/* Breadcrumbs */}
+        <div className="pl-16 pr-3 py-3 lg:px-3 z-10 sticky top-0 bg-white border-b border-slate-200">
+          <nav className="flex" aria-label="Breadcrumb">
+            <ol className="inline-flex items-center space-x-1 md:space-x-3">
+              <li className="inline-flex items-center">
+                <Link href="/" className="inline-flex items-center text-sm font-medium text-gray-700 hover:text-gray-600">
+                  <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
+                  </svg>
+                  Inicio
+                </Link>
+              </li>
+              <li>
+                <div className="flex items-center">
+                  <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"></path>
+                  </svg>
+                  <span className="ml-1 text-sm font-medium text-gray-500 md:ml-2">Dashboard</span>
+                </div>
+              </li>
+            </ol>
+          </nav>
         </div>
-        </section>
 
-        {/* ───────────── SECCIÓN TICKETS ───────────── */}
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Tickets</h2>
-          <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-1">
-                <div>
-                  <CardTitle className="text-sm font-medium">Distribución de presupuestos</CardTitle>
-                  <CardDescription className="text-xs">
-                    {effectiveTicketCampaign
-                      ? <>Campaña: <span className="font-medium text-foreground">{effectiveTicketCampaign}</span></>
-                      : 'Todas las campañas'}
-                  </CardDescription>
-                </div>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  className="h-4 w-4 text-muted-foreground"
-                >
-                  <rect width="20" height="14" x="2" y="5" rx="2" />
-                  <path d="M2 10h20" />
-                </svg>
-              </CardHeader>
-              <CardContent className="p-4 pt-0 space-y-3">
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                  <div>
-                    <div className="text-xl font-bold leading-tight tabular-nums">
-                      {ticketTotalSeleccion > 0 ? usdFormatter.format(ticketTotalSeleccion) : '—'}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {effectiveTicketCampaign
-                        ? 'Suma de presupuestos de la campaña seleccionada'
-                        : 'Suma de presupuestos de leads con campaña asignada'}
-                    </p>
-                  </div>
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                    Rango (USD)
-                    <input
-                      type="number"
-                      min={1000}
-                      step={1000}
-                      value={ticketBinSize}
-                      onChange={(e) => {
-                        const n = parseInt(e.target.value, 10);
-                        setTicketBinSize(Number.isFinite(n) ? n : 10000);
-                      }}
-                      className="h-7 w-24 rounded-md border border-input bg-background px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    />
-                  </label>
-                </div>
-                <ChartHistogramPresupuestos bins={histogramaPresupuestos} className="w-full" />
-                {histogramaPresupuestos.length > 0 && (
-                  <div className="max-h-48 overflow-y-auto">
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-card">
-                        <tr className="border-b">
-                          <th className="py-2 text-left font-medium">Rango de búsqueda</th>
-                          <th className="py-2 text-right font-medium">Cantidad de consultas</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {histogramaPresupuestos.map(b => (
-                          <tr key={b.from} className="border-b last:border-b-0">
-                            <td className="py-1.5 text-left tabular-nums">
-                              {usdFormatter.format(b.from)} – {usdFormatter.format(b.to)}
-                            </td>
-                            <td className="py-1.5 text-right tabular-nums">{b.count}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-start justify-between space-y-0 p-4 pb-1">
-                <div>
-                  <CardTitle className="text-sm font-medium">Ticket por campaña</CardTitle>
-                  <CardDescription className="text-xs">
-                    Solo leads con presupuesto &gt; 0. Clic en una campaña para ver su distribución.
-                  </CardDescription>
-                </div>
-                {effectiveTicketCampaign && (
-                  <button
-                    type="button"
-                    onClick={() => setTicketCampaignFilter('')}
-                    className="rounded-md border border-input px-2 py-1 text-xs text-muted-foreground shadow-sm hover:bg-slate-50"
-                  >
-                    Ver todas
-                  </button>
-                )}
-              </CardHeader>
-              <CardContent className="p-4 pt-2">
-                {ticketPorCampana.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Sin datos de presupuesto por campaña.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b">
-                            <th className="py-2 text-left font-medium">Campaña</th>
-                            <th className="py-2 text-right font-medium">Leads</th>
-                            <th className="py-2 text-right font-medium">Total USD</th>
-                            <th className="py-2 text-right font-medium">Promedio USD</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {ticketPorCampana.map(r => (
-                            <tr
-                              key={r.campaign}
-                              onClick={() =>
-                                setTicketCampaignFilter(prev => (prev === r.campaign ? '' : r.campaign))
-                              }
-                              className={`border-b last:border-b-0 cursor-pointer transition-colors hover:bg-slate-50 ${
-                                effectiveTicketCampaign === r.campaign ? 'bg-emerald-50' : ''
-                              }`}
-                            >
-                              <td className="py-1.5 text-left max-w-[140px] truncate" title={r.campaign}>{r.campaign}</td>
-                              <td className="py-1.5 text-right tabular-nums">{r.count}</td>
-                              <td className="py-1.5 text-right tabular-nums">{usdFormatter.format(r.total)}</td>
-                              <td className="py-1.5 text-right tabular-nums">{usdFormatter.format(r.promedio)}</td>
-                            </tr>
-                          ))}
-                          <tr className="border-t-2 font-semibold">
-                            <td className="py-1.5">Total</td>
-                            <td className="py-1.5 text-right tabular-nums">
-                              {ticketPorCampana.reduce((s, r) => s + r.count, 0)}
-                            </td>
-                            <td className="py-1.5 text-right tabular-nums">{usdFormatter.format(ticketTotalCampanas)}</td>
-                            <td className="py-1.5 text-right tabular-nums">—</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </section>
-
-        {/* ───────────── SECCIÓN 2 — EVOLUCIÓN ───────────── */}
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Evolución temporal</h2>
-        <Card>
-          <CardHeader className="space-y-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <CardTitle>Leads por Período</CardTitle>
-                <CardDescription>
-                  Total, tibios, fríos y calientes según fecha de ingreso (
-                  <span className="font-medium text-foreground">{chartPeriodStart}</span>
-                  {' → '}
-                  <span className="font-medium text-foreground">{chartPeriodEnd}</span>
-                  {periodDayCount > 0 ? ` · ${periodDayCount} días` : ''})
-                </CardDescription>
-              </div>
+        <div className="mx-auto max-w-6xl space-y-6">
+          {/* ───────────── HEADER ───────────── */}
+          <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Dashboard</h1>
+              <p className="text-sm text-muted-foreground">
+                {periodDayCount} {periodDayCount === 1 ? 'día' : 'días'} · {totalLeads.toLocaleString('es-AR')} leads en total
+              </p>
             </div>
-            <PeriodoSelector
-              idPrefix="dash"
-              start={chartPeriodStart}
-              end={chartPeriodEnd}
-              onStartChange={setChartPeriodStart}
-              onEndChange={setChartPeriodEnd}
-              clipped={periodRangeClipped}
-            />
-          </CardHeader>
-          <CardContent>
-            <ChartAreaInteractive
-              data={leadsByDate}
-              config={chartConfig}
-              dateKey="date"
-              valueKey="leads"
-            />
-          </CardContent>
-        </Card>
-        </section>
-
-        {/* ───────────── SECCIÓN 3 — PIPELINE ───────────── */}
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Pipeline del rango ({chartPeriodStart} → {chartPeriodEnd})
-          </h2>
-          <div className="grid gap-4 grid-cols-1">
-            {/* Bar chart unificado con filtro de campaña */}
-            <Card>
-              <CardHeader className="space-y-4">
-                <div>
-                  <CardTitle>Leads por Estado</CardTitle>
-                  <CardDescription>
-                    {effectiveBarEstadoCampaignFilter === SIN_CAMPANA_SENTINEL ? (
-                      <>Leads sin campaña asignada en el rango del dashboard.</>
-                    ) : effectiveBarEstadoCampaignFilter ? (
-                      <>
-                        Leads de la campaña{' '}
-                        <span className="font-medium text-foreground">{effectiveBarEstadoCampaignFilter}</span>
-                        {' '}en el rango del dashboard.
-                      </>
-                    ) : (
-                      <>Distribución por estado de todos los leads en el rango del dashboard.</>
-                    )}
-                  </CardDescription>
-                </div>
-                <div className="flex flex-col gap-2 sm:max-w-md">
-                  <Label htmlFor="bar-estado-campaign-filter" className="text-xs text-muted-foreground">
-                    Filtrar por campaña
-                  </Label>
-                  <select
-                    id="bar-estado-campaign-filter"
-                    aria-label="Filtrar gráfico Leads por Estado"
-                    value={barEstadoCampaignFilter}
-                    onChange={(e) => setBarEstadoCampaignFilter(e.target.value)}
-                    className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <option value="">Todas las campañas</option>
-                    {uniqueCampaigns.map((c, idx) => (
-                      <option key={`bar-estado-camp-${idx}-${c}`} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                    <option value={SIN_CAMPANA_SENTINEL}>Sin campaña</option>
-                  </select>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <ChartBarLeadsPorEstado
-                  leads={barEstadoFilteredLeads}
-                  columnColors={columnColors}
-                />
-              </CardContent>
-            </Card>
-          </div>
-        </section>
-
-        {/* ───────────── SECCIÓN 4 — ACTIVIDAD POR CATEGORÍA ───────────── */}
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Actividad por categoría</h2>
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <CardTitle>Llamadas</CardTitle>
-              <CardDescription>
-                Misma ventana de fechas que &quot;Leads por Período&quot; ({chartPeriodStart} → {chartPeriodEnd})
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ChartAreaInteractive
-                data={llamadasByDate}
-                config={llamadasChartConfig}
-                dateKey="date"
-                valueKey="leads"
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              <PeriodoSelector
+                idPrefix="dash"
+                variant="inline"
+                start={chartPeriodStart}
+                end={chartPeriodEnd}
+                onStartChange={setChartPeriodStart}
+                onEndChange={setChartPeriodEnd}
+                clipped={periodRangeClipped}
               />
-            </CardContent>
-          </Card>
+              <PanelLockButton />
+            </div>
+          </header>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Visitas</CardTitle>
-              <CardDescription>
-                Misma ventana de fechas que &quot;Leads por Período&quot;
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ChartAreaInteractive
-                data={visitasByDate}
-                config={visitasChartConfig}
-                dateKey="date"
-                valueKey="leads"
-              />
-            </CardContent>
-          </Card>
+          {/* ───────────── PESTAÑAS ───────────── */}
+          <nav className="flex gap-6 border-b border-slate-200" role="tablist" aria-label="Secciones del dashboard">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.id}
+                onClick={() => selectTab(t.id)}
+                className={`-mb-px border-b-2 pb-2.5 text-sm transition-colors ${
+                  tab === t.id
+                    ? 'border-slate-900 font-medium text-slate-900'
+                    : 'border-transparent text-muted-foreground hover:text-slate-700'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Vender</CardTitle>
-              <CardDescription>
-                Misma ventana de fechas que &quot;Leads por Período&quot;
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ChartAreaInteractive
-                data={venderByDate}
-                config={venderChartConfig}
-                dateKey="date"
-                valueKey="leads"
-              />
-            </CardContent>
-          </Card>
-        </div>
-        </section>
-
-        {/* ───────────── SECCIÓN 5 — ANÁLISIS POR CAMPAÑA ───────────── */}
-        {uniqueCampaigns.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Análisis por campaña</h2>
-          <Card>
-            <CardHeader className="space-y-4">
-              <div>
-                <CardTitle>Leads por Campaña</CardTitle>
-                <CardDescription>
-                  {effectiveCampaignChartFilter ? (
-                    <>
-                      Fríos, tibios y calientes para la campaña{' '}
-                      <span className="font-medium text-foreground">{effectiveCampaignChartFilter}</span>
-                      {' '}(fecha de ingreso en el rango del dashboard)
-                    </>
-                  ) : (
-                    <>
-                      Comparativa por campaña en el rango seleccionado. Las campañas se toman de{' '}
-                      <span className="font-medium text-foreground">pautas</span> y solo se grafican leads que matchean alguna pauta (por nombre o por números).
-                    </>
-                  )}
-                </CardDescription>
+          {isLoading ? (
+            <div className="space-y-6">
+              <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+                {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-[104px] w-full rounded-xl" />)}
               </div>
-              <div className="flex flex-col gap-2 sm:max-w-md">
-                <Label htmlFor="campaign-chart-filter" className="text-xs text-muted-foreground">
-                  Filtrar gráfico por campaña
-                </Label>
-                <select
-                  id="campaign-chart-filter"
-                  value={campaignChartFilter}
-                  onChange={(e) => setCampaignChartFilter(e.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="">Todas las campañas (comparar campañas)</option>
-                  {uniqueCampaigns.map((c, idx) => (
-                    <option key={`camp-filter-${idx}-${c}`} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                {effectiveCampaignChartFilter && (
-                  <p className="text-xs text-muted-foreground">
-                    Séries: total del día y desglose frío / tibio / caliente (otros estados no se apilan en estas curvas).
-                  </p>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <ChartAreaInteractive
-                data={campaignMainChartData}
-                config={campaignMainChartConfig}
-                dateKey="date"
-                valueKey="leads"
-              />
-            </CardContent>
-          </Card>
+              <Skeleton className="h-[420px] w-full rounded-xl" />
+            </div>
+          ) : (
+            <>
+              {/* ═════════════ RESUMEN ═════════════ */}
+              {tab === 'resumen' && (
+                <div className="space-y-6">
+                  <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+                    <Kpi label="Leads nuevos" value={kpisPeriodo.actual.toLocaleString('es-AR')} hint={variacionLabel} />
+                    <Kpi
+                      label="Calientes"
+                      value={kpisPeriodo.calientes.toLocaleString('es-AR')}
+                      hint={`${pct(kpisPeriodo.calientes, kpisPeriodo.actual)} de los leads nuevos`}
+                    />
+                    <Kpi
+                      label="Llamadas"
+                      value={kpisPeriodo.llamadas.toLocaleString('es-AR')}
+                      hint={`${pct(kpisPeriodo.llamadas, kpisPeriodo.actual)} de los leads nuevos`}
+                    />
+                    <Kpi
+                      label="Visitas"
+                      value={kpisPeriodo.visitas.toLocaleString('es-AR')}
+                      hint={`${pct(kpisPeriodo.visitas, kpisPeriodo.actual)} de los leads nuevos`}
+                    />
+                  </div>
 
-          {/* Gráficos individuales por campaña (máximo 6 campañas más importantes) */}
-          <div className="pt-2">
-            <h3 className="text-sm font-medium text-slate-700 mb-3">Por campaña individual</h3>
-            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-              {uniqueCampaigns.slice(0, 6).map((campaign) => {
-                const campaignData = individualCampaignsData[campaign] || [];
-                const safeKey = campaign.replace(/[^a-zA-Z0-9]/g, '_');
-                const campaignChartConfig: ChartConfig = {
-                  leads: {
-                    label: campaign,
-                    color: campaignsChartConfig[safeKey]?.color || "#1E90FF",
-                  },
-                };
-
-                return (
-                  <Card key={campaign}>
-                    <CardHeader>
-                      <CardTitle className="text-sm">{campaign}</CardTitle>
-                      <CardDescription className="text-xs">
-                        En el rango de fechas del dashboard
-                      </CardDescription>
+                  <Card className="shadow-none">
+                    <CardHeader className="p-6 pb-2">
+                      <CardTitle className="text-sm font-medium">Leads por día</CardTitle>
+                      <CardDescription className="text-xs">Total y desglose frío / tibio / caliente según fecha de ingreso</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                      <ChartAreaInteractive
-                        data={campaignData}
-                        config={campaignChartConfig}
-                        dateKey="date"
-                        valueKey="leads"
-                      />
+                    <CardContent className="p-6 pt-0">
+                      <ChartAreaInteractive data={leadsByDate} config={chartConfig} dateKey="date" valueKey="leads" />
                     </CardContent>
                   </Card>
-                );
-              })}
-            </div>
-            {uniqueCampaigns.length > 6 && (
-              <p className="text-sm text-gray-500 mt-4">
-                Mostrando las 6 campañas con más leads. Total de campañas: {uniqueCampaigns.length}
-              </p>
-            )}
-          </div>
-        </section>
-        )}
+
+                  <Card className="shadow-none">
+                    <CardHeader className="flex flex-col gap-3 p-6 pb-2 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+                      <div className="space-y-1.5">
+                        <CardTitle className="text-sm font-medium">Leads por estado</CardTitle>
+                        <CardDescription className="text-xs">
+                          {effectiveBarEstadoCampaignFilter === SIN_CAMPANA_SENTINEL
+                            ? 'Leads sin campaña asignada'
+                            : effectiveBarEstadoCampaignFilter
+                              ? `Campaña: ${effectiveBarEstadoCampaignFilter}`
+                              : 'Todas las campañas'}
+                        </CardDescription>
+                      </div>
+                      <select
+                        id="bar-estado-campaign-filter"
+                        aria-label="Filtrar leads por estado por campaña"
+                        value={barEstadoCampaignFilter}
+                        onChange={(e) => setBarEstadoCampaignFilter(e.target.value)}
+                        className={`${selectClass} w-full sm:w-64`}
+                      >
+                        <option value="">Todas las campañas</option>
+                        {uniqueCampaigns.map((c, idx) => (
+                          <option key={`bar-estado-camp-${idx}-${c}`} value={c}>{c}</option>
+                        ))}
+                        <option value={SIN_CAMPANA_SENTINEL}>Sin campaña</option>
+                      </select>
+                    </CardHeader>
+                    <CardContent className="p-6 pt-2">
+                      <ChartBarLeadsPorEstado leads={barEstadoFilteredLeads} columnColors={columnColors} />
+                    </CardContent>
+                  </Card>
+
+                  <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+                    {[
+                      { title: 'Llamadas', data: llamadasByDate, config: llamadasChartConfig },
+                      { title: 'Visitas', data: visitasByDate, config: visitasChartConfig },
+                      { title: 'Vender', data: venderByDate, config: venderChartConfig },
+                    ].map(({ title, data, config }) => (
+                      <Card key={title} className="shadow-none">
+                        <CardHeader className="p-5 pb-0">
+                          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+                          <CardDescription className="text-xs">
+                            {data.reduce((s, d) => s + d.leads, 0).toLocaleString('es-AR')} en el período
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-5 pt-2">
+                          <ChartAreaInteractive data={data} config={config} dateKey="date" valueKey="leads" className="h-[160px] w-full" />
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ═════════════ CAMPAÑAS ═════════════ */}
+              {tab === 'campanas' && (
+                uniqueCampaigns.length === 0 ? (
+                  <Card className="shadow-none">
+                    <CardContent className="py-16 text-center">
+                      <p className="text-sm font-medium text-slate-900">No hay campañas activas</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Las campañas se toman de las pautas activas.</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="space-y-6">
+                    <Card className="shadow-none">
+                      <CardHeader className="flex flex-col gap-3 p-6 pb-2 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+                        <div className="space-y-1.5">
+                          <CardTitle className="text-sm font-medium">
+                            {effectiveCampaignChartFilter ? effectiveCampaignChartFilter : 'Comparativa de campañas'}
+                          </CardTitle>
+                          <CardDescription className="text-xs">
+                            {effectiveCampaignChartFilter
+                              ? 'Total del día y desglose frío / tibio / caliente'
+                              : 'Leads por día de cada campaña (pautas activas, matcheadas por nombre o números)'}
+                          </CardDescription>
+                        </div>
+                        <select
+                          id="campaign-chart-filter"
+                          aria-label="Filtrar gráfico por campaña"
+                          value={campaignChartFilter}
+                          onChange={(e) => setCampaignChartFilter(e.target.value)}
+                          className={`${selectClass} w-full sm:w-64`}
+                        >
+                          <option value="">Comparar todas</option>
+                          {uniqueCampaigns.map((c, idx) => (
+                            <option key={`camp-filter-${idx}-${c}`} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </CardHeader>
+                      <CardContent className="p-6 pt-2">
+                        <ChartAreaInteractive data={campaignMainChartData} config={campaignMainChartConfig} dateKey="date" valueKey="leads" />
+                      </CardContent>
+                    </Card>
+
+                    <div className="space-y-3">
+                      <div className="flex items-baseline justify-between">
+                        <h2 className="text-sm font-medium text-slate-900">Por campaña</h2>
+                        {uniqueCampaigns.length > 6 && (
+                          <p className="text-xs text-muted-foreground">Mostrando 6 de {uniqueCampaigns.length}</p>
+                        )}
+                      </div>
+                      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                        {uniqueCampaigns.slice(0, 6).map((campaign) => {
+                          const campaignData = individualCampaignsData[campaign] || [];
+                          const safeKey = campaign.replace(/[^a-zA-Z0-9]/g, '_');
+                          const total = campaignData.reduce((s, d) => s + d.leads, 0);
+                          const campaignChartConfig: ChartConfig = {
+                            leads: { label: campaign, color: campaignsChartConfig[safeKey]?.color || '#1E90FF' },
+                          };
+                          return (
+                            <Card key={campaign} className="shadow-none">
+                              <CardHeader className="p-5 pb-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setCampaignChartFilter(campaign)}
+                                  className="truncate text-left text-sm font-medium hover:underline"
+                                  title={`Ver ${campaign} en detalle`}
+                                >
+                                  {campaign}
+                                </button>
+                                <CardDescription className="text-xs">{total.toLocaleString('es-AR')} leads en el período</CardDescription>
+                              </CardHeader>
+                              <CardContent className="p-5 pt-2">
+                                <ChartAreaInteractive data={campaignData} config={campaignChartConfig} dateKey="date" valueKey="leads" className="h-[160px] w-full" />
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )
+              )}
+
+              {/* ═════════════ PRESUPUESTOS ═════════════ */}
+              {tab === 'presupuestos' && (
+                <div className="space-y-6">
+                  <p className="text-xs text-muted-foreground">
+                    Presupuestos declarados por los leads, en USD. Incluye todos los leads (no depende del período).
+                  </p>
+
+                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+                    <Kpi
+                      label="Ticket promedio"
+                      value={ticketPromedio !== null ? usdFormatter.format(ticketPromedio) : '—'}
+                      hint="Leads con presupuesto cargado"
+                    />
+                    <Kpi
+                      label="Total en campañas"
+                      value={ticketTotalCampanas > 0 ? usdFormatter.format(ticketTotalCampanas) : '—'}
+                      hint="Suma de presupuestos de leads con campaña"
+                    />
+                    <Kpi
+                      label="Leads con presupuesto"
+                      value={ticketPorCampana.reduce((s, r) => s + r.count, 0).toLocaleString('es-AR')}
+                      hint="Asignados a una campaña"
+                    />
+                  </div>
+
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <Card className="shadow-none">
+                      <CardHeader className="flex flex-row items-start justify-between space-y-0 p-6 pb-2">
+                        <div className="space-y-1.5">
+                          <CardTitle className="text-sm font-medium">Ticket por campaña</CardTitle>
+                          <CardDescription className="text-xs">Clic en una campaña para ver su distribución</CardDescription>
+                        </div>
+                        {effectiveTicketCampaign && (
+                          <button
+                            type="button"
+                            onClick={() => setTicketCampaignFilter('')}
+                            className="rounded-md border border-input px-2 py-1 text-xs text-muted-foreground shadow-sm hover:bg-slate-50"
+                          >
+                            Ver todas
+                          </button>
+                        )}
+                      </CardHeader>
+                      <CardContent className="p-6 pt-2">
+                        {ticketPorCampana.length === 0 ? (
+                          <p className="py-6 text-center text-sm text-muted-foreground">Sin presupuestos por campaña.</p>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-slate-200 text-xs text-muted-foreground">
+                                  <th className="py-2 text-left font-medium">Campaña</th>
+                                  <th className="py-2 text-right font-medium">Leads</th>
+                                  <th className="py-2 text-right font-medium">Total</th>
+                                  <th className="py-2 text-right font-medium">Promedio</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {ticketPorCampana.map((r) => (
+                                  <tr
+                                    key={r.campaign}
+                                    onClick={() => setTicketCampaignFilter((prev) => (prev === r.campaign ? '' : r.campaign))}
+                                    className={`cursor-pointer border-b border-slate-100 transition-colors last:border-b-0 hover:bg-slate-50 ${
+                                      effectiveTicketCampaign === r.campaign ? 'bg-slate-100' : ''
+                                    }`}
+                                  >
+                                    <td className="max-w-[160px] truncate py-2" title={r.campaign}>{r.campaign}</td>
+                                    <td className="py-2 text-right tabular-nums">{r.count}</td>
+                                    <td className="py-2 text-right tabular-nums">{usdFormatter.format(r.total)}</td>
+                                    <td className="py-2 text-right tabular-nums text-muted-foreground">{usdFormatter.format(r.promedio)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card className="shadow-none">
+                      <CardHeader className="flex flex-row items-start justify-between space-y-0 p-6 pb-2">
+                        <div className="space-y-1.5">
+                          <CardTitle className="text-sm font-medium">Distribución de presupuestos</CardTitle>
+                          <CardDescription className="text-xs">
+                            {effectiveTicketCampaign || 'Todas las campañas'} · {ticketTotalSeleccion > 0 ? usdFormatter.format(ticketTotalSeleccion) : '—'}
+                          </CardDescription>
+                        </div>
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                          Rango
+                          <input
+                            type="number"
+                            min={1000}
+                            step={1000}
+                            value={ticketBinSize}
+                            onChange={(e) => {
+                              const n = parseInt(e.target.value, 10);
+                              setTicketBinSize(Number.isFinite(n) ? n : 10000);
+                            }}
+                            className="h-8 w-24 rounded-md border border-input bg-background px-2 text-right text-xs tabular-nums shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </label>
+                      </CardHeader>
+                      <CardContent className="space-y-4 p-6 pt-2">
+                        <ChartHistogramPresupuestos bins={histogramaPresupuestos} className="w-full" />
+                        {histogramaPresupuestos.length > 0 && (
+                          <div className="max-h-48 overflow-y-auto">
+                            <table className="w-full text-sm">
+                              <thead className="sticky top-0 bg-card">
+                                <tr className="border-b border-slate-200 text-xs text-muted-foreground">
+                                  <th className="py-2 text-left font-medium">Rango</th>
+                                  <th className="py-2 text-right font-medium">Consultas</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {histogramaPresupuestos.map((b) => (
+                                  <tr key={b.from} className="border-b border-slate-100 last:border-b-0">
+                                    <td className="py-1.5 tabular-nums">{usdFormatter.format(b.from)} – {usdFormatter.format(b.to)}</td>
+                                    <td className="py-1.5 text-right tabular-nums">{b.count}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </AppLayout>
   );
