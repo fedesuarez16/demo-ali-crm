@@ -106,7 +106,7 @@ const menuCategories: MenuCategory[] = [
       { name: 'Ficha propio', path: `${PROPSEARCH_URL}/ficha-propio`, icon: FileText },
       { name: 'Carpetas', path: `${PROPSEARCH_URL}/historial`, icon: FolderOpen },
       { name: 'Limpieza', path: `${PROPSEARCH_URL}/limpieza`, icon: Sparkles },
-      { name: 'Métricas', path: `${PROPSEARCH_URL}/metricas`, icon: BarChart3 },
+      { name: 'Métricas', path: `${PROPSEARCH_URL}/metrics`, icon: BarChart3 },
     ].map((item) => ({ ...item, external: true })),
   },
 ];
