@@ -41,6 +41,7 @@ export async function updateSession(request: NextRequest) {
   // Allow public paths through without redirect
   const isPublicPath =
     pathname === '/login' ||
+    pathname === '/privacidad' ||
     pathname.startsWith('/api/') ||
     pathname.startsWith('/_next/') ||
     pathname === '/favicon.ico';
