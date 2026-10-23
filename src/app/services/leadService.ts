@@ -328,6 +328,7 @@ const mapLeadRow = (row: any): Lead => {
     // chatwoot_conversation_id para calificación automática basada en mensajes
     chatwoot_conversation_id: row.chatwoot_conversation_id ?? undefined,
     toque_register: row.toque_register ?? undefined,
+    info_actualizada_at: row.info_actualizada_at ?? undefined,
   };
 };
 
@@ -1105,6 +1106,26 @@ export const getLeadById = async (leadId: string): Promise<Lead | null> => {
     return data ? mapLeadRow(data) : null;
   } catch (e) {
     console.error('Exception in getLeadById:', e);
+    return null;
+  }
+};
+
+/**
+ * Re-extrae con LLM los datos del lead (intencion, presupuesto, zona, etc.) leyendo
+ * la conversación de Chatwoot. No toca notas ni estado. Devuelve el status del endpoint
+ * ('actualizado' | 'sin_cambios' | 'sin_conversacion' | ...) o null si falló.
+ */
+export const reanalizarLead = async (leadId: string): Promise<string | null> => {
+  try {
+    const res = await fetch(`/api/leads/${encodeURIComponent(leadId)}/reanalizar`, { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error('Error reanalizando lead:', data?.error || res.status);
+      return null;
+    }
+    return data.status ?? null;
+  } catch (e) {
+    console.error('Exception in reanalizarLead:', e);
     return null;
   }
 };

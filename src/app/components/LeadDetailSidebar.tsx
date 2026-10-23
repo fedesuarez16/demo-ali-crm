@@ -12,7 +12,7 @@ import { X, Phone, Mail, Calendar, MapPin, DollarSign, Home, User, Clock, FileTe
 import { cn } from '@/lib/utils';
 import { programarSeguimiento, getSeguimientosPendientes, actualizarFechaProgramada, ColaSeguimiento, existeSeguimientoParaLead, eliminarTodosSeguimientosPendientes } from '../services/mensajeService';
 import { useChatStatus } from '../../hooks/useChatStatus';
-import { updateLead, getLeadById, deleteLead } from '../services/leadService';
+import { updateLead, getLeadById, deleteLead, reanalizarLead } from '../services/leadService';
 
 interface LeadDetailSidebarProps {
   lead: Lead | null;
@@ -51,6 +51,7 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
   const [isSavingFechaProgramada, setIsSavingFechaProgramada] = useState(false);
   const [isRefreshingLead, setIsRefreshingLead] = useState(false);
   const [isDeletingLead, setIsDeletingLead] = useState(false);
+  const [isReanalizando, setIsReanalizando] = useState(false);
 
   // Hook para verificar el estado del chat via n8n webhook
   const phoneNumber = (lead as any)?.whatsapp_id || lead?.telefono;
@@ -140,6 +141,29 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
       });
     return () => { cancelled = true; };
   }, [lead?.id, (lead as any)?.whatsapp_id, lead?.telefono, isOpen]);
+
+  // Al abrir el lead, un LLM relee la conversación y actualiza intencion, presupuesto, zona, etc.
+  // Se muestra lo guardado mientras tanto; las notas (anotaciones adicionales) nunca se tocan.
+  useEffect(() => {
+    if (!isOpen || !lead?.id) return;
+    let cancelled = false;
+    const leadId = lead.id;
+    setIsReanalizando(true);
+    reanalizarLead(leadId)
+      .then(async (status) => {
+        if (cancelled || status !== 'actualizado') return;
+        const fresh = await getLeadById(leadId);
+        if (!cancelled && fresh) {
+          setLocalLead(fresh);
+          onLeadRefreshed?.(fresh);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsReanalizando(false);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead?.id, isOpen]);
 
   // Refresca toda la información del lead desde Supabase y los datos relacionados.
   const handleRefreshLead = async () => {
@@ -918,18 +942,61 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
               </Card>
             )}
             
-            {/* Notes - Editable */}
+            {/* Información extraída de la conversación (se actualiza sola al abrir) */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2">
+                    <Home className="h-4 w-4" />
+                    Información del lead
+                  </span>
+                  {isReanalizando ? (
+                    <span className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current"></div>
+                      Actualizando…
+                    </span>
+                  ) : lead.info_actualizada_at ? (
+                    <span className="text-xs font-normal text-muted-foreground">
+                      Actualizado {formatDateTime(lead.info_actualizada_at)}
+                    </span>
+                  ) : null}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+                  {[
+                    { label: 'Intención', value: lead.intencion },
+                    { label: 'Presupuesto', value: lead.presupuesto ? `USD ${lead.presupuesto.toLocaleString('es-AR')}` : '' },
+                    { label: 'Zona', value: lead.zona },
+                    { label: 'Tipo', value: lead.tipo_propiedad },
+                    { label: 'Forma de pago', value: lead.forma_pago },
+                    { label: 'Vende', value: lead.caracteristicas_venta },
+                  ]
+                    .filter(({ label, value }) => value || label !== 'Vende')
+                    .map(({ label, value }) => (
+                      <React.Fragment key={label}>
+                        <dt className="text-muted-foreground">{label}</dt>
+                        <dd className={cn('break-words', !value || value === 'undefined' ? 'text-muted-foreground' : '')}>
+                          {value && value !== 'undefined' ? value : '—'}
+                        </dd>
+                      </React.Fragment>
+                    ))}
+                </dl>
+              </CardContent>
+            </Card>
+
+            {/* Anotaciones adicionales - manuales (columna notas), el LLM nunca las toca */}
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm flex items-center gap-2">
                     <FileText className="h-4 w-4" />
-                    Notas
+                    Anotaciones adicionales
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <textarea
                   className="w-full h-32 px-3 py-2 text-sm border border-input rounded-md bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
-                  placeholder="Agrega notas sobre este lead..."
+                  placeholder="Agregá anotaciones sobre este lead..."
                   value={notas}
                   onChange={(e) => setNotas(e.target.value)}
                   disabled={isSavingNotas}
@@ -946,32 +1013,30 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                         Guardando...
                       </>
                     ) : (
-                      'Guardar Notas'
+                      'Guardar anotaciones'
                     )}
                   </Button>
                 </div>
               </CardContent>
             </Card>
             
-            {/* Observaciones antiguas (si existen y son diferentes de notas) */}
-            {(lead.observaciones || (lead as any).propiedades_mostradas) && (
-              (lead.observaciones || (lead as any).propiedades_mostradas) !== notas && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      Observaciones
+            {/* Observaciones (caracteristicas_buscadas): se editan a mano desde el formulario del lead */}
+            {lead.observaciones && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Observaciones
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="bg-muted p-3 rounded-md text-sm text-muted-foreground">
-                    {lead.observaciones || (lead as any).propiedades_mostradas}
+                  <div className="bg-muted p-3 rounded-md text-sm text-muted-foreground whitespace-pre-wrap">
+                    {lead.observaciones}
                   </div>
                 </CardContent>
               </Card>
-              )
             )}
-            
+
             {/* Matching Properties */}
             {matchingProperties.length > 0 && (
               <Card>

@@ -37,6 +37,7 @@ export interface Lead {
   estado_chat?: number; // Estado del chat: 1 = activo, 0 = inactivo (independiente del estado del lead)
   toque_register?: string; // Registro de toque: Gen100 | Gen300 | Gen400
   chatwoot_conversation_id?: number; // ID de la conversación en Chatwoot para calificación automática
+  info_actualizada_at?: string; // Última re-extracción con LLM desde la conversación (POST /api/leads/[id]/reanalizar)
 }
 
 export interface FilterOptions {
