@@ -38,6 +38,8 @@ export interface Lead {
   toque_register?: string; // Registro de toque: Gen100 | Gen300 | Gen400
   chatwoot_conversation_id?: number; // ID de la conversación en Chatwoot para calificación automática
   info_actualizada_at?: string; // Última re-extracción con LLM desde la conversación (POST /api/leads/[id]/reanalizar)
+  resumen_conversacion?: string; // Resumen de la conversación generado por LLM (POST /api/leads/[id]/reanalizar)
+  calificacion_auto?: boolean; // true = el calificador LLM lo mueve de columna aunque esté en una columna humana (POST /api/leads/[id]/calificar)
 }
 
 export interface FilterOptions {

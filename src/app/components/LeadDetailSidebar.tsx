@@ -8,11 +8,11 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, Phone, Mail, Calendar, MapPin, DollarSign, Home, User, Clock, FileText, Building, Plus, Minus, Wifi, WifiOff, Bell, Trash2 } from 'lucide-react';
+import { X, Phone, Mail, Calendar, MapPin, DollarSign, Home, User, Clock, FileText, Building, Plus, Minus, Wifi, WifiOff, Bell, Trash2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { programarSeguimiento, getSeguimientosPendientes, actualizarFechaProgramada, ColaSeguimiento, existeSeguimientoParaLead, eliminarTodosSeguimientosPendientes } from '../services/mensajeService';
 import { useChatStatus } from '../../hooks/useChatStatus';
-import { updateLead, getLeadById, deleteLead, reanalizarLead } from '../services/leadService';
+import { updateLead, getLeadById, deleteLead, reanalizarLead, setCalificacionAuto } from '../services/leadService';
 
 interface LeadDetailSidebarProps {
   lead: Lead | null;
@@ -52,6 +52,8 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
   const [isRefreshingLead, setIsRefreshingLead] = useState(false);
   const [isDeletingLead, setIsDeletingLead] = useState(false);
   const [isReanalizando, setIsReanalizando] = useState(false);
+  const [isUpdatingCalificacion, setIsUpdatingCalificacion] = useState(false);
+  const [calificacionMsg, setCalificacionMsg] = useState<string | null>(null);
 
   // Hook para verificar el estado del chat via n8n webhook
   const phoneNumber = (lead as any)?.whatsapp_id || lead?.telefono;
@@ -521,6 +523,39 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
     }
   };
 
+  // Activa la calificación automática (califica ya con el LLM y lo sigue moviendo en cada mensaje,
+  // aunque esté en una columna humana) o la apaga. Ver /api/leads/[id]/calificar.
+  const handleToggleCalificacion = async () => {
+    if (!localLead) return;
+    const activar = !localLead.calificacion_auto;
+    const capturedId = localLead.id;
+    setIsUpdatingCalificacion(true);
+    setCalificacionMsg(null);
+    try {
+      const data = await setCalificacionAuto(capturedId, activar);
+      if (!data) {
+        alert('Error al actualizar la calificación automática. Intenta nuevamente.');
+        return;
+      }
+      const fresh = await getLeadById(capturedId);
+      if (fresh && localLead.id === capturedId) {
+        setLocalLead(fresh);
+        onLeadRefreshed?.(fresh);
+      }
+      const r = data.resultado;
+      if (!activar) setCalificacionMsg(null);
+      else if (r?.aplicado) setCalificacionMsg(`Movido de "${r.estado_anterior}" a "${r.estado_sugerido}": ${r.motivo}`);
+      else if (r) setCalificacionMsg(`Sigue en "${r.estado_anterior}" (${r.razon_no_aplicado}). ${r.motivo}`);
+      else if (data.status === 'sin_conversacion') setCalificacionMsg('Activada. No encontré la conversación en Chatwoot: se calificará con el próximo mensaje.');
+      else setCalificacionMsg('Activada. Se calificará con el próximo mensaje.');
+    } catch (e) {
+      console.error('Error toggling calificación automática:', e);
+      alert('Error al actualizar la calificación automática.');
+    } finally {
+      setIsUpdatingCalificacion(false);
+    }
+  };
+
   if (!lead) return null;
 
   return (
@@ -694,6 +729,38 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
                     )}
                     Activar agente
                   </Button>
+                )}
+              </div>
+
+              <div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleToggleCalificacion}
+                  disabled={isUpdatingCalificacion || !((lead as any)?.whatsapp_id || lead?.telefono)}
+                  className={cn(
+                    'w-full',
+                    localLead?.calificacion_auto
+                      ? 'text-red-700 border-red-200 hover:bg-red-50'
+                      : 'text-blue-700 border-blue-200 hover:bg-blue-50'
+                  )}
+                  title="El LLM mueve al lead de columna según los últimos 5 mensajes, aunque esté en una columna asignada a mano"
+                >
+                  {isUpdatingCalificacion ? (
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current mr-2"></div>
+                  ) : localLead?.calificacion_auto ? (
+                    <Minus className="h-4 w-4 mr-2" />
+                  ) : (
+                    <Plus className="h-4 w-4 mr-2" />
+                  )}
+                  {isUpdatingCalificacion && !localLead?.calificacion_auto
+                    ? 'Calificando...'
+                    : localLead?.calificacion_auto
+                      ? 'Desactivar calificación automática'
+                      : 'Activar calificación automática'}
+                </Button>
+                {calificacionMsg && (
+                  <p className="text-xs text-muted-foreground mt-1">{calificacionMsg}</p>
                 )}
               </div>
             </div>
@@ -942,6 +1009,25 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
               </Card>
             )}
             
+            {/* Resumen IA de la conversación: lo genera reanalizar al abrir, solo si hay mensajes nuevos */}
+            {(lead.resumen_conversacion || isReanalizando) && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    Resumen de la conversación
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {lead.resumen_conversacion ? (
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{lead.resumen_conversacion}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Generando resumen…</p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Información extraída de la conversación (se actualiza sola al abrir) */}
             <Card>
               <CardHeader className="pb-3">

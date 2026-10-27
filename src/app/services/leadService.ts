@@ -329,6 +329,8 @@ const mapLeadRow = (row: any): Lead => {
     chatwoot_conversation_id: row.chatwoot_conversation_id ?? undefined,
     toque_register: row.toque_register ?? undefined,
     info_actualizada_at: row.info_actualizada_at ?? undefined,
+    resumen_conversacion: row.resumen_conversacion ?? undefined,
+    calificacion_auto: row.calificacion_auto === true,
   };
 };
 
@@ -1126,6 +1128,38 @@ export const reanalizarLead = async (leadId: string): Promise<string | null> => 
     return data.status ?? null;
   } catch (e) {
     console.error('Exception in reanalizarLead:', e);
+    return null;
+  }
+};
+
+export type ResultadoCalificacion = {
+  status: string;
+  resultado?: {
+    estado_anterior: string;
+    estado_sugerido: string | null;
+    confianza: number | string;
+    motivo: string;
+    aplicado: boolean;
+    razon_no_aplicado: string | null;
+  };
+};
+
+// Activa (y califica ya) o apaga la calificación automática del lead, aunque esté en una columna humana.
+export const setCalificacionAuto = async (leadId: string, activar: boolean): Promise<ResultadoCalificacion | null> => {
+  try {
+    const res = await fetch(`/api/leads/${encodeURIComponent(leadId)}/calificar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activar }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error('Error en calificación automática:', data?.error || res.status);
+      return null;
+    }
+    return data;
+  } catch (e) {
+    console.error('Exception in setCalificacionAuto:', e);
     return null;
   }
 };
