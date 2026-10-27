@@ -105,7 +105,7 @@ export function ChartHistogramPresupuestos({
             <stop offset="100%" stopColor="#10B981" stopOpacity={0.55} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
         <XAxis
           dataKey="tick"
           tickLine={false}
@@ -114,7 +114,7 @@ export function ChartHistogramPresupuestos({
           interval="preserveStartEnd"
           minTickGap={12}
           height={28}
-          tick={{ fill: '#64748b', fontSize: 11 }}
+          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
         />
         <YAxis
           tickLine={false}
@@ -122,7 +122,7 @@ export function ChartHistogramPresupuestos({
           tickMargin={8}
           width={40}
           allowDecimals={false}
-          tick={{ fill: '#64748b', fontSize: 12 }}
+          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
         />
         <Tooltip
           cursor={{ fill: 'rgba(148, 163, 184, 0.10)' }}

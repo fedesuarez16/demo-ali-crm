@@ -146,6 +146,18 @@ try {
   process.exit(0);
 }
 
+// Opcional: `npm run sync:n8n -- "<archivo>.json" ...` sincroniza solo esos archivos de workflows/.
+// Sin argumentos (y en CI) se sincroniza toda la carpeta.
+const only = process.argv.slice(2).map((a) => basename(a));
+if (only.length > 0) {
+  const missing = only.filter((name) => !files.some((f) => basename(f) === name));
+  if (missing.length > 0) {
+    console.error(`✘ No están en workflows/: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+  files = files.filter((f) => only.includes(basename(f)));
+}
+
 if (files.length === 0) {
   console.log('No hay archivos .json en workflows/.');
   process.exit(0);

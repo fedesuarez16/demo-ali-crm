@@ -182,13 +182,13 @@ export function ChartBarLeadsPorEstado({
               </linearGradient>
             ))}
           </defs>
-          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
           <XAxis
             type="number"
             tickLine={false}
             axisLine={false}
             allowDecimals={false}
-            tick={{ fill: '#64748b', fontSize: 11 }}
+            tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
           />
           <YAxis
             type="category"
@@ -197,7 +197,7 @@ export function ChartBarLeadsPorEstado({
             axisLine={false}
             interval={0}
             width={190}
-            tick={{ fill: '#475569', fontSize: 12 }}
+            tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
           />
           <Tooltip
             cursor={{ fill: 'rgba(148, 163, 184, 0.10)' }}
@@ -230,7 +230,7 @@ export function ChartBarLeadsPorEstado({
             </linearGradient>
           ))}
         </defs>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
         <XAxis
           dataKey="label"
           tickLine={false}
@@ -238,7 +238,7 @@ export function ChartBarLeadsPorEstado({
           tickMargin={8}
           interval={0}
           height={32}
-          tick={{ fill: '#64748b', fontSize: 12 }}
+          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
         />
         <YAxis
           tickLine={false}
@@ -246,7 +246,7 @@ export function ChartBarLeadsPorEstado({
           tickMargin={8}
           allowDecimals={false}
           width={36}
-          tick={{ fill: '#64748b', fontSize: 12 }}
+          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
         />
         <Tooltip
           cursor={{ fill: 'rgba(148, 163, 184, 0.10)' }}

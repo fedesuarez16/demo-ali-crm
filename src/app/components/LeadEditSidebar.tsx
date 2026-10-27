@@ -52,13 +52,14 @@ const LeadEditSidebar: React.FC<LeadEditSidebarProps> = ({
     'visita',
   ]);
   const [estadoColors, setEstadoColors] = useState<Record<string, string>>({});
+  const [estadoLabels, setEstadoLabels] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
     (async () => {
       try {
-        const [{ customColumns, columnColors }, distinctLeadEstados] = await Promise.all([
+        const [{ customColumns, columnColors, columnLabels }, distinctLeadEstados] = await Promise.all([
           getKanbanColumns(),
           getDistinctLeadEstados(),
         ]);
@@ -94,6 +95,7 @@ const LeadEditSidebar: React.FC<LeadEditSidebarProps> = ({
 
         setEstadoOptions(deduped);
         setEstadoColors(columnColors || {});
+        setEstadoLabels(columnLabels || {});
       } catch (err) {
         console.error('Error cargando columnas del kanban:', err);
       }
@@ -129,10 +131,11 @@ const LeadEditSidebar: React.FC<LeadEditSidebarProps> = ({
   }, [estadoOptions, formData.estado, isNewLead]);
 
   const formatEstadoLabel = (value: string): React.ReactNode => {
+    const customLabel = estadoLabels[value];
     const known = ESTADO_LABELS[value];
-    if (known) return known;
+    if (known && !customLabel) return known;
     const color = estadoColors[value];
-    const label = value.charAt(0).toUpperCase() + value.slice(1);
+    const label = customLabel || value.charAt(0).toUpperCase() + value.slice(1);
     return (
       <span className="inline-flex items-center gap-2">
         {color && (

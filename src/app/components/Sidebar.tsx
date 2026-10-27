@@ -36,6 +36,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import LogoutButton from '@/app/components/LogoutButton';
+import ThemeToggle from '@/app/components/ThemeToggle';
 
 interface MenuItem {
   name: string;
@@ -157,7 +158,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
     const content = (
       <>
         {isActive && !collapsed && (
-          <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-neutral-900" />
+          <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-neutral-900 dark:bg-foreground" />
         )}
         <Icon
           className={cn('h-4 w-4 shrink-0', isActive ? 'text-neutral-900' : 'text-neutral-400 group-hover:text-neutral-700')}
@@ -219,7 +220,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
         <div className={cn('flex h-14 items-center border-b border-neutral-100', collapsed ? 'justify-center px-2' : 'justify-between px-4')}>
           {!collapsed && (
             <div className="flex min-w-0 items-center gap-2.5">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-neutral-900 text-xs font-semibold text-white">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-neutral-900 text-xs font-semibold text-white dark:bg-foreground dark:text-background">
                 TA
               </div>
               <div className="min-w-0 leading-tight">
@@ -255,7 +256,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
                         target="_blank"
                         rel="noopener noreferrer"
                         title={category.name}
-                        className="mx-auto flex h-9 w-9 items-center justify-center rounded-md bg-black text-white transition-colors hover:bg-neutral-800"
+                        className="mx-auto flex h-9 w-9 items-center justify-center rounded-md bg-black text-white transition-colors hover:bg-neutral-800 dark:bg-foreground dark:text-background dark:hover:bg-foreground/90"
                       >
                         <CollapsedIcon className="h-4 w-4" strokeWidth={1.75} />
                       </a>
@@ -274,7 +275,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
                     className={cn(
                       'group mb-1 flex w-full items-center justify-between transition-colors',
                       category.external
-                        ? 'h-9 rounded-md bg-black px-2.5 text-[13px] font-medium text-white hover:bg-neutral-800'
+                        ? 'h-9 rounded-md bg-black px-2.5 text-[13px] font-medium text-white hover:bg-neutral-800 dark:bg-foreground dark:text-background dark:hover:bg-foreground/90'
                         : 'px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-neutral-400 hover:text-neutral-700'
                     )}
                   >
@@ -292,6 +293,11 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
         </ScrollArea>
 
         {/* Footer */}
+        {collapsed && (
+          <div className="hidden border-t border-neutral-100 p-2 lg:block">
+            <ThemeToggle className="mx-auto h-9 w-9" />
+          </div>
+        )}
         {!collapsed && (
           <div className="border-t border-neutral-100 p-3">
             <div className="flex items-center gap-2.5 rounded-md px-1.5 py-1.5">
@@ -302,6 +308,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
                 <p className="truncate text-[13px] font-medium text-neutral-900">Usuario admin</p>
                 <p className="truncate text-[11px] text-neutral-400">Admin</p>
               </div>
+              <ThemeToggle />
               <LogoutButton />
             </div>
           </div>

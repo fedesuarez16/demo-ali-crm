@@ -21,7 +21,7 @@ import {
 } from '../services/leadService';
 import { getAllPropiedadDirecciones } from '../services/propiedadesService';
 import { exportLeadsToCSV } from '../utils/exportUtils';
-import { getKanbanColumns, saveKanbanColumns, migrateColumnsFromLocalStorage, normalizeColumnName, getDistinctLeadEstados } from '../services/columnService';
+import { getKanbanColumns, saveKanbanColumns, saveColumnLabels, migrateColumnsFromLocalStorage, normalizeColumnName, getDistinctLeadEstados } from '../services/columnService';
 import { programarSeguimiento } from '../services/mensajeService';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
@@ -65,6 +65,10 @@ export default function LeadsKanbanPage() {
   const [isColumnSelectorVisible, setIsColumnSelectorVisible] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['frío', 'tibio', 'caliente', 'llamada', 'visita']);
   const [columnColors, setColumnColors] = useState<Record<string, string>>({});
+  // Nombres visibles de columnas (solo front): estado canónico -> etiqueta
+  const [columnLabels, setColumnLabels] = useState<Record<string, string>>({});
+  const [editingColumn, setEditingColumn] = useState<string | null>(null);
+  const [editingLabel, setEditingLabel] = useState('');
   // Estados distintos tomados de leads.estado — sirven para mostrar columnas "huérfanas"
   const [distinctEstados, setDistinctEstados] = useState<string[]>([]);
 
@@ -77,7 +81,7 @@ export default function LeadsKanbanPage() {
 
         // Cargar columnas y estados distintos en paralelo
         const [
-          { customColumns: loadedCustom, visibleColumns: loadedVisible, columnColors: loadedColors },
+          { customColumns: loadedCustom, visibleColumns: loadedVisible, columnColors: loadedColors, columnLabels: loadedLabels },
           rawEstados,
         ] = await Promise.all([
           getKanbanColumns(),
@@ -92,6 +96,7 @@ export default function LeadsKanbanPage() {
         setCustomColumns(loadedCustom);
         setVisibleColumns(normalizedVisible.length > 0 ? normalizedVisible : [...BASE_STATES]);
         setColumnColors(loadedColors);
+        setColumnLabels(loadedLabels);
         setDistinctEstados(rawEstados);
       } catch (error) {
         console.error('Error loading columns from Supabase:', error);
@@ -481,6 +486,37 @@ export default function LeadsKanbanPage() {
       alert('Error al guardar el color de la columna. Por favor intenta nuevamente.');
       setColumnColors(previousColors);
       setCustomColumns(previousCustom);
+    }
+  };
+
+  const getDisplayName = (column: string) => columnLabels[column] || column;
+
+  const startRenameColumn = (column: string) => {
+    setEditingColumn(column);
+    setEditingLabel(getDisplayName(column));
+  };
+
+  // Renombra solo la etiqueta visible: leads.estado conserva la clave original.
+  const commitRenameColumn = async () => {
+    if (!editingColumn) return;
+    const column = editingColumn;
+    const label = editingLabel.trim();
+    setEditingColumn(null);
+
+    const previousLabels = columnLabels;
+    const updated = { ...columnLabels };
+    if (!label || label.toLowerCase() === column.toLowerCase()) {
+      delete updated[column];
+    } else {
+      updated[column] = label;
+    }
+    if ((updated[column] ?? '') === (columnLabels[column] ?? '')) return;
+
+    setColumnLabels(updated);
+    const success = await saveColumnLabels(updated);
+    if (!success) {
+      alert('Error al renombrar la columna. Por favor intenta nuevamente.');
+      setColumnLabels(previousLabels);
     }
   };
 
@@ -949,7 +985,7 @@ export default function LeadsKanbanPage() {
                           >
                             ←
                           </button>
-                          <span className="text-xs font-semibold text-gray-800 capitalize">{col}</span>
+                          <span className="text-xs font-semibold text-gray-800 capitalize">{getDisplayName(col)}</span>
                           <button
                             type="button"
                             onClick={() => moveVisibleColumn(col, 'right')}
@@ -999,8 +1035,43 @@ export default function LeadsKanbanPage() {
                             title={`Cambiar color de ${column}`}
                           />
                         </span>
-                        <span className="text-sm text-gray-700 capitalize truncate">{column}</span>
+                        {editingColumn === column ? (
+                          <input
+                            type="text"
+                            autoFocus
+                            value={editingLabel}
+                            onChange={(e) => setEditingLabel(e.target.value)}
+                            onClick={(e) => e.preventDefault()}
+                            onBlur={commitRenameColumn}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') commitRenameColumn();
+                              if (e.key === 'Escape') setEditingColumn(null);
+                            }}
+                            className="min-w-0 flex-1 rounded border border-gray-300 px-1.5 py-0.5 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-gray-500"
+                            aria-label={`Nuevo nombre para ${column}`}
+                          />
+                        ) : (
+                          <span
+                            className="text-sm text-gray-700 capitalize truncate"
+                            title={columnLabels[column] ? `Estado interno: ${column}` : undefined}
+                          >
+                            {getDisplayName(column)}
+                          </span>
+                        )}
                       </label>
+                      {editingColumn !== column && (
+                        <button
+                          type="button"
+                          onClick={() => startRenameColumn(column)}
+                          aria-label={`Renombrar columna ${column}`}
+                          title="Renombrar (solo cambia el nombre visible)"
+                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 transition-colors"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden="true">
+                            <path d="M2.695 14.763l-1.262 3.154a.5.5 0 0 0 .65.65l3.155-1.262a4 4 0 0 0 1.343-.885L17.5 5.5a2.121 2.121 0 0 0-3-3L3.58 13.42a4 4 0 0 0-.885 1.343Z" />
+                          </svg>
+                        </button>
+                      )}
                       {isDeletable && (
                         <button
                           type="button"
@@ -1030,6 +1101,7 @@ export default function LeadsKanbanPage() {
               onEditLead={handleOpenEditLead}
               visibleColumns={visibleColumns}
               columnColors={columnColors}
+              columnLabels={columnLabels}
               onSelectionChange={handleSelectionChange}
               selectedLeadIds={new Set(selectedLeads.map(l => l.id))}
               isSelectionMode={isSelectionMode}

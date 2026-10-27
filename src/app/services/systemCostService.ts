@@ -18,9 +18,11 @@ export interface SystemCosts {
   openai:  number;
   claude:  number;
   mantenimiento: number;
+  mantenimiento_crm: number;
+  plantillas: number;
 }
 
-const ZERO: SystemCosts = { hosting: 0, openai: 0, claude: 0, mantenimiento: 0 };
+const ZERO: SystemCosts = { hosting: 0, openai: 0, claude: 0, mantenimiento: 0, mantenimiento_crm: 0, plantillas: 0 };
 
 function toNumber(v: unknown): number {
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
@@ -35,7 +37,7 @@ export async function getSystemCosts(): Promise<SystemCosts> {
   const supabase = getSupabase();
   const { data, error } = await (supabase as any)
     .from('system_costs')
-    .select('hosting, openai, claude, mantenimiento')
+    .select('hosting, openai, claude, mantenimiento, mantenimiento_crm, plantillas')
     .eq('id', 1)
     .maybeSingle();
 
@@ -50,6 +52,8 @@ export async function getSystemCosts(): Promise<SystemCosts> {
     openai:  toNumber(data.openai),
     claude:  toNumber(data.claude),
     mantenimiento: toNumber(data.mantenimiento),
+    mantenimiento_crm: toNumber(data.mantenimiento_crm),
+    plantillas: toNumber(data.plantillas),
   };
 }
 
@@ -60,6 +64,8 @@ export async function updateSystemCosts(costs: SystemCosts): Promise<SystemCosts
     openai:  toNumber(costs.openai),
     claude:  toNumber(costs.claude),
     mantenimiento: toNumber(costs.mantenimiento),
+    mantenimiento_crm: toNumber(costs.mantenimiento_crm),
+    plantillas: toNumber(costs.plantillas),
     updated_at: new Date().toISOString(),
   };
 
@@ -67,7 +73,7 @@ export async function updateSystemCosts(costs: SystemCosts): Promise<SystemCosts
     .from('system_costs')
     .update(payload)
     .eq('id', 1)
-    .select('hosting, openai, claude, mantenimiento')
+    .select('hosting, openai, claude, mantenimiento, mantenimiento_crm, plantillas')
     .single();
 
   if (error) {
@@ -80,5 +86,7 @@ export async function updateSystemCosts(costs: SystemCosts): Promise<SystemCosts
     openai:  toNumber(data.openai),
     claude:  toNumber(data.claude),
     mantenimiento: toNumber(data.mantenimiento),
+    mantenimiento_crm: toNumber(data.mantenimiento_crm),
+    plantillas: toNumber(data.plantillas),
   };
 }

@@ -10,6 +10,8 @@ interface LeadCardsProps {
   onEditLead?: (lead: Lead) => void;
   visibleColumns?: string[];
   columnColors?: Record<string, string>;
+  /** Nombres visibles por estado canónico; el estado real no cambia. */
+  columnLabels?: Record<string, string>;
   onSelectionChange?: (selectedLeads: Lead[]) => void;
   selectedLeadIds?: Set<string>;
   isSelectionMode?: boolean;
@@ -20,7 +22,7 @@ interface LeadCardsProps {
 /** min-w-[240px] + gap-2 (8px) en el flex del tablero */
 const KANBAN_COLUMN_SCROLL_STEP = 248;
 
-const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEditLead, visibleColumns, columnColors = {}, onSelectionChange, selectedLeadIds: externalSelectedIds, isSelectionMode: externalIsSelectionMode, onSelectionModeChange, onLeadDeleted }) => {
+const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEditLead, visibleColumns, columnColors = {}, columnLabels = {}, onSelectionChange, selectedLeadIds: externalSelectedIds, isSelectionMode: externalIsSelectionMode, onSelectionModeChange, onLeadDeleted }) => {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [matchingProperties, setMatchingProperties] = useState<Map<string, Property[]>>(new Map());
@@ -221,67 +223,26 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
     }
   };
 
+  // Badge translúcido del color de la columna: se lee bien en tema claro y oscuro
+  const STATUS_FALLBACK_COLORS: Record<string, string> = {
+    'frío': '#3b82f6',
+    'tibio': '#eab308',
+    'caliente': '#ef4444',
+    'llamada': '#8b5cf6',
+    'visita': '#10b981',
+  };
+
   const getStatusBadgeColor = (status: string) => {
-    // Si hay un color personalizado para esta columna, usarlo
-    if (columnColors[status]) {
-      const color = columnColors[status];
-      // Convertir hex a RGB para calcular el color de fondo más claro
-      const hex = color.replace('#', '');
-      const r = parseInt(hex.substr(0, 2), 16);
-      const g = parseInt(hex.substr(2, 2), 16);
-      const b = parseInt(hex.substr(4, 2), 16);
-      // Crear un color de fondo más claro (20% de opacidad)
-      const bgColor = `rgba(${r}, ${g}, ${b}, 0.15)`;
-      // Determinar si el texto debe ser oscuro o claro basado en la luminosidad
-      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-      const textColor = luminance > 0.5 ? color : color;
-      
-      return {
-        backgroundColor: bgColor,
-        color: textColor,
-        borderColor: color
-      };
-    }
-    
-    // Fallback a colores por defecto
-    switch (status) {
-      case 'frío':
-        return {
-          backgroundColor: 'rgb(219, 234, 254)',
-          color: '#1e40af',
-          borderColor: '#3b82f6'
-        };
-      case 'tibio':
-        return {
-          backgroundColor: 'rgb(254, 249, 195)',
-          color: '#854d0e',
-          borderColor: '#eab308'
-        };
-      case 'caliente':
-        return {
-          backgroundColor: 'rgb(254, 226, 226)',
-          color: '#991b1b',
-          borderColor: '#ef4444'
-        };
-      case 'llamada':
-        return {
-          backgroundColor: 'rgb(237, 233, 254)',
-          color: '#5b21b6',
-          borderColor: '#8b5cf6'
-        };
-      case 'visita':
-        return {
-          backgroundColor: 'rgb(209, 250, 229)',
-          color: '#065f46',
-          borderColor: '#10b981'
-        };
-      default:
-        return {
-          backgroundColor: 'rgb(243, 244, 246)',
-          color: '#1f2937',
-          borderColor: '#9ca3af'
-        };
-    }
+    const color = columnColors[status] || STATUS_FALLBACK_COLORS[status] || '#9ca3af';
+    const hex = color.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    return {
+      backgroundColor: `rgba(${r}, ${g}, ${b}, 0.15)`,
+      color,
+      borderColor: color
+    };
   };
 
   const formatCurrency = (amount: number) => {
@@ -435,7 +396,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
     // Añadir una imagen de arrastre personalizada (opcional)
     const dragImage = document.createElement('div');
     dragImage.textContent = lead.nombreCompleto;
-    dragImage.style.backgroundColor = 'white';
+    dragImage.style.backgroundColor = 'rgb(var(--bg-white))';
     dragImage.style.padding = '8px';
     dragImage.style.borderRadius = '4px';
     dragImage.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
@@ -504,6 +465,8 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
   };
 
   const getStatusTitle = (status: string) => {
+    const customLabel = columnLabels[canonicalEstado(status)];
+    if (customLabel) return customLabel;
     const titleMap: Record<string, string> = {
       'caliente': 'Calientes',
       'tibio': 'Tibios',
@@ -709,12 +672,11 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                             )}
                             {((lead.seguimientos_count !== undefined && lead.seguimientos_count !== null && lead.seguimientos_count > 0) || true) && (
                               <div 
-                                className="absolute top-1 right-1 z-50"
+                                className="absolute top-1 right-1 z-50 border border-gray-200 bg-gray-100 text-gray-500"
                                 style={{
                                   position: 'absolute',
                                   top: '4px',
                                   right: '4px',
-                                  color: '#6b7280',
                                   fontSize: '10px',
                                   fontWeight: '700',
                                   borderRadius: '4px',
@@ -725,8 +687,6 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
-                                  backgroundColor: '#f3f4f6',
-                                  border: '1px solid #e5e7eb',
                                   zIndex: 50,
                                   pointerEvents: 'none'
                                 }}
@@ -807,7 +767,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                                   className="inline-flex items-center px-1 py-0.5 rounded-md text-[10px] font-medium border"
                                   style={getStatusBadgeColor(lead.estado)}
                                 >
-                                  {lead.estado}
+                                  {columnLabels[canonicalEstado(lead.estado)] || lead.estado}
                                 </span>
                                 {lead.toque_register && (
                                   <span className="inline-flex items-center px-1 py-0.5 rounded-md text-[10px] font-medium border bg-indigo-50 text-indigo-700 border-indigo-200">

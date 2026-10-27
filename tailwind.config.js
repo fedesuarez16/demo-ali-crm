@@ -1,4 +1,6 @@
 /** @type {import('tailwindcss').Config} */
+const { bgPalette, textPalette, borderPalette, darkPalettePlugin } = require('./tailwind.dark-palette');
+
 module.exports = {
   darkMode: ["class"],
   content: [
@@ -8,6 +10,16 @@ module.exports = {
   ],
   theme: {
   	extend: {
+  		// Paleta adaptada al tema (ver tailwind.dark-palette.js)
+  		backgroundColor: bgPalette,
+  		gradientColorStops: bgPalette,
+  		ringOffsetColor: bgPalette,
+  		textColor: textPalette,
+  		placeholderColor: textPalette,
+  		borderColor: borderPalette,
+  		divideColor: borderPalette,
+  		ringColor: borderPalette,
+  		outlineColor: borderPalette,
   		colors: {
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
@@ -66,5 +78,5 @@ module.exports = {
   		}
   	}
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [require("tailwindcss-animate"), darkPalettePlugin],
 } 

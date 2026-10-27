@@ -220,7 +220,7 @@ const LeadTable: React.FC<LeadTableProps> = ({
                 marginTop: '2px',
                 border: '2px solid #6b7280',
                 borderRadius: '4px',
-                backgroundColor: isSelected ? '#4f46e5' : 'white',
+                backgroundColor: isSelected ? '#4f46e5' : 'rgb(var(--bg-white))',
                 display: 'block',
                 visibility: 'visible',
                 opacity: 1,

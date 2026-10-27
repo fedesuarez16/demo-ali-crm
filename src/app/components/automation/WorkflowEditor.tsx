@@ -221,7 +221,7 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave }) => 
               width: '100%',
               height: '100%',
               backgroundSize: '20px 20px',
-              backgroundImage: 'radial-gradient(circle, #ddd 1px, transparent 1px)',
+              backgroundImage: 'radial-gradient(circle, rgb(var(--border-gray-300)) 1px, transparent 1px)',
               backgroundPosition: '0 0',
             }}
           />

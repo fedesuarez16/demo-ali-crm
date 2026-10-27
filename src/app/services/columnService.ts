@@ -19,6 +19,7 @@ export interface KanbanColumns {
   custom_columns: string[];
   visible_columns: string[];
   column_colors?: Record<string, string>; // Mapeo de nombre de columna -> color hex
+  column_labels?: Record<string, string>; // Mapeo de estado canónico -> nombre visible (solo front)
   created_at?: string;
   updated_at?: string;
 }
@@ -80,7 +81,8 @@ export const normalizeColumnName = canonicalEstado;
 export const getKanbanColumns = async (): Promise<{ 
   customColumns: string[]; 
   visibleColumns: string[]; 
-  columnColors: Record<string, string> 
+  columnColors: Record<string, string>;
+  columnLabels: Record<string, string>;
 }> => {
   try {
     const { data, error } = await (getSupabase() as any)
@@ -95,7 +97,8 @@ export const getKanbanColumns = async (): Promise<{
       return {
         customColumns: [],
         visibleColumns: ['frío', 'tibio', 'caliente', 'llamada', 'visita'],
-        columnColors: DEFAULT_COLORS
+        columnColors: DEFAULT_COLORS,
+        columnLabels: {}
       };
     }
 
@@ -105,7 +108,8 @@ export const getKanbanColumns = async (): Promise<{
       return {
         customColumns: [],
         visibleColumns: ['frío', 'tibio', 'caliente', 'llamada', 'visita'],
-        columnColors: DEFAULT_COLORS
+        columnColors: DEFAULT_COLORS,
+        columnLabels: {}
       };
     }
 
@@ -126,7 +130,8 @@ export const getKanbanColumns = async (): Promise<{
     return {
       customColumns: (latestRecord.custom_columns as string[]) || [],
       visibleColumns: normalizedVisibleColumns.length > 0 ? normalizedVisibleColumns : ['frío', 'tibio', 'caliente', 'llamada', 'visita'],
-      columnColors: mergedColors
+      columnColors: mergedColors,
+      columnLabels: canonicalizeLabels(latestRecord.column_labels)
     };
   } catch (e) {
     console.error('Supabase not configured or failed to initialize:', e);
@@ -134,7 +139,8 @@ export const getKanbanColumns = async (): Promise<{
     return {
       customColumns: [],
       visibleColumns: ['frío', 'tibio', 'caliente', 'llamada', 'visita'],
-      columnColors: DEFAULT_COLORS
+      columnColors: DEFAULT_COLORS,
+      columnLabels: {}
     };
   }
 };
@@ -223,6 +229,60 @@ export const saveKanbanColumns = async (
     return true;
   } catch (e) {
     console.error('Exception saving kanban columns:', e);
+    return false;
+  }
+};
+
+function canonicalizeLabels(raw: Record<string, string> | null | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw || {})) {
+    const canonicalKey = canonicalEstado(key);
+    const label = (value || '').toString().trim();
+    if (canonicalKey && label) out[canonicalKey] = label;
+  }
+  return out;
+}
+
+/**
+ * Nombre visible de una columna. El estado real (leads.estado) nunca se renombra:
+ * la etiqueta es solo presentación.
+ */
+export function getColumnLabel(estado: string, labels?: Record<string, string>): string | undefined {
+  return labels?.[canonicalEstado(estado)];
+}
+
+/**
+ * Guarda solo las etiquetas visibles de las columnas, sin tocar leads ni el resto
+ * de la configuración del Kanban.
+ */
+export const saveColumnLabels = async (labels: Record<string, string>): Promise<boolean> => {
+  try {
+    const columnLabels = canonicalizeLabels(labels);
+    const { data: existingData } = await (getSupabase() as any)
+      .from('kanban_columns')
+      .select('id')
+      .order('id', { ascending: false })
+      .limit(1);
+
+    const existingId = existingData?.[0]?.id as number | undefined;
+    const payload = { column_labels: columnLabels, updated_at: new Date().toISOString() };
+
+    const { error } = existingId
+      ? await (getSupabase() as any).from('kanban_columns').update(payload).eq('id', existingId)
+      : await (getSupabase() as any).from('kanban_columns').insert([{
+          custom_columns: [],
+          visible_columns: ['frío', 'tibio', 'caliente', 'llamada', 'visita'],
+          column_colors: DEFAULT_COLORS,
+          ...payload,
+        }]);
+
+    if (error) {
+      console.error('Error saving column labels in Supabase:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('Exception saving column labels:', e);
     return false;
   }
 };

@@ -112,6 +112,8 @@ export default function GastosPage() {
   const [openaiCost, setOpenaiCost] = useState<string>('');
   const [claudeCost, setClaudeCost] = useState<string>('');
   const [mantenimientoCost, setMantenimientoCost] = useState<string>('');
+  const [mantenimientoCrmCost, setMantenimientoCrmCost] = useState<string>('');
+  const [plantillasCost, setPlantillasCost] = useState<string>('');
   const [costsSaveStatus, setCostsSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [externos, setExternos] = useState<GastosExternos | null>(null);
   const [externosLoading, setExternosLoading] = useState(true);
@@ -127,6 +129,8 @@ export default function GastosPage() {
         setOpenaiCost(costs.openai > 0 ? String(costs.openai) : '');
         setClaudeCost(costs.claude > 0 ? String(costs.claude) : '');
         setMantenimientoCost(costs.mantenimiento > 0 ? String(costs.mantenimiento) : '');
+        setMantenimientoCrmCost(costs.mantenimiento_crm > 0 ? String(costs.mantenimiento_crm) : '');
+        setPlantillasCost(costs.plantillas > 0 ? String(costs.plantillas) : '');
       } catch (e) {
         console.error('Error cargando system_costs:', e);
       }
@@ -140,6 +144,8 @@ export default function GastosPage() {
       openai:  overrides?.openai  ?? parseCost(openaiCost),
       claude:  overrides?.claude  ?? parseCost(claudeCost),
       mantenimiento: overrides?.mantenimiento ?? parseCost(mantenimientoCost),
+      mantenimiento_crm: overrides?.mantenimiento_crm ?? parseCost(mantenimientoCrmCost),
+      plantillas: overrides?.plantillas ?? parseCost(plantillasCost),
     };
     setCostsSaveStatus('saving');
     try {
@@ -185,7 +191,8 @@ export default function GastosPage() {
   }, [desde, hasta]);
 
   const totalMensual =
-    parseCost(hostingCost) + parseCost(openaiCost) + parseCost(claudeCost) + parseCost(mantenimientoCost);
+    parseCost(hostingCost) + parseCost(openaiCost) + parseCost(claudeCost) + parseCost(mantenimientoCost) +
+    parseCost(mantenimientoCrmCost) + parseCost(plantillasCost);
   const periodDayCount = periodDates.length;
   const gastoPeriodo = (totalMensual / DIAS_POR_MES) * periodDayCount;
 
@@ -323,13 +330,13 @@ export default function GastosPage() {
               </div>
 
               <div className="flex h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                <div className="bg-slate-800 transition-all" style={{ width: `${shareCrm * 100}%` }} />
+                <div className="bg-slate-800 transition-all dark:bg-[#cbd5e1]" style={{ width: `${shareCrm * 100}%` }} />
                 <div className="bg-amber-500 transition-all" style={{ width: `${sharePropSearch * 100}%` }} />
               </div>
 
               <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="flex items-start gap-3">
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-slate-800" aria-hidden="true" />
+                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-slate-800 dark:bg-[#cbd5e1]" aria-hidden="true" />
                   <div>
                     <dt className="text-xs text-muted-foreground">CRM · costos fijos</dt>
                     <dd className="text-lg font-medium tabular-nums">
@@ -389,6 +396,8 @@ export default function GastosPage() {
                     { id: 'gasto-openai',  label: 'OpenAI',  value: openaiCost,  setter: setOpenaiCost,  field: 'openai'  as const },
                     { id: 'gasto-claude',  label: 'Claude',  value: claudeCost,  setter: setClaudeCost,  field: 'claude'  as const },
                     { id: 'gasto-mantenimiento', label: 'Mantenimiento y optimizaciones', value: mantenimientoCost, setter: setMantenimientoCost, field: 'mantenimiento' as const },
+                    { id: 'gasto-mantenimiento-crm', label: 'Mantenimiento CRM y Propsearch', value: mantenimientoCrmCost, setter: setMantenimientoCrmCost, field: 'mantenimiento_crm' as const },
+                    { id: 'gasto-plantillas', label: 'Gastos plantillas', value: plantillasCost, setter: setPlantillasCost, field: 'plantillas' as const },
                   ].map(({ id, label, value, setter, field }) => (
                     <div key={id} className="flex items-center justify-between gap-4">
                       <Label htmlFor={id} className="text-sm font-normal text-slate-700">{label}</Label>

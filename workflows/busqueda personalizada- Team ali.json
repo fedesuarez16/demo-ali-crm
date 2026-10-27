@@ -1,0 +1,222 @@
+{
+  "name": "busqueda personalizada- Team ali",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "jsonExample",
+        "jsonExample": "{\n  \"lead_name\": \"={{ $json.lead_name || $json.input?.lead_name || $json.pushName || $json.body?.data?.pushName || '' }}\",\n  \"lead_number\": \"={{ $json.lead_number || $json.input?.lead_number || $json.body?.data?.key?.remoteJid || $json.whatsapp_id || $json.input?.whatsapp_id || '' }}\",\n  \"confirmation_text\": \"={{ $json.confirmation_text || $json.input?.confirmation_text || $json.text || $json.user_message || $json.input?.text || '' }}\",\n  \"raw_from_agent\": \"={{ $json }}\",\n  \"whatsapp_id\" : \"{{ $('Normalice').item.json.normalized.conversation.messages[0].sender.phone_number }}\"\n}\n"
+      },
+      "id": "c055762a-8fe7-4141-a639-df2372f30060",
+      "typeVersion": 1.1,
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -208,
+        352
+      ]
+    },
+    {
+      "id": "7931e4ba-f039-46df-91fb-00ecfb417473",
+      "name": "Send template",
+      "position": [
+        528,
+        528
+      ],
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "kTnlO8UPG1BozSzt",
+          "mode": "id",
+          "cachedResultName": "Team ali - enviar plantilla YCloud (sub-workflow)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "to": "=+5492214633333",
+            "template": "notificacion_busqueda_personalizada",
+            "language": "es_AR"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "to",
+              "displayName": "to",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "template",
+              "displayName": "template",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "language",
+              "displayName": "language",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "notes": "Migrado a YCloud. Plantilla: notificacion_busqueda_personalizada|es_AR (recreada en el WABA de YCloud como es_AR)."
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "leads",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "whatsapp_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.whatsapp_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "estado",
+              "fieldValue": "busqueda"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        528,
+        352
+      ],
+      "id": "41e72643-9617-4493-bb98-3a8acbf82bb4",
+      "name": "Update a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "k63Rdkg9hyaaztWV",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 15
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        288,
+        352
+      ],
+      "id": "87d60418-4ef2-4f4d-892d-4b0196640053",
+      "name": "Wait",
+      "webhookId": "fb314681-f2a7-42b8-90c1-e5f9526ca8f5"
+    },
+    {
+      "id": "9efa239f-9e8a-4cb8-8a0b-19e114fd642f",
+      "name": "Clean Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        800,
+        440
+      ],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ok-bool",
+              "name": "ok",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "registered-bool",
+              "name": "registered",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Send template",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Update a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send template": {
+      "main": [
+        [
+          {
+            "node": "Clean Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a row": {
+      "main": [
+        [
+          {
+            "node": "Clean Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "binaryMode": "separate",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "id": "2BaZJuYh0If9DBiw"
+}

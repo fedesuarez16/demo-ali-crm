@@ -1,0 +1,98 @@
+[
+  {
+    "name": "generico",
+    "language": "es_AR",
+    "status": "APPROVED",
+    "category": "MARKETING",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hola! ¿Cómo estás?\n\nSoy Maga, asistente del equipo de Andrés Alí en RE/MAX Diagonal II 😊\n\nEstoy retomando tu consulta para poder darte un servicio más personalizado.\n\n¿Tu búsqueda sigue activa o ya resolviste?\n\nSi aún estás en búsqueda, contame qué estás necesitando hoy y el presupuesto que manejás, así te acompaño con opciones concretas."
+      }
+    ]
+  },
+  {
+    "name": "baja_valor",
+    "language": "es_AR",
+    "status": "APPROVED",
+    "category": "MARKETING",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hola, ¿cómo estás? 😊\nTe escribo porque la propiedad que habías consultado tuvo una modificación de valor y pensé en vos automáticamente.\n\nQuería saber si seguís con interés o todavía estás buscando algo en esa línea, así puedo enviarte la información actualizada.\n\nMaga | Team Ali | Remax City Bell"
+      }
+    ]
+  },
+  {
+    "name": "plantilla_venta_def",
+    "language": "es_AR",
+    "status": "APPROVED",
+    "category": "MARKETING",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "Hola, ¿cómo estás?\nSoy Maga, asistente de Andrés Ali de RE/MAX City Bell 😊\n\nRecordaba que hace un tiempo habíamos hablado y me comentaste que para avanzar con una compra primero necesitabas vender tu propiedad.\n\nTe escribo porque hoy una buena estrategia y comercialización hacen la diferencia en el mercado.\n\nSi te parece, coordinamos una reunión, llamada o visita y realizamos una cotización sin cargo para evaluar posibilidades reales."
+      }
+    ]
+  },
+  {
+    "name": "seguimiento_t2",
+    "language": "es_AR",
+    "status": "APPROVED",
+    "category": "MARKETING",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "¡Buen día! Soy Maga, Asistente de Andrés Alí, Martillero de RE/MAX Diagonal II.\nSolo paso a confirmar si seguís interesado/a. Capaz se te pasó responder… Suele pasar.\n¿Seguimos en contacto por esta propiedad o querés que te comparta otras opciones similares?"
+      }
+    ]
+  },
+  {
+    "name": "seguimiento_t3",
+    "language": "es_AR",
+    "status": "APPROVED",
+    "category": "MARKETING",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "¡Hola! Soy Maga, Asistente de Andrés Alí, Martillero de RE/MAX Diagonal II. Espero que estés muy bien. Te escribo para no perder el hilo de tu consulta.\n¿Quisiera saber si ya resolviste, seguís en búsqueda activa o necesitás vender otra propiedad antes de comprar?\nCuando quieras, retomamos. Tu proyecto es importante y estoy para acompañarte."
+      }
+    ]
+  },
+  {
+    "name": "seguimiento_t4",
+    "language": "es_AR",
+    "status": "APPROVED",
+    "category": "MARKETING",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "¡Hola! ¿Cómo estás? Soy Maga nuevamente, Asistente de Andrés Alí, Martillero de RE/MAX Diagonal II.\nPasó un tiempo desde tu consulta y quería saber si te gustaría que coordinemos una llamada con Andrés para ayudarte.\n¡Quedo atenta a tu respuesta!"
+      }
+    ]
+  },
+  {
+    "name": "seguimiento_t5",
+    "language": "es_AR",
+    "status": "APPROVED",
+    "category": "MARKETING",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "¡Hola! ¿Cómo estás? Soy Maga, Asistente de Andrés Alí, Martillero de RE/MAX Diagonal II.\nRetomo tu consulta para saber si todavía estás buscando o si ya pudiste avanzar.\nQuería asegurarme de haberte brindado la atención necesaria.\nSi hoy estás en otra etapa, no hay problema. Cuando quieras retomarlo, estoy a disposición."
+      }
+    ]
+  },
+  {
+    "name": "seguimiento_t6",
+    "language": "es_AR",
+    "status": "APPROVED",
+    "category": "MARKETING",
+    "components": [
+      {
+        "type": "BODY",
+        "text": "¡Hola! ¿Cómo estás? Soy Maga, Asistente de Andrés Alí, Martillero de RE/MAX Diagonal II.\nHace un tiempo hablamos por una consulta inmobiliaria y quería saber cómo siguió todo.\n¿Seguís buscando o ya resolviste?\nSi todavía estás en búsqueda, escribime y vemos cómo puedo ayudarte hoy."
+      }
+    ]
+  }
+]
