@@ -390,34 +390,55 @@ export default function GastosPage() {
                     <p className="text-xl font-semibold tabular-nums text-slate-500">{usdFormatter.format(totalMensual)}</p>
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-5">
                   {[
-                    { id: 'gasto-hosting', label: 'Hosting', value: hostingCost, setter: setHostingCost, field: 'hosting' as const },
-                    { id: 'gasto-openai',  label: 'OpenAI',  value: openaiCost,  setter: setOpenaiCost,  field: 'openai'  as const },
-                    { id: 'gasto-claude',  label: 'Claude',  value: claudeCost,  setter: setClaudeCost,  field: 'claude'  as const },
-                    { id: 'gasto-mantenimiento', label: 'Base de datos', value: mantenimientoCost, setter: setMantenimientoCost, field: 'mantenimiento' as const },
-                    { id: 'gasto-mantenimiento-crm', label: 'Mantenimiento CRM y Propsearch', value: mantenimientoCrmCost, setter: setMantenimientoCrmCost, field: 'mantenimiento_crm' as const },
-                    { id: 'gasto-plantillas', label: 'Gastos plantillas', value: plantillasCost, setter: setPlantillasCost, field: 'plantillas' as const },
-                  ].map(({ id, label, value, setter, field }) => (
-                    <div key={id} className="flex items-center justify-between gap-4">
-                      <Label htmlFor={id} className="text-sm font-normal text-slate-700">{label}</Label>
-                      <div className="relative w-32">
-                        <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
-                        <input
-                          id={id}
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={value}
-                          onChange={(e) => setter(e.target.value)}
-                          onBlur={(e) => persistCosts({ [field]: parseCost(e.target.value) })}
-                          placeholder="0"
-                          className="h-8 w-full rounded-md border border-input bg-background pl-5 pr-2 text-right text-sm tabular-nums shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        />
+                    {
+                      titulo: 'Debitado de la tarjeta',
+                      items: [
+                        { id: 'gasto-mantenimiento', label: 'Base de datos', value: mantenimientoCost, setter: setMantenimientoCost, field: 'mantenimiento' as const },
+                        { id: 'gasto-plantillas', label: 'Gastos plantillas', value: plantillasCost, setter: setPlantillasCost, field: 'plantillas' as const },
+                      ],
+                    },
+                    {
+                      titulo: 'Pagado al desarrollador',
+                      items: [
+                        { id: 'gasto-hosting', label: 'Hosting', value: hostingCost, setter: setHostingCost, field: 'hosting' as const },
+                        { id: 'gasto-openai',  label: 'OpenAI',  value: openaiCost,  setter: setOpenaiCost,  field: 'openai'  as const },
+                        { id: 'gasto-claude',  label: 'Claude',  value: claudeCost,  setter: setClaudeCost,  field: 'claude'  as const },
+                        { id: 'gasto-mantenimiento-crm', label: 'Mantenimiento CRM y Propsearch', value: mantenimientoCrmCost, setter: setMantenimientoCrmCost, field: 'mantenimiento_crm' as const },
+                      ],
+                    },
+                  ].map(({ titulo, items }) => (
+                    <div key={titulo} className="space-y-2">
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{titulo}</p>
+                      {items.map(({ id, label, value, setter, field }) => (
+                        <div key={id} className="flex items-center justify-between gap-4">
+                          <Label htmlFor={id} className="text-sm font-normal text-slate-700">{label}</Label>
+                          <div className="relative w-32">
+                            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                            <input
+                              id={id}
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={value}
+                              onChange={(e) => setter(e.target.value)}
+                              onBlur={(e) => persistCosts({ [field]: parseCost(e.target.value) })}
+                              placeholder="0"
+                              className="h-8 w-full rounded-md border border-input bg-background pl-5 pr-2 text-right text-sm tabular-nums shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-2">
+                        <span className="text-sm font-medium text-slate-700">Subtotal</span>
+                        <span className="w-32 pr-2 text-right text-sm font-semibold tabular-nums">
+                          {usdFormatter.format(items.reduce((acc, { value }) => acc + parseCost(value), 0))}
+                        </span>
                       </div>
                     </div>
                   ))}
-                  <p className="pt-1 text-xs text-muted-foreground">Montos mensuales. Se guardan al salir del campo.</p>
+                  <p className="text-xs text-muted-foreground">Montos mensuales. Se guardan al salir del campo.</p>
                 </div>
               </CardContent>
             </Card>
