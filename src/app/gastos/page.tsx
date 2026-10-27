@@ -395,7 +395,7 @@ export default function GastosPage() {
                     { id: 'gasto-hosting', label: 'Hosting', value: hostingCost, setter: setHostingCost, field: 'hosting' as const },
                     { id: 'gasto-openai',  label: 'OpenAI',  value: openaiCost,  setter: setOpenaiCost,  field: 'openai'  as const },
                     { id: 'gasto-claude',  label: 'Claude',  value: claudeCost,  setter: setClaudeCost,  field: 'claude'  as const },
-                    { id: 'gasto-mantenimiento', label: 'Mantenimiento y optimizaciones', value: mantenimientoCost, setter: setMantenimientoCost, field: 'mantenimiento' as const },
+                    { id: 'gasto-mantenimiento', label: 'Base de datos', value: mantenimientoCost, setter: setMantenimientoCost, field: 'mantenimiento' as const },
                     { id: 'gasto-mantenimiento-crm', label: 'Mantenimiento CRM y Propsearch', value: mantenimientoCrmCost, setter: setMantenimientoCrmCost, field: 'mantenimiento_crm' as const },
                     { id: 'gasto-plantillas', label: 'Gastos plantillas', value: plantillasCost, setter: setPlantillasCost, field: 'plantillas' as const },
                   ].map(({ id, label, value, setter, field }) => (
