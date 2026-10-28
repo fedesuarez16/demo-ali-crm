@@ -83,6 +83,12 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Tailwind fija el offset de los rings en blanco; en dark debe ser la superficie */
+  .dark *,
+  .dark ::before,
+  .dark ::after {
+    --tw-ring-offset-color: rgb(var(--bg-white));
+  }
 }
 
 /* Estilos personalizados */

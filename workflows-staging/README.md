@@ -30,7 +30,7 @@ Si se rota el token de Chatwoot: actualizar la credencial y los nodos del seguim
 - Condición de pausa por echo: matchea exactamente 1 lead real por `whatsapp_id` ✅
 - Datos de prueba borrados (Chatwoot y `mensajes_pendientes`).
 | Seguimiento adaptado | `Team ali - seguimiento (ycloud).json` | Listo para el corte |
-| Agente adaptado | `Team ali - agente (ycloud).json` | Listo para el corte |
+| Agente adaptado | Movido a `workflows/backups/Team ali - agente (ycloud)_staging-pre-corte.json` | Obsoleto: el corte ya se hizo y producción es `workflows/Team ali - agente (14).json` (mismo id `ejW2YR1lNj3dYsGc`, no subir) |
 | Pruebas de lógica de los puentes | `node workflows-staging/puente.test.mjs` | 25/25 OK |
 
 ## Reglas del puente (por qué no hay duplicados ni bucles)
