@@ -60,8 +60,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: `El calificador respondió ${res.status}` }, { status: 502 });
     }
 
-    // Fila de lead_calificaciones; vacío si la conversación no tiene mensajes.
-    const resultado = await res.json().catch(() => null);
+    // [fila de lead_calificaciones], o [] si la conversación no tiene mensajes.
+    const filas = await res.json().catch(() => []);
+    const resultado = Array.isArray(filas) ? filas[0] : filas;
     if (!resultado?.id) return NextResponse.json({ status: 'sin_mensajes', conversationId });
 
     return NextResponse.json({ status: 'calificado', conversationId, resultado });
