@@ -5,7 +5,9 @@ export const dynamic = 'force-dynamic';
 
 // Hardcoded — single production target per project. If a second toggle target is ever needed,
 // promote to env (N8N_SEGUIMIENTO_WORKFLOW_ID). Do not change without coordinating with the operator.
-const WORKFLOW_ID = 'LbBE3PePXgn3mhZc';
+// "Team ali - seguimiento v2 (8 toques)". El viejo (LbBE3PePXgn3mhZc) NO se debe reactivar:
+// interpreta seguimientos_count con el ciclo anterior y pisaría la reprogramación del 2026-10-28.
+const WORKFLOW_ID = 'FGn0OKrYA97cYNCj';
 
 class MissingConfigError extends Error {
   constructor(public missing: string[]) {
