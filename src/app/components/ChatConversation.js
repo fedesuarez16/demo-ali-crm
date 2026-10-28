@@ -5,6 +5,53 @@ import { useChatMessages } from '../../hooks/useChatMessages';
 import { updateLead, getAllLeads, createLead, findLeadByPhone } from '../services/leadService';
 import { programarSeguimiento, getSeguimientosPendientes, eliminarMensajeProgramado, eliminarTodosSeguimientosPendientes, existeSeguimientoParaLead } from '../services/mensajeService';
 
+// URL pública del adjunto en Chatwoot (ActiveStorage)
+const getAttachmentUrl = (att) =>
+  att?.data_url || att?.url || att?.file_url || att?.download_url || att?.public_url || att?.thumb_url || null;
+
+// Los stickers de WhatsApp llegan como imagen WebP (o file_type 'sticker')
+const isStickerAttachment = (att) => {
+  if (!att) return false;
+  if (att.file_type === 'sticker') return true;
+  if (att.content_type === 'image/webp') return true;
+  const url = getAttachmentUrl(att) || '';
+  return /\.webp(\?|$)/i.test(url);
+};
+
+const isImageAttachment = (att) =>
+  !!att && (att.file_type === 'image' || (att.content_type && att.content_type.startsWith('image/')) || isStickerAttachment(att));
+
+// Imagen/sticker con fallback a etiqueta si la URL no carga
+const ChatImage = ({ attachment, sticker, outgoing }) => {
+  const [failed, setFailed] = useState(false);
+  const src = getAttachmentUrl(attachment);
+  const fullSrc = attachment?.data_url || src;
+
+  if (!src || failed) {
+    return (
+      <div className={`flex items-center gap-2 py-1 ${outgoing ? 'text-green-100' : 'text-gray-500'}`}>
+        <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        <span className="text-sm">{sticker ? 'Sticker' : 'Imagen'}</span>
+      </div>
+    );
+  }
+
+  return (
+    <a href={fullSrc} target="_blank" rel="noopener noreferrer" className="block">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={sticker ? 'Sticker' : 'Imagen'}
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className={sticker ? 'w-32 h-32 object-contain' : 'max-w-full max-h-80 rounded-md object-cover'}
+      />
+    </a>
+  );
+};
+
 const ChatConversation = ({ conversation, onBack }) => {
   const { messages, loading, loadingMore, error, hasMore, refreshMessages, loadMoreMessages, sendMessage } = useChatMessages(conversation?.id);
   const messagesEndRef = useRef(null);
@@ -922,9 +969,9 @@ const ChatConversation = ({ conversation, onBack }) => {
                                          'audio/ogg; codecs=opus'; // WhatsApp usa OGG Opus por defecto
 
                   // Detectar imagen
-                  const hasImage = !hasAudio && message.attachments?.some(att =>
-                    att.file_type === 'image' || (att.content_type && att.content_type.startsWith('image/'))
-                  );
+                  const imageAttachment = !hasAudio ? message.attachments?.find(isImageAttachment) : null;
+                  const hasImage = !!imageAttachment;
+                  const isSticker = isStickerAttachment(imageAttachment);
 
                   // Detectar video
                   const hasVideo = !hasAudio && message.attachments?.some(att =>
@@ -945,12 +992,16 @@ const ChatConversation = ({ conversation, onBack }) => {
                   >
                     {/* Botones de editar/borrar — ocultos temporalmente */}
                     <div
-                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg transition-opacity ${
+                        className={`max-w-xs lg:max-w-md rounded-lg transition-opacity ${
                           isDeleting ? 'opacity-50' : ''
                         } ${
-                        outgoing
-                          ? 'bg-green-500 text-white rounded-br-sm'
-                          : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
+                        isSticker
+                          ? 'p-0 bg-transparent'
+                          : hasImage
+                            ? `p-1 ${outgoing ? 'bg-green-500 text-white rounded-br-sm' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'}`
+                            : outgoing
+                              ? 'px-4 py-2 bg-green-500 text-white rounded-br-sm'
+                              : 'px-4 py-2 bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
                       }`}
                     >
                         {/* Audio con URL reproducible */}
@@ -996,12 +1047,12 @@ const ChatConversation = ({ conversation, onBack }) => {
                             <span className="text-sm">Mensaje de voz</span>
                           </div>
                         ) : hasImage ? (
-                          /* Imagen */
-                          <div className={`flex items-center gap-2 py-1 ${outgoing ? 'text-green-100' : 'text-gray-500'}`}>
-                            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            <span className="text-sm">Imagen</span>
+                          /* Imagen o sticker */
+                          <div className="space-y-1">
+                            <ChatImage attachment={imageAttachment} sticker={isSticker} outgoing={outgoing} />
+                            {!isSticker && message.content && message.content.trim() && (
+                              <p className="text-sm whitespace-pre-wrap px-2 pb-1">{message.content}</p>
+                            )}
                           </div>
                         ) : hasVideo ? (
                           /* Video */
