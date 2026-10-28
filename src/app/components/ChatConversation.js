@@ -52,6 +52,16 @@ const ChatImage = ({ attachment, sticker, outgoing }) => {
   );
 };
 
+// Sugerencias de seguimiento ya generadas, por conversación + última actividad (evita
+// pagar otra llamada al LLM al volver a un chat que no cambió)
+const sugerenciaCache = new Map();
+
+const formatHorasRestantes = (ms) => {
+  const horas = Math.max(0, Math.floor(ms / 3600000));
+  if (horas >= 1) return `${horas} h`;
+  return `${Math.max(1, Math.floor(ms / 60000))} min`;
+};
+
 const ChatConversation = ({ conversation, onBack }) => {
   const { messages, loading, loadingMore, error, hasMore, refreshMessages, loadMoreMessages, sendMessage } = useChatMessages(conversation?.id);
   const messagesEndRef = useRef(null);
@@ -70,6 +80,13 @@ const ChatConversation = ({ conversation, onBack }) => {
   const [editingContent, setEditingContent] = useState('');
   const [editingLoading, setEditingLoading] = useState(false);
   const [messageOverrides, setMessageOverrides] = useState({});
+  const [leadCheckedFor, setLeadCheckedFor] = useState(null); // conversation.id cuya búsqueda de lead ya terminó
+  const [sugerencia, setSugerencia] = useState(null);
+  const [isLoadingSugerencia, setIsLoadingSugerencia] = useState(false);
+  const [sugerenciaError, setSugerenciaError] = useState(null);
+  const [sugerenciaOculta, setSugerenciaOculta] = useState(false);
+  const [sugerenciaCopiada, setSugerenciaCopiada] = useState(false);
+  const sugerenciaConvRef = useRef(null);
 
   // Función para obtener el número de teléfono del contacto (misma lógica que ChatList.js)
   const getContactPhone = (conversation) => {
@@ -229,11 +246,68 @@ const ChatConversation = ({ conversation, onBack }) => {
         setLead(null);
       } finally {
         setIsLoadingLead(false);
+        setLeadCheckedFor(conversation?.id ?? null);
       }
     };
 
     loadLead();
   }, [conversation]);
+
+  // Sugerencia de seguimiento con IA. Respeta la ventana de 24 h de Meta: fuera de ella
+  // no se puede mandar texto libre desde la API, así que se ofrece wa.me con el texto precargado.
+  const sugerenciaKey = conversation?.id ? `${conversation.id}:${conversation.last_activity_at || ''}` : null;
+
+  const cargarSugerencia = async (force = false) => {
+    const convId = conversation?.id;
+    if (!convId || !sugerenciaKey) return;
+    if (!force && sugerenciaCache.has(sugerenciaKey)) {
+      setSugerencia(sugerenciaCache.get(sugerenciaKey));
+      return;
+    }
+    setIsLoadingSugerencia(true);
+    setSugerenciaError(null);
+    try {
+      const res = await fetch(`/api/chats/${convId}/sugerencia`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: lead?.id || null, telefono: phoneNumber || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo generar la sugerencia');
+      sugerenciaCache.set(sugerenciaKey, data);
+      if (sugerenciaConvRef.current === convId) setSugerencia(data);
+    } catch (err) {
+      console.error('Error generando sugerencia:', err);
+      if (sugerenciaConvRef.current === convId) setSugerenciaError(err.message);
+    } finally {
+      if (sugerenciaConvRef.current === convId) setIsLoadingSugerencia(false);
+    }
+  };
+
+  useEffect(() => {
+    sugerenciaConvRef.current = conversation?.id ?? null;
+    setSugerencia(null);
+    setSugerenciaError(null);
+    setSugerenciaOculta(false);
+    setSugerenciaCopiada(false);
+    setIsLoadingSugerencia(false);
+  }, [conversation?.id]);
+
+  useEffect(() => {
+    if (conversation?.id && leadCheckedFor === conversation.id) cargarSugerencia();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadCheckedFor, conversation?.id]);
+
+  const copiarSugerencia = async () => {
+    if (!sugerencia?.mensaje) return;
+    try {
+      await navigator.clipboard.writeText(sugerencia.mensaje);
+      setSugerenciaCopiada(true);
+      setTimeout(() => setSugerenciaCopiada(false), 2000);
+    } catch {
+      // El portapapeles puede estar bloqueado; el texto sigue visible para copiarlo a mano
+    }
+  };
 
   // Función para activar/desactivar el chat
   const handleToggleChat = async () => {
@@ -1175,6 +1249,101 @@ const ChatConversation = ({ conversation, onBack }) => {
           }}
           className="flex flex-col"
         >
+          {/* Sugerencia de seguimiento (IA) */}
+          {!sugerenciaOculta && (isLoadingSugerencia || sugerenciaError || sugerencia?.mensaje) && (() => {
+            const cierraEn = sugerencia?.ventanaCierraAt ? sugerencia.ventanaCierraAt - Date.now() : 0;
+            const dentroVentana = cierraEn > 0;
+            const waLink = sugerencia?.telefono && sugerencia?.mensaje
+              ? `https://wa.me/${sugerencia.telefono}?text=${encodeURIComponent(sugerencia.mensaje)}`
+              : null;
+            return (
+              <div className="mx-4 mt-3 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-semibold text-violet-800">✨ Sugerencia de seguimiento</span>
+                    {sugerencia?.mensaje && !isLoadingSugerencia && (
+                      dentroVentana ? (
+                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-800" title="Meta permite texto libre hasta 24 h después del último mensaje del cliente">
+                          Ventana 24 h abierta · cierra en {formatHorasRestantes(cierraEn)}
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800" title="Pasaron más de 24 h desde el último mensaje del cliente">
+                          Fuera de la ventana de 24 h
+                        </span>
+                      )
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => cargarSugerencia(true)}
+                      disabled={isLoadingSugerencia}
+                      className="rounded px-1.5 py-0.5 text-[11px] text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+                      title="Generar otra sugerencia"
+                    >
+                      ↻ Regenerar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSugerenciaOculta(true)}
+                      className="rounded px-1.5 py-0.5 text-[11px] text-violet-700 hover:bg-violet-100"
+                      title="Ocultar sugerencia"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                {isLoadingSugerencia ? (
+                  <div className="mt-2 flex items-center gap-2 text-xs text-violet-700">
+                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-violet-600"></div>
+                    <span>Generando sugerencia a partir de la conversación...</span>
+                  </div>
+                ) : sugerenciaError ? (
+                  <p className="mt-2 text-xs text-red-600">No se pudo generar la sugerencia: {sugerenciaError}</p>
+                ) : (
+                  <>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-gray-800">{sugerencia.mensaje}</p>
+                    {!dentroVentana && (
+                      <p className="mt-1.5 text-[11px] text-amber-800">
+                        Meta no permite mandar texto libre fuera de las 24 h desde el último mensaje del cliente. Envialo desde WhatsApp con el texto precargado.
+                      </p>
+                    )}
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {dentroVentana ? (
+                        <button
+                          type="button"
+                          onClick={() => setInputValue(sugerencia.mensaje)}
+                          className="rounded-md bg-violet-600 px-3 py-1 text-xs font-medium text-white hover:bg-violet-700"
+                        >
+                          Usar mensaje
+                        </button>
+                      ) : waLink ? (
+                        <a
+                          href={waLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700"
+                        >
+                          Abrir en WhatsApp (wa.me)
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-gray-500">Sin teléfono para armar el link de wa.me</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={copiarSugerencia}
+                        className="rounded-md border border-violet-300 bg-white px-3 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100"
+                      >
+                        {sugerenciaCopiada ? 'Copiado ✓' : 'Copiar'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Área de texto grande */}
           <div className="px-4 pt-3 pb-3">
             <textarea
