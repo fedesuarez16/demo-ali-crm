@@ -1,5 +1,51 @@
 import { NextResponse } from 'next/server';
 
+const esMensajeVisible = (msg) => {
+  if (msg.message_type === 2) return false;
+  if ((!msg.content || msg.content.trim() === '') && (!msg.attachments || msg.attachments.length === 0)) return false;
+  const content = (msg.content || '').toLowerCase();
+  return !(
+    content.includes('this message was deleted') ||
+    content.includes('mensaje eliminado') ||
+    content.includes('message was deleted') ||
+    msg.content_attributes?.deleted === true ||
+    msg.deleted === true ||
+    msg.status === 'deleted'
+  );
+};
+
+// Devuelve la siguiente página de mensajes de las conversaciones anteriores del mismo contacto
+// (más recientes primero), marcados con `historial_anterior` para que la UI ponga un separador.
+async function fetchHistorialAnterior({ baseUrl, accountId, apiToken, conversationId, before }) {
+  const headers = { 'Content-Type': 'application/json', 'api_access_token': apiToken };
+  const accountUrl = `${baseUrl}/api/v1/accounts/${accountId}`;
+
+  const convRes = await fetch(`${accountUrl}/conversations/${conversationId}`, { headers });
+  if (!convRes.ok) return [];
+  const conv = await convRes.json();
+  const contactId = conv.meta?.sender?.id || conv.contact_inbox?.contact_id;
+  if (!contactId) return [];
+
+  const listRes = await fetch(`${accountUrl}/contacts/${contactId}/conversations`, { headers });
+  if (!listRes.ok) return [];
+  const listData = await listRes.json();
+  const anteriores = (listData.payload || [])
+    .filter(c => String(c.id) !== String(conversationId) && c.created_at < conv.created_at)
+    .sort((a, b) => b.created_at - a.created_at);
+
+  for (const anterior of anteriores) {
+    const url = `${accountUrl}/conversations/${anterior.id}/messages${before ? `?before=${before}` : ''}`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) continue;
+    const data = await res.json();
+    const mensajes = (data.payload || []).filter(esMensajeVisible);
+    if (mensajes.length > 0) {
+      return mensajes.map(m => ({ ...m, historial_anterior: true }));
+    }
+  }
+  return [];
+}
+
 export async function GET(request, { params }) {
   try {
     // Validar variables de entorno
@@ -132,9 +178,24 @@ export async function GET(request, { params }) {
 
     console.log(`Found ${messages.length} total messages, ${realMessages.length} real messages (${messages.length - realMessages.length} filtered)`);
 
+    // Después de la migración a YCloud el puente crea una conversación nueva en el inbox 4
+    // y el historial queda en la conversación vieja del mismo contacto (inbox 3).
+    // Cuando la conversación actual se agota, seguimos paginando por las anteriores.
+    // Los ids de mensaje de Chatwoot son globales y crecientes, así que `before` sirve igual.
+    let historialAnterior = [];
+    if (!after && messages.length < 20) {
+      try {
+        historialAnterior = await fetchHistorialAnterior({
+          baseUrl, accountId, apiToken, conversationId, before,
+        });
+      } catch (err) {
+        console.warn('No se pudo traer el historial de conversaciones anteriores:', err.message);
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      data: realMessages,
+      data: [...historialAnterior, ...realMessages],
       total: realMessages.length,
       conversationId: conversationId
     });

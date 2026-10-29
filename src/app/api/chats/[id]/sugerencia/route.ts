@@ -45,41 +45,61 @@ function getSupabase() {
   return createClient(supabaseUrl, supabaseAnonKey);
 }
 
+// Teléfono y conversaciones anteriores del mismo contacto. Después de la migración a YCloud
+// el puente crea una conversación nueva en el inbox 4 y el historial queda en la vieja (inbox 3).
+async function fetchContexto(cw: ChatwootClient, conversationId: string) {
+  const res = await fetch(`${cw.base}/conversations/${conversationId}`, { headers: cw.headers });
+  if (!res.ok) return { telefono: '', anteriores: [] as string[] };
+  const data = await res.json();
+  const sender = data.meta?.sender || {};
+  const telefono = digits(sender.phone_number || sender.identifier || data.contact_inbox?.source_id || '');
+
+  let anteriores: string[] = [];
+  if (sender.id) {
+    const listRes = await fetch(`${cw.base}/contacts/${sender.id}/conversations`, { headers: cw.headers });
+    if (listRes.ok) {
+      const list: any[] = (await listRes.json()).payload || [];
+      anteriores = list
+        .filter((c) => String(c.id) !== String(conversationId) && c.created_at < data.created_at)
+        .sort((a, b) => b.created_at - a.created_at)
+        .map((c) => String(c.id));
+    }
+  }
+  return { telefono, anteriores };
+}
+
 // Últimos mensajes con texto (sin notas privadas ni actividad) + fecha del último mensaje
 // del cliente de cualquier tipo (audio, imagen o sticker también abren la ventana).
-async function fetchConversacion(cw: ChatwootClient, conversationId: string) {
+// Recorre las conversaciones en orden (la actual primero) hasta juntar MAX_MENSAJES.
+async function fetchConversacion(cw: ChatwootClient, conversationIds: string[]) {
   const mensajes: Mensaje[] = [];
   let ultimoClienteAt = 0;
-  let before: number | null = null;
-  for (let page = 0; page < MAX_PAGINAS && mensajes.length < MAX_MENSAJES; page++) {
-    const url = `${cw.base}/conversations/${conversationId}/messages${before ? `?before=${before}` : ''}`;
-    const res = await fetch(url, { headers: cw.headers });
-    if (!res.ok) break;
-    const data = await res.json();
-    const payload: any[] = data.payload || [];
-    if (payload.length === 0) break;
+  let paginas = 0;
+  for (const conversationId of conversationIds) {
+    let before: number | null = null;
+    while (paginas < MAX_PAGINAS && mensajes.length < MAX_MENSAJES) {
+      const url = `${cw.base}/conversations/${conversationId}/messages${before ? `?before=${before}` : ''}`;
+      const res = await fetch(url, { headers: cw.headers });
+      paginas++;
+      if (!res.ok) break;
+      const data = await res.json();
+      const payload: any[] = data.payload || [];
+      if (payload.length === 0) break;
 
-    before = Math.min(...payload.map((m) => m.id));
-    for (const m of payload) {
-      if (m.private || (m.message_type !== 0 && m.message_type !== 1)) continue;
-      if (m.message_type === 0) ultimoClienteAt = Math.max(ultimoClienteAt, (m.created_at || 0) * 1000);
-      const texto = String(m.content || '').trim();
-      if (!texto) continue;
-      mensajes.push({ rol: m.message_type === 0 ? 'Cliente' : 'Asesor', texto: texto.slice(0, 1500), created_at: m.created_at || 0 });
+      before = Math.min(...payload.map((m) => m.id));
+      for (const m of payload) {
+        if (m.private || (m.message_type !== 0 && m.message_type !== 1)) continue;
+        if (m.message_type === 0) ultimoClienteAt = Math.max(ultimoClienteAt, (m.created_at || 0) * 1000);
+        const texto = String(m.content || '').trim();
+        if (!texto) continue;
+        mensajes.push({ rol: m.message_type === 0 ? 'Cliente' : 'Asesor', texto: texto.slice(0, 1500), created_at: m.created_at || 0 });
+      }
     }
   }
   return {
     mensajes: mensajes.sort((a, b) => a.created_at - b.created_at).slice(-MAX_MENSAJES),
     ultimoClienteAt,
   };
-}
-
-async function fetchTelefono(cw: ChatwootClient, conversationId: string) {
-  const res = await fetch(`${cw.base}/conversations/${conversationId}`, { headers: cw.headers });
-  if (!res.ok) return '';
-  const data = await res.json();
-  const sender = data.meta?.sender || {};
-  return digits(sender.phone_number || sender.identifier || data.contact_inbox?.source_id || '');
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -94,10 +114,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const leadId = body?.leadId ? String(body.leadId) : null;
 
   try {
-    const [{ mensajes, ultimoClienteAt }, telefonoChatwoot] = await Promise.all([
-      fetchConversacion(cw, id),
-      fetchTelefono(cw, id),
-    ]);
+    const { telefono: telefonoChatwoot, anteriores } = await fetchContexto(cw, id);
+    const { mensajes, ultimoClienteAt } = await fetchConversacion(cw, [id, ...anteriores]);
 
     let lead: Record<string, unknown> | null = null;
     const supabase = getSupabase();

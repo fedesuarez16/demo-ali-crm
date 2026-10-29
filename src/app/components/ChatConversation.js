@@ -64,6 +64,8 @@ const formatHorasRestantes = (ms) => {
 
 const ChatConversation = ({ conversation, onBack }) => {
   const { messages, loading, loadingMore, error, hasMore, refreshMessages, loadMoreMessages, sendMessage } = useChatMessages(conversation?.id);
+  // Primer mensaje de la conversación actual cuando arriba hay historial de antes de la migración a YCloud
+  const idInicioConversacionActual = messages.find((m, i) => !m.historial_anterior && messages[i - 1]?.historial_anterior)?.id;
   const messagesEndRef = useRef(null);
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
@@ -274,6 +276,7 @@ const ChatConversation = ({ conversation, onBack }) => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo generar la sugerencia');
+      if (data.status === 'sin_contexto') throw new Error('no hay conversación ni datos del lead para armarla');
       sugerenciaCache.set(sugerenciaKey, data);
       if (sugerenciaConvRef.current === convId) setSugerencia(data);
     } catch (err) {
@@ -293,10 +296,12 @@ const ChatConversation = ({ conversation, onBack }) => {
     setIsLoadingSugerencia(false);
   }, [conversation?.id]);
 
-  useEffect(() => {
-    if (conversation?.id && leadCheckedFor === conversation.id) cargarSugerencia();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leadCheckedFor, conversation?.id]);
+  // La sugerencia se genera recién cuando el asesor la pide (botón), no al abrir el chat
+  const verSugerencia = () => {
+    setSugerenciaOculta(false);
+    cargarSugerencia();
+  };
+  const mostrandoSugerencia = !sugerenciaOculta && (isLoadingSugerencia || sugerenciaError || sugerencia?.mensaje);
 
   const copiarSugerencia = async () => {
     if (!sugerencia?.mensaje) return;
@@ -980,6 +985,8 @@ const ChatConversation = ({ conversation, onBack }) => {
                 
                 {/* Mensajes de ese día */}
                 {dateMessages.map((message) => {
+                  const empiezaConversacionActual = message.id === idInicioConversacionActual;
+
                   // Verificar si el mensaje tiene un attachment de audio
                   // Chatwoot puede marcar audio de diferentes formas:
                   // - message_type: 3 (audio)
@@ -1024,7 +1031,7 @@ const ChatConversation = ({ conversation, onBack }) => {
                   // Formato típico: /api/v1/accounts/{account_id}/conversations/{conversation_id}/messages/{message_id}/attachments/{attachment_id}
                   if (!audioUrl && audioAttachment?.id && conversation?.id && message.id) {
                     // Intentar construir URL relativa (se resolverá con el proxy de Next.js)
-                    audioUrl = `/api/chats/${conversation.id}/messages/${message.id}/attachments/${audioAttachment.id}`;
+                    audioUrl = `/api/chats/${message.conversation_id || conversation.id}/messages/${message.id}/attachments/${audioAttachment.id}`;
                   }
                   
                   // Si aún no hay URL pero hay attachments, usar el primero
@@ -1060,8 +1067,15 @@ const ChatConversation = ({ conversation, onBack }) => {
                   const outgoing = isOutgoing(message);
                   
                   return (
+                  <React.Fragment key={message.id}>
+                  {empiezaConversacionActual && (
+                    <div className="flex items-center gap-2 my-4 text-xs text-gray-400">
+                      <div className="flex-1 h-px bg-gray-200" />
+                      <span>Fin del historial anterior a la migración</span>
+                      <div className="flex-1 h-px bg-gray-200" />
+                    </div>
+                  )}
                   <div
-                    key={message.id}
                     className={`flex ${outgoing ? 'justify-end' : 'justify-start'} mb-2 group`}
                   >
                     {/* Botones de editar/borrar — ocultos temporalmente */}
@@ -1216,6 +1230,7 @@ const ChatConversation = ({ conversation, onBack }) => {
                       </p>
                     </div>
                   </div>
+                  </React.Fragment>
                   );
                 })}
               </div>
@@ -1250,7 +1265,19 @@ const ChatConversation = ({ conversation, onBack }) => {
           className="flex flex-col"
         >
           {/* Sugerencia de seguimiento (IA) */}
-          {!sugerenciaOculta && (isLoadingSugerencia || sugerenciaError || sugerencia?.mensaje) && (() => {
+          {!mostrandoSugerencia && conversation?.id && (
+            <div className="mx-4 mt-3">
+              <button
+                type="button"
+                onClick={verSugerencia}
+                disabled={leadCheckedFor !== conversation.id}
+                className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-800 hover:bg-violet-100 disabled:opacity-50"
+              >
+                ✨ Ver sugerencia de seguimiento
+              </button>
+            </div>
+          )}
+          {mostrandoSugerencia && (() => {
             const cierraEn = sugerencia?.ventanaCierraAt ? sugerencia.ventanaCierraAt - Date.now() : 0;
             const dentroVentana = cierraEn > 0;
             const waLink = sugerencia?.telefono && sugerencia?.mensaje

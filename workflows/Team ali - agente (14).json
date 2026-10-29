@@ -269,7 +269,7 @@
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "-- Bot activo si el interruptor global está prendido O si el mensaje viene de un número en lista de prueba.\n-- Lista de prueba (2026-10-27): 5491133370937 (Fede), 5492214770671. Para abrirlo a todos: agent_status.is_active = true.\nSELECT (is_active OR $1 = ANY (ARRAY['5491133370937', '5492214770671'])) AS is_active\nFROM agent_status\nWHERE id = 1;\n",
+        "query": "-- Bot activo si el interruptor global está prendido O si el mensaje viene de un número en lista de prueba.\n-- Lista de prueba (2026-10-27): 5491133370937 (Fede), 5492214770671. Para abrirlo a todos: agent_status.is_active = true.\nSELECT (is_active OR $1 = ANY (ARRAY['5491133370937', '5492214770671', '5492214770660'])) AS is_active\nFROM agent_status\nWHERE id = 1;\n",
         "options": {
           "queryReplacement": "={{ String($('Normalice1').item.json.normalized.conversation.messages[0].sender.phone_number || '').replace(/\\D/g, '') }}"
         }
@@ -806,8 +806,8 @@
     {
       "id": "6dd24dc5-f9b0-4648-a77e-ece5b1cc201c",
       "name": "Obtener Historial Evolution",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "retryOnFail": true,
       "maxTries": 4,
       "waitBetweenTries": 2000,
@@ -816,17 +816,7 @@
         6992
       ],
       "parameters": {
-        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations/{{ $('Normalice1').item.json.normalized.conversation.id }}/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "api_access_token",
-              "value": "axxJevEaPpRy4VJTfHS93LQr"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "// Mensajes de la conversación actual + historial de conversaciones anteriores del mismo contacto.\n// Después de la migración a YCloud el puente crea una conversación nueva en el inbox 4 y el\n// historial queda en la conversación vieja (inbox 3). Devuelve { payload } como la API de Chatwoot.\nconst BASE = 'https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2';\nconst headers = { api_access_token: 'axxJevEaPpRy4VJTfHS93LQr' };\nconst MINIMO = 10;\nconst get = (path) => this.helpers.httpRequest({ method: 'GET', url: BASE + path, headers, json: true });\n\nconst conversationId = $('Normalice1').first().json.normalized.conversation.id;\nconst actual = await get(`/conversations/${conversationId}/messages`);\nlet payload = actual.payload || [];\nconst visibles = (list) => list.filter(m => m.message_type !== 2 && (m.content || (m.attachments || []).length));\n\nif (visibles(payload).length < MINIMO) {\n  try {\n    const conv = await get(`/conversations/${conversationId}`);\n    const contactId = conv.meta?.sender?.id;\n    if (contactId) {\n      const convs = (await get(`/contacts/${contactId}/conversations`)).payload || [];\n      const anteriores = convs\n        .filter(c => String(c.id) !== String(conversationId) && c.created_at < conv.created_at)\n        .sort((a, b) => b.created_at - a.created_at);\n      for (const anterior of anteriores) {\n        if (visibles(payload).length >= MINIMO) break;\n        const res = await get(`/conversations/${anterior.id}/messages`);\n        payload = [...(res.payload || []), ...payload];\n      }\n    }\n  } catch (err) {\n    console.log('No se pudo traer el historial anterior:', err.message);\n  }\n}\n\nreturn [{ json: { payload } }];"
       }
     },
     {
@@ -1139,25 +1129,15 @@
       "id": "4cc42fc8-e17d-4d72-9608-1026bfadc7c4",
       "name": "Obtener Historial Evolution4",
       "notes": "Alineado con Obtener Historial Evolution (rama texto). Antes apuntaba a app.chatwoot.com cuenta 135793 con campos de Evolution.",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "onError": "continueRegularOutput",
       "position": [
         2816,
         5904
       ],
       "parameters": {
-        "url": "=https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2/conversations/{{ $('Normalice1').item.json.normalized.conversation.id }}/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "api_access_token",
-              "value": "axxJevEaPpRy4VJTfHS93LQr"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "// Mensajes de la conversación actual + historial de conversaciones anteriores del mismo contacto.\n// Después de la migración a YCloud el puente crea una conversación nueva en el inbox 4 y el\n// historial queda en la conversación vieja (inbox 3). Devuelve { payload } como la API de Chatwoot.\nconst BASE = 'https://mia-chatwoot.w9weud.easypanel.host/api/v1/accounts/2';\nconst headers = { api_access_token: 'axxJevEaPpRy4VJTfHS93LQr' };\nconst MINIMO = 10;\nconst get = (path) => this.helpers.httpRequest({ method: 'GET', url: BASE + path, headers, json: true });\n\nconst conversationId = $('Normalice1').first().json.normalized.conversation.id;\nconst actual = await get(`/conversations/${conversationId}/messages`);\nlet payload = actual.payload || [];\nconst visibles = (list) => list.filter(m => m.message_type !== 2 && (m.content || (m.attachments || []).length));\n\nif (visibles(payload).length < MINIMO) {\n  try {\n    const conv = await get(`/conversations/${conversationId}`);\n    const contactId = conv.meta?.sender?.id;\n    if (contactId) {\n      const convs = (await get(`/contacts/${contactId}/conversations`)).payload || [];\n      const anteriores = convs\n        .filter(c => String(c.id) !== String(conversationId) && c.created_at < conv.created_at)\n        .sort((a, b) => b.created_at - a.created_at);\n      for (const anterior of anteriores) {\n        if (visibles(payload).length >= MINIMO) break;\n        const res = await get(`/conversations/${anterior.id}/messages`);\n        payload = [...(res.payload || []), ...payload];\n      }\n    }\n  } catch (err) {\n    console.log('No se pudo traer el historial anterior:', err.message);\n  }\n}\n\nreturn [{ json: { payload } }];"
       }
     },
     {
@@ -1592,7 +1572,8 @@
           "attemptToConvertTypes": false,
           "convertFieldsToString": false
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "id": "bee010ef-1709-484d-bdcd-cffc103342d8",
