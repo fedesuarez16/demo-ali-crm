@@ -65,11 +65,10 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
     setLocalLead(lead);
   }, [lead?.id]);
 
-  // Actualizar notas cuando cambia el lead
+  // Actualizar notas cuando cambia el lead. Siempre se resetea: mapLeadRow convierte null en
+  // undefined, y si no se limpia acá quedan las notas del lead anterior.
   useEffect(() => {
-    if (lead?.notas !== undefined) {
-      setNotas(lead.notas || '');
-    }
+    setNotas(lead?.notas || '');
     if (lead?.seguimientos_count !== undefined && lead?.seguimientos_count !== null) {
       setSeguimientosCount(lead.seguimientos_count);
     }
@@ -175,7 +174,7 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
       const fresh = await getLeadById(lead.id);
       if (fresh) {
         setLocalLead(fresh);
-        if (fresh.notas !== undefined) setNotas(fresh.notas || '');
+        setNotas(fresh.notas || '');
         if (fresh.seguimientos_count !== undefined && fresh.seguimientos_count !== null) {
           setSeguimientosCount(fresh.seguimientos_count);
         }
@@ -291,8 +290,9 @@ const LeadDetailSidebar: React.FC<LeadDetailSidebarProps> = ({
     try {
       const updatedLead = await updateLead(lead.id, { notas });
       if (updatedLead) {
-        // Las notas se actualizaron exitosamente
-        // El componente padre debería actualizar el lead si es necesario
+        // Propagar al padre para que al volver a este lead no se muestren notas viejas
+        setLocalLead(updatedLead);
+        onLeadRefreshed?.(updatedLead);
       }
     } catch (error) {
       console.error('Error saving notas:', error);
