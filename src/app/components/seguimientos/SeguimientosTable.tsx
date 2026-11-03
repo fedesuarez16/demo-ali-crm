@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { CICLO, type EstadoSeguimiento, type SeguimientoCiclo } from '../../services/seguimientoCicloService';
+import { getPaso, type Especiales, type EstadoSeguimiento, type SeguimientoCiclo } from '../../services/seguimientoCicloService';
 
 const TZ = 'America/Argentina/Buenos_Aires';
 
@@ -9,6 +9,7 @@ export const ETIQUETA_ESTADO: Record<EstadoSeguimiento, { texto: string; clase: 
   vencido: { texto: 'Sale ahora', clase: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300' },
   programado: { texto: 'Programado', clase: 'bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300' },
   en_pausa: { texto: 'En pausa', clase: 'bg-muted text-muted-foreground' },
+  sin_plantilla: { texto: 'Plantilla sin aprobar', clase: 'bg-orange-100 text-orange-800 dark:bg-orange-500/15 dark:text-orange-300' },
   enviando: { texto: 'Enviando', clase: 'bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-300' },
   completado: { texto: 'Completó el ciclo', clase: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300' },
   error: { texto: 'Error de envío', clase: 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300' },
@@ -36,6 +37,7 @@ const aInputLocal = (d: Date) => {
 
 type SeguimientosTableProps = {
   filas: SeguimientoCiclo[];
+  especiales: Especiales;
   ocupadoId: number | null;
   onReprogramar: (id: number, fecha: Date) => Promise<void>;
   onReintentar: (id: number) => Promise<void>;
@@ -44,7 +46,7 @@ type SeguimientosTableProps = {
 
 const POR_PAGINA = 50;
 
-export function SeguimientosTable({ filas, ocupadoId, onReprogramar, onReintentar, onQuitar }: SeguimientosTableProps) {
+export function SeguimientosTable({ filas, especiales, ocupadoId, onReprogramar, onReintentar, onQuitar }: SeguimientosTableProps) {
   const [pagina, setPagina] = useState(0);
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [fechaTemp, setFechaTemp] = useState('');
@@ -73,7 +75,7 @@ export function SeguimientosTable({ filas, ocupadoId, onReprogramar, onReintenta
           </thead>
           <tbody>
             {visibles.map((f) => {
-              const paso = f.proximoToque ? CICLO[f.proximoToque - 1] : null;
+              const paso = f.proximoToque ? getPaso(f.proximoToque, especiales) : null;
               const editando = editandoId === f.id;
               const ocupado = ocupadoId === f.id;
               return (
@@ -88,8 +90,11 @@ export function SeguimientosTable({ filas, ocupadoId, onReprogramar, onReintenta
                   <td className="py-2.5 pr-3">
                     {paso ? (
                       <>
-                        <div className="font-medium">Toque {paso.toque} <span className="text-muted-foreground font-normal">de 8</span></div>
-                        <div className="text-xs text-muted-foreground">{paso.plantilla}</div>
+                        <div className="font-medium">{paso.titulo}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {paso.plantilla}
+                          {paso.especial && <span> · fuera del ciclo, {paso.espera}</span>}
+                        </div>
                       </>
                     ) : (
                       <span className="text-muted-foreground">

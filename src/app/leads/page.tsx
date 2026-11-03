@@ -23,6 +23,7 @@ import { getAllPropiedadDirecciones } from '../services/propiedadesService';
 import { exportLeadsToCSV } from '../utils/exportUtils';
 import { getKanbanColumns, saveKanbanColumns, saveColumnLabels, migrateColumnsFromLocalStorage, normalizeColumnName, getDistinctLeadEstados } from '../services/columnService';
 import { programarSeguimiento } from '../services/mensajeService';
+import { getPlantillas, type PlantillaSeguimiento } from '../services/plantillasService';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 
@@ -56,7 +57,16 @@ export default function LeadsKanbanPage() {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedToque, setSelectedToque] = useState<number>(1);
   const [showToqueSelector, setShowToqueSelector] = useState(false);
-  
+  // Plantillas genéricas (fuera del ciclo): su código se usa como "toque" en la cola
+  const [plantillasGenericas, setPlantillasGenericas] = useState<PlantillaSeguimiento[]>([]);
+
+  useEffect(() => {
+    if (!showToqueSelector) return;
+    getPlantillas()
+      .then((ps) => setPlantillasGenericas(ps.filter((p) => p.activa)))
+      .catch((e) => console.error('Error cargando plantillas genéricas:', e));
+  }, [showToqueSelector]);
+
   // Estados para columnas personalizadas
   const [customColumns, setCustomColumns] = useState<string[]>([]);
   const [isAddColumnModalVisible, setIsAddColumnModalVisible] = useState(false);
@@ -787,11 +797,22 @@ export default function LeadsKanbanPage() {
                             onChange={(e) => setSelectedToque(Number(e.target.value))}
                             className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-black"
                           >
-                            {[100, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 300, 400].map((num) => (
-                              <option key={num} value={num}>
-                                {num}
-                              </option>
-                            ))}
+                            <optgroup label="Ciclo">
+                              {[100, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                                <option key={num} value={num}>
+                                  {num}
+                                </option>
+                              ))}
+                            </optgroup>
+                            {plantillasGenericas.length > 0 && (
+                              <optgroup label="Plantillas genéricas">
+                                {plantillasGenericas.map((p) => (
+                                  <option key={p.codigo} value={p.codigo}>
+                                    {p.codigo} · {p.nombre}{p.nombreYcloud ? '' : ' (sin aprobar)'}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
                           </select>
                           <button
                             onClick={() => {

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { estaLista, getPlantillas, type PlantillaSeguimiento } from './plantillasService';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string | undefined;
@@ -29,6 +30,41 @@ export const CICLO: { toque: number; plantilla: string; espera: string }[] = [
   { toque: 8, plantilla: 'seguimiento_t6', espera: 'fin del ciclo' },
 ];
 
+/**
+ * Toques especiales: plantillas genéricas fuera del ciclo, cargadas en la tabla plantillas_seguimiento
+ * (ABM en /mensajes-programados) y asignadas desde /leads (selector "Toque").
+ * El contador de la fila ES el código de la plantilla (300, 400...), no count + 1.
+ * Después de enviarlos, el workflow devuelve al lead al ciclo en el T3 a +30 días (count = 2).
+ */
+export const ESPERA_ESPECIAL = 'vuelve al T3 (+30 días)';
+
+export type Paso = { etiqueta: string; titulo: string; plantilla: string; espera: string; especial: boolean; lista: boolean };
+
+/** Plantillas indexadas por código; se arma una vez por carga a partir de getPlantillas(). */
+export type Especiales = Map<number, PlantillaSeguimiento>;
+
+export const indexarEspeciales = (plantillas: PlantillaSeguimiento[]): Especiales =>
+  new Map(plantillas.map((p) => [p.codigo, p]));
+
+/** Datos para mostrar un toque (del ciclo o especial) a partir de su número. */
+export const getPaso = (toque: number, especiales: Especiales): Paso | null => {
+  const especial = especiales.get(toque);
+  if (especial) {
+    return {
+      etiqueta: especial.nombre,
+      titulo: especial.nombre,
+      plantilla: especial.nombreYcloud ?? 'sin aprobar en YCloud',
+      espera: ESPERA_ESPECIAL,
+      especial: true,
+      lista: estaLista(especial),
+    };
+  }
+  const paso = CICLO[toque - 1];
+  return paso
+    ? { etiqueta: `T${paso.toque}`, titulo: `Toque ${paso.toque} de 8`, plantilla: paso.plantilla, espera: paso.espera, especial: false, lista: true }
+    : null;
+};
+
 /** Columnas del Kanban que reciben toques; el workflow saltea a los leads en cualquier otra. */
 export const ESTADOS_QUE_RECIBEN_TOQUES = new Set(['frío', 'tibio', 'caliente']);
 
@@ -37,9 +73,10 @@ export type EstadoSeguimiento =
   | 'programado'   // en ciclo, con fecha futura
   | 'en_pausa'     // en ciclo, pero el lead está en una columna que no recibe toques
   | 'enviando'     // el workflow lo está procesando ahora
+  | 'sin_plantilla' // toque especial cuya plantilla no está aprobada en YCloud o está desactivada: no sale
   | 'completado'
   | 'error'
-  | 'fuera_de_ciclo'; // contador fuera de 0..7 (valores heredados del ciclo viejo)
+  | 'fuera_de_ciclo'; // contador fuera de 0..7 y que no es un toque especial (valores heredados del ciclo viejo)
 
 export interface SeguimientoCiclo {
   id: number;
@@ -84,24 +121,36 @@ async function fetchAll<T>(table: string, columns: string): Promise<T[]> {
   }
 }
 
-function clasificar(estadoFila: string, count: number, fecha: Date | null, estadoLead: string | null, ahora: number): EstadoSeguimiento {
+function clasificar(
+  estadoFila: string,
+  count: number,
+  fecha: Date | null,
+  estadoLead: string | null,
+  ahora: number,
+  especiales: Especiales,
+): EstadoSeguimiento {
   if (estadoFila === 'completado') return 'completado';
   if (estadoFila === 'error') return 'error';
   if (estadoFila === 'procesando') return 'enviando';
-  if (count < 0 || count > 7) return 'fuera_de_ciclo';
+  const especial = especiales.get(count);
+  if ((count < 0 || count > 7) && !especial) return 'fuera_de_ciclo';
+  if (especial && !estaLista(especial)) return 'sin_plantilla';
   if (estadoLead && !ESTADOS_QUE_RECIBEN_TOQUES.has(estadoLead)) return 'en_pausa';
   return fecha && fecha.getTime() <= ahora ? 'vencido' : 'programado';
 }
 
 /**
  * Filas de cola_seguimientos que importan para el ciclo (pendientes, procesando, completadas y con error),
- * cruzadas con el lead por los últimos 10 dígitos del teléfono.
+ * cruzadas con el lead por los últimos 10 dígitos del teléfono. También devuelve las plantillas
+ * genéricas, porque sin ellas no se puede saber qué contadores son toques especiales.
  */
-export const getSeguimientosCiclo = async (): Promise<SeguimientoCiclo[]> => {
-  const [filas, leads] = await Promise.all([
+export const getSeguimientosCiclo = async (): Promise<{ filas: SeguimientoCiclo[]; plantillas: PlantillaSeguimiento[] }> => {
+  const [filas, leads, plantillas] = await Promise.all([
     fetchAll<any>('cola_seguimientos', 'id, remote_jid, estado, seguimientos_count, fecha_programada, enviado_at, chatwoot_conversation_id'),
     fetchAll<any>('leads', 'id, nombre, whatsapp_id, estado'),
+    getPlantillas(),
   ]);
+  const especiales = indexarEspeciales(plantillas);
 
   const leadPorTelefono = new Map<string, any>();
   for (const lead of leads) {
@@ -112,14 +161,15 @@ export const getSeguimientosCiclo = async (): Promise<SeguimientoCiclo[]> => {
   const ahora = Date.now();
   const relevantes = new Set(['pendiente', 'procesando', 'completado', 'error']);
 
-  return filas
+  const resultado: SeguimientoCiclo[] = filas
     .filter((f) => relevantes.has(String(f.estado ?? 'pendiente')))
     .map((f) => {
       const lead = leadPorTelefono.get(last10(f.remote_jid)) ?? null;
       const count = Number(f.seguimientos_count ?? 0);
       const fecha = parseUtc(f.fecha_programada);
       const estadoFila = String(f.estado ?? 'pendiente');
-      const enCiclo = count >= 0 && count <= 7;
+      const especial = especiales.has(count);
+      const enCiclo = (count >= 0 && count <= 7) || especial;
       return {
         id: f.id,
         remoteJid: String(f.remote_jid ?? ''),
@@ -129,13 +179,14 @@ export const getSeguimientosCiclo = async (): Promise<SeguimientoCiclo[]> => {
         estadoLead: lead?.estado ?? null,
         estadoFila,
         seguimientosCount: count,
-        proximoToque: estadoFila !== 'completado' && enCiclo ? count + 1 : null,
+        proximoToque: estadoFila !== 'completado' && enCiclo ? (especial ? count : count + 1) : null,
         fechaProgramada: fecha,
         enviadoAt: parseUtc(f.enviado_at),
         conversacionId: f.chatwoot_conversation_id ?? null,
-        estado: clasificar(estadoFila, count, fecha, lead?.estado ?? null, ahora),
+        estado: clasificar(estadoFila, count, fecha, lead?.estado ?? null, ahora, especiales),
       };
     });
+  return { filas: resultado, plantillas };
 };
 
 /** Cambia la fecha del próximo toque. Recibe la fecha en hora local del navegador y la guarda en UTC. */

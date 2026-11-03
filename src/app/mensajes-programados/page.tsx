@@ -10,8 +10,12 @@ import { Input } from '@/components/ui/input';
 import { ToquesChart } from '../components/seguimientos/ToquesChart';
 import { CargaDiariaChart } from '../components/seguimientos/CargaDiariaChart';
 import { ETIQUETA_ESTADO, SeguimientosTable } from '../components/seguimientos/SeguimientosTable';
+import { PlantillasManager } from '../components/seguimientos/PlantillasManager';
+import type { PlantillaSeguimiento } from '../services/plantillasService';
 import {
+  getPaso,
   getSeguimientosCiclo,
+  indexarEspeciales,
   quitarDelCiclo,
   reintentarSeguimiento,
   reprogramarSeguimiento,
@@ -21,7 +25,7 @@ import {
 
 const TZ = 'America/Argentina/Buenos_Aires';
 const DIAS_CARGA = 60;
-const EN_CICLO: EstadoSeguimiento[] = ['vencido', 'programado', 'en_pausa', 'enviando'];
+const EN_CICLO: EstadoSeguimiento[] = ['vencido', 'programado', 'en_pausa', 'enviando', 'sin_plantilla'];
 
 type FiltroEstado = 'en_ciclo' | EstadoSeguimiento | 'todos';
 
@@ -30,6 +34,7 @@ const FILTROS: { valor: FiltroEstado; texto: string }[] = [
   { valor: 'vencido', texto: ETIQUETA_ESTADO.vencido.texto },
   { valor: 'programado', texto: ETIQUETA_ESTADO.programado.texto },
   { valor: 'en_pausa', texto: ETIQUETA_ESTADO.en_pausa.texto },
+  { valor: 'sin_plantilla', texto: ETIQUETA_ESTADO.sin_plantilla.texto },
   { valor: 'error', texto: ETIQUETA_ESTADO.error.texto },
   { valor: 'completado', texto: ETIQUETA_ESTADO.completado.texto },
   { valor: 'todos', texto: 'Todos' },
@@ -52,6 +57,8 @@ function StatCard({ titulo, valor, detalle, destacado }: { titulo: string; valor
 
 export default function MensajesProgramadosPage() {
   const [filas, setFilas] = useState<SeguimientoCiclo[]>([]);
+  const [plantillas, setPlantillas] = useState<PlantillaSeguimiento[]>([]);
+  const especiales = useMemo(() => indexarEspeciales(plantillas), [plantillas]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [ocupadoId, setOcupadoId] = useState<number | null>(null);
@@ -67,7 +74,9 @@ export default function MensajesProgramadosPage() {
   const loadFilas = useCallback(async () => {
     setIsLoading(true);
     try {
-      setFilas(await getSeguimientosCiclo());
+      const datos = await getSeguimientosCiclo();
+      setFilas(datos.filas);
+      setPlantillas(datos.plantillas);
       setLoadError(null);
     } catch (e) {
       console.error('Error cargando seguimientos:', e);
@@ -165,6 +174,17 @@ export default function MensajesProgramadosPage() {
     }
     return { porToque, enCiclo, vencidos, proximos7, enPausa, errores, completados };
   }, [filas]);
+
+  /** Filas que todavía esperan cada plantilla genérica (por código). */
+  const enEspera = useMemo(() => {
+    const conteo: Record<number, number> = {};
+    for (const f of filas) {
+      if (f.estado !== 'completado' && especiales.has(f.seguimientosCount)) {
+        conteo[f.seguimientosCount] = (conteo[f.seguimientosCount] ?? 0) + 1;
+      }
+    }
+    return conteo;
+  }, [filas, especiales]);
 
   const cargaDiaria = useMemo(() => {
     const conteo = new Map<string, number>();
@@ -273,11 +293,16 @@ export default function MensajesProgramadosPage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base">Leads por próximo toque</CardTitle>
                     <CardDescription>
-                      T1 es el mensaje de la IA; del T2 al T8 son plantillas. Tocá una barra para filtrar la tabla.
+                      T1 es el mensaje de la IA; del T2 al T8 son plantillas. A la derecha, las plantillas genéricas, que después vuelven al T3. Tocá una barra para filtrar la tabla.
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ToquesChart porToque={stats.porToque} seleccionado={filtroToque} onSeleccionar={setFiltroToque} />
+                    <ToquesChart
+                      porToque={stats.porToque}
+                      especiales={especiales}
+                      seleccionado={filtroToque}
+                      onSeleccionar={setFiltroToque}
+                    />
                   </CardContent>
                 </Card>
 
@@ -300,7 +325,7 @@ export default function MensajesProgramadosPage() {
                       <CardDescription>
                         {filtroToque !== null ? (
                           <>
-                            Mostrando el toque {filtroToque}.{' '}
+                            Mostrando {getPaso(filtroToque, especiales)?.titulo ?? `el toque ${filtroToque}`}.{' '}
                             <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => setFiltroToque(null)}>
                               Ver todos los toques
                             </button>
@@ -340,11 +365,25 @@ export default function MensajesProgramadosPage() {
                   <SeguimientosTable
                     key={`${filtroEstado}-${filtroToque}-${busqueda}`}
                     filas={filtradas}
+                    especiales={especiales}
                     ocupadoId={ocupadoId}
                     onReprogramar={handleReprogramar}
                     onReintentar={handleReintentar}
                     onQuitar={handleQuitar}
                   />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Plantillas genéricas</CardTitle>
+                  <CardDescription>
+                    Mensajes fuera del ciclo (ej. baja de valor). Se asignan desde Leads → Seleccionar → Toque con su código. Después
+                    del envío, el lead vuelve al T3 a +30 días.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <PlantillasManager plantillas={plantillas} enEspera={enEspera} onCambio={loadFilas} />
                 </CardContent>
               </Card>
             </>
