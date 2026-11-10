@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -22,6 +23,21 @@ export default function LoginForm() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Los links de recuperación enviados desde el dashboard de Supabase apuntan
+  // al Site URL; el middleware redirige a /login y el navegador conserva el
+  // #hash con los tokens. Los reenviamos a la página que los procesa.
+  useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    if (hash.get('type') === 'recovery' && hash.get('access_token')) {
+      window.location.replace(`/restablecer-contrasena${window.location.hash}`);
+      return;
+    }
+    if (hash.get('error_code') === 'otp_expired') {
+      setError('El link expiró o ya fue usado. Pedí uno nuevo.');
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -75,7 +91,15 @@ export default function LoginForm() {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="password">Contraseña</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Contraseña</Label>
+                <Link
+                  href="/recuperar-contrasena"
+                  className="text-sm text-muted-foreground hover:underline"
+                >
+                  ¿Olvidaste tu contraseña?
+                </Link>
+              </div>
               <Input
                 id="password"
                 type="password"

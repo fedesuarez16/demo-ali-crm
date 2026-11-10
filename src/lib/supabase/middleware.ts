@@ -42,6 +42,8 @@ export async function updateSession(request: NextRequest) {
   const isPublicPath =
     pathname === '/login' ||
     pathname === '/privacidad' ||
+    pathname === '/recuperar-contrasena' ||
+    pathname === '/restablecer-contrasena' ||
     pathname.startsWith('/api/') ||
     pathname.startsWith('/_next/') ||
     pathname === '/favicon.ico';
