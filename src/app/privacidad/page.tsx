@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-// Página pública (excluida del login en lib/supabase/middleware.ts).
+// Página pública (excluida del login en src/middleware.ts).
 // Meta la exige como URL de política de privacidad para la revisión de la app de WhatsApp.
 
 export const metadata: Metadata = {

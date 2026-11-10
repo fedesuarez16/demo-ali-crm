@@ -1,15 +1,12 @@
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { Suspense } from 'react';
-import { createClient } from '@/lib/supabase/server';
+import { CRM_COOKIE, getCrmPassword, verifyCrmToken } from '@/lib/crmAuth';
 import LoginForm from './LoginForm';
 
 export default async function LoginPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user) {
+  const cookieStore = await cookies();
+  if (await verifyCrmToken(cookieStore.get(CRM_COOKIE)?.value, getCrmPassword())) {
     redirect('/');
   }
 

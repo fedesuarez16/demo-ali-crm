@@ -23,6 +23,7 @@ SUPABASE_SERVICE_ROLE_KEY      # server-only; /api/gastos reads the metrics_* vi
 CHATWOOT_URL
 CHATWOOT_ACCOUNT_ID
 CHATWOOT_API_TOKEN
+CRM_PASSWORD                   # server-only; shared password for the whole CRM (login). Fails closed if unset
 DASHBOARD_PASSWORD             # server-only; shared password for /dashboard, /gastos and /api/gastos (fails closed if unset)
 ANTHROPIC_ADMIN_KEY            # server-only Admin API key (sk-ant-admin...); /api/gastos/anthropic reads the org cost_report
 OPENAI_API_KEY                 # used by /api/ai-chat and embeddings
@@ -92,9 +93,13 @@ The main n8n workflow (`Team ali - agente`, id `ejW2YR1lNj3dYsGc`) is stored as 
 
 The script strips fields n8n rejects on `PUT` (`id`, `active`, `tags`, `pinData`, `versionId`, `meta`, `triggerCount`, `shared`, and UI-internal keys inside `settings` like `binaryMode`, `callerPolicy`, `timeSavedMode`, `availableInMCP`). It never touches the `active` state — toggle that from the UI. Archived workflows are skipped with a warning. To revert a bad sync, use n8n's UI **Workflow history → Restore**, then re-export and replace the JSON. Full details in `DOCUMENTATION.md` §13.
 
+### Login is a shared password, not Supabase Auth
+
+The CRM has no per-user accounts. `/login` posts to `/api/crm-auth`, which checks `CRM_PASSWORD` and sets an HMAC-signed httpOnly cookie (`crm_session`, 30 days, see `src/lib/crmAuth.ts` + `src/lib/signedSession.ts`). `src/middleware.ts` redirects every page except `/login` and `/privacidad` to `/login?next=` without it. Changing `CRM_PASSWORD` logs everyone out. Supabase Auth is not used (it was dropped because the built-in email limits broke password recovery). Note: `/api/**` routes other than `/api/gastos` are not covered by the middleware.
+
 ### Panel access is a second lock on top of login
 
-`/dashboard`, `/gastos` and `/api/gastos/**` share one password (`DASHBOARD_PASSWORD`), independent of the Supabase user login. `src/middleware.ts` verifies an HMAC-signed httpOnly cookie (`panel_session`, 12 h, see `src/lib/panelAuth.ts`) and redirects pages to `/acceso-panel?next=`; APIs get 401. The cookie is issued by `POST /api/panel-auth` only to logged-in users; one login opens both sections. To protect another route, add it to `PANEL_SECTIONS` (and the middleware matcher if it's an API).
+`/dashboard`, `/gastos` and `/api/gastos/**` share one password (`DASHBOARD_PASSWORD`), independent of the CRM login. `src/middleware.ts` verifies an HMAC-signed httpOnly cookie (`panel_session`, 12 h, see `src/lib/panelAuth.ts`) and redirects pages to `/acceso-panel?next=`; APIs get 401. The cookie is issued by `POST /api/panel-auth` only to clients with a valid `crm_session`; one login opens both sections. To protect another route, add it to `PANEL_SECTIONS` (and the middleware matcher if it's an API).
 
 ### RLS is open
 

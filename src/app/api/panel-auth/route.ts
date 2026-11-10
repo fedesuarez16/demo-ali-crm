@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { CRM_COOKIE, getCrmPassword, verifyCrmToken } from '@/lib/crmAuth';
 import {
   PANEL_COOKIE,
   PANEL_SESSION_SECONDS,
@@ -7,42 +7,14 @@ import {
   getPanelPassword,
   passwordMatches,
 } from '@/lib/panelAuth';
+import { clientIp, crearLimitadorDeIntentos } from '@/lib/signedSession';
 
-// Límite simple de intentos fallidos por IP (en memoria, por instancia)
-const MAX_INTENTOS = 8;
-const VENTANA_MS = 15 * 60 * 1000;
-const intentos = new Map<string, { count: number; desde: number }>();
-
-function clientIp(request: NextRequest): string {
-  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'local';
-}
-
-function bloqueado(ip: string): boolean {
-  const e = intentos.get(ip);
-  if (!e) return false;
-  if (Date.now() - e.desde > VENTANA_MS) {
-    intentos.delete(ip);
-    return false;
-  }
-  return e.count >= MAX_INTENTOS;
-}
-
-function registrarFallo(ip: string) {
-  const e = intentos.get(ip);
-  if (!e || Date.now() - e.desde > VENTANA_MS) {
-    if (intentos.size > 1000) intentos.clear();
-    intentos.set(ip, { count: 1, desde: Date.now() });
-  } else {
-    e.count++;
-  }
-}
+const limitador = crearLimitadorDeIntentos();
 
 /** POST { password } → setea la cookie de sesión del panel (Dashboard y Gastos) */
 export async function POST(request: NextRequest) {
   // El panel es un segundo candado: primero hay que estar logueado en el sistema
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
+  if (!(await verifyCrmToken(request.cookies.get(CRM_COOKIE)?.value, getCrmPassword()))) {
     return NextResponse.json({ error: 'Tenés que iniciar sesión primero' }, { status: 401 });
   }
 
@@ -62,17 +34,17 @@ export async function POST(request: NextRequest) {
     /* body inválido: cae como contraseña vacía */
   }
 
-  const ip = clientIp(request);
-  if (bloqueado(ip)) {
+  const ip = clientIp(request.headers);
+  if (limitador.bloqueado(ip)) {
     return NextResponse.json({ error: 'Demasiados intentos. Probá de nuevo en unos minutos.' }, { status: 429 });
   }
 
   if (!input || !(await passwordMatches(input, panelPassword))) {
-    registrarFallo(ip);
+    limitador.registrarFallo(ip);
     return NextResponse.json({ error: 'Contraseña incorrecta' }, { status: 401 });
   }
 
-  intentos.delete(ip);
+  limitador.limpiar(ip);
   const response = NextResponse.json({ ok: true });
   response.cookies.set(PANEL_COOKIE, await createPanelToken(panelPassword), {
     httpOnly: true,

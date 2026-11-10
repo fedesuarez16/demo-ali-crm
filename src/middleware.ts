@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { updateSession } from '@/lib/supabase/middleware';
+import { CRM_COOKIE, getCrmPassword, verifyCrmToken } from '@/lib/crmAuth';
 import {
   PANEL_ACCESS_PATH,
   PANEL_COOKIE,
@@ -13,7 +13,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const panelToken = request.cookies.get(PANEL_COOKIE)?.value;
 
-  // APIs del panel: solo con sesión de panel válida (que a su vez exige login para emitirse)
+  // APIs del panel: solo con sesión de panel válida (que a su vez exige login del CRM para emitirse)
   if (sectionForApi(pathname)) {
     if (!(await verifyPanelToken(panelToken, getPanelPassword()))) {
       return NextResponse.json({ error: 'Acceso al panel requerido' }, { status: 401 });
@@ -21,10 +21,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const response = await updateSession(request);
-
-  // Sin login general → updateSession ya redirige a /login
-  if (response.headers.get('location')) return response;
+  // Login general del CRM (contraseña compartida)
+  const isPublicPath = pathname === '/login' || pathname === '/privacidad';
+  if (!isPublicPath) {
+    const crmToken = request.cookies.get(CRM_COOKIE)?.value;
+    if (!(await verifyCrmToken(crmToken, getCrmPassword()))) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      url.search = '';
+      url.searchParams.set('next', pathname);
+      return NextResponse.redirect(url);
+    }
+  }
 
   if (sectionForPage(pathname)) {
     if (!(await verifyPanelToken(panelToken, getPanelPassword()))) {
@@ -36,7 +44,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {

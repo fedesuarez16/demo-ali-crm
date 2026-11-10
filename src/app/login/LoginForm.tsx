@@ -1,9 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import {
   Card,
   CardContent,
@@ -15,56 +13,51 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 
+/** Solo rutas internas: evita redirecciones abiertas vía ?next=https://... */
+function destinoSeguro(next: string | null): string {
+  return next && next.startsWith('/') && !next.startsWith('//') ? next : '/';
+}
+
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Los links de recuperación enviados desde el dashboard de Supabase apuntan
-  // al Site URL; el middleware redirige a /login y el navegador conserva el
-  // #hash con los tokens. Los reenviamos a la página que los procesa.
-  useEffect(() => {
-    const hash = new URLSearchParams(window.location.hash.slice(1));
-    if (hash.get('type') === 'recovery' && hash.get('access_token')) {
-      window.location.replace(`/restablecer-contrasena${window.location.hash}`);
-      return;
-    }
-    if (hash.get('error_code') === 'otp_expired') {
-      setError('El link expiró o ya fue usado. Pedí uno nuevo.');
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    }
-  }, []);
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    if (!email || !password) {
-      setError('Por favor completá todos los campos.');
+    if (!password) {
+      setError('Ingresá la contraseña.');
       return;
     }
 
     setError('');
     setLoading(true);
 
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const res = await fetch('/api/crm-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
 
-    if (authError) {
-      setError('Correo o contraseña inválidos');
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setError(data?.error ?? 'No se pudo iniciar sesión');
+        setLoading(false);
+        return;
+      }
+    } catch {
+      setError('Error de conexión. Probá de nuevo.');
       setLoading(false);
       return;
     }
 
-    const next = searchParams.get('next') ?? '/';
     router.refresh();
-    router.push(next);
+    router.push(destinoSeguro(searchParams.get('next')));
   };
 
   return (
@@ -73,33 +66,13 @@ export default function LoginForm() {
         <CardHeader>
           <CardTitle className="text-2xl">Iniciar sesión</CardTitle>
           <CardDescription>
-            Ingresá tus credenciales para acceder al CRM.
+            Ingresá la contraseña para acceder al CRM.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="email">Correo electrónico</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="correo@ejemplo.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={loading}
-                autoComplete="email"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Contraseña</Label>
-                <Link
-                  href="/recuperar-contrasena"
-                  className="text-sm text-muted-foreground hover:underline"
-                >
-                  ¿Olvidaste tu contraseña?
-                </Link>
-              </div>
+              <Label htmlFor="password">Contraseña</Label>
               <Input
                 id="password"
                 type="password"
@@ -108,6 +81,7 @@ export default function LoginForm() {
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
                 autoComplete="current-password"
+                autoFocus
               />
             </div>
             {error && (

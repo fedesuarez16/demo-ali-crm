@@ -1,7 +1,9 @@
 // Acceso al panel (/dashboard, /gastos): segunda contraseña, compartida por ambas
-// secciones y distinta del login general de Supabase. La sesión es una sola cookie
+// secciones y distinta de la del login del CRM. La sesión es una sola cookie
 // httpOnly firmada con HMAC: entrando una vez quedan abiertas las dos secciones.
-// Usa Web Crypto para funcionar igual en el middleware (edge) y en route handlers (node).
+// La firma de la cookie vive en signedSession.ts (compartida con el login del CRM).
+
+import { createSessionToken, sessionPasswordMatches, verifySessionToken } from './signedSession';
 
 export type PanelSection = 'dashboard' | 'gastos';
 
@@ -44,46 +46,17 @@ export function sectionForApi(pathname: string): PanelSection | null {
   return null;
 }
 
-const encoder = new TextEncoder();
+const PANEL_SCOPE = 'panel-v1';
 
-async function hmacHex(secret: string, data: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(`panel-v1:${secret}`),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(data));
-  return Array.from(new Uint8Array(sig), (b) => b.toString(16).padStart(2, '0')).join('');
+/** Al cambiar DASHBOARD_PASSWORD se invalidan todas las sesiones del panel. */
+export function createPanelToken(password: string): Promise<string> {
+  return createSessionToken(PANEL_SCOPE, password, PANEL_SESSION_SECONDS);
 }
 
-function constantTimeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
+export function verifyPanelToken(token: string | undefined, password: string | null): Promise<boolean> {
+  return verifySessionToken(PANEL_SCOPE, token, password);
 }
 
-/**
- * Token = "<expiraEpochSeg>.<hmac>". La clave deriva de la contraseña del panel:
- * al cambiar DASHBOARD_PASSWORD se invalidan todas las sesiones abiertas.
- */
-export async function createPanelToken(password: string): Promise<string> {
-  const exp = Math.floor(Date.now() / 1000) + PANEL_SESSION_SECONDS;
-  return `${exp}.${await hmacHex(password, String(exp))}`;
-}
-
-export async function verifyPanelToken(token: string | undefined, password: string | null): Promise<boolean> {
-  if (!token || !password) return false;
-  const [expStr, sig] = token.split('.');
-  const exp = Number(expStr);
-  if (!Number.isFinite(exp) || !sig || exp < Math.floor(Date.now() / 1000)) return false;
-  return constantTimeEqual(sig, await hmacHex(password, expStr));
-}
-
-export async function passwordMatches(input: string, password: string): Promise<boolean> {
-  // Comparar hashes de largo fijo evita filtrar el largo de la contraseña por tiempo
-  const [a, b] = await Promise.all([hmacHex(password, `pw:${input}`), hmacHex(password, `pw:${password}`)]);
-  return constantTimeEqual(a, b);
+export function passwordMatches(input: string, password: string): Promise<boolean> {
+  return sessionPasswordMatches(PANEL_SCOPE, input, password);
 }
