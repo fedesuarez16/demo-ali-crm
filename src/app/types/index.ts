@@ -241,3 +241,97 @@ export interface PropiedadBusqueda {
   archivo_origen?: string | null;
   created_at?: string | null;
 }
+
+// ───────────────────────── Rueda de Negocios — Match v2 ─────────────────────────
+
+export type TipoCanonico =
+  | 'departamento' | 'casa' | 'ph' | 'duplex' | 'terreno' | 'local'
+  | 'oficina' | 'cochera' | 'galpon' | 'quinta' | 'otro';
+
+export type Amenity =
+  | 'cochera' | 'patio' | 'jardin' | 'pileta' | 'quincho' | 'parrilla'
+  | 'balcon' | 'terraza' | 'ascensor' | 'amenities';
+
+export type FormaPago = 'apto_credito' | 'permuta' | 'contado' | 'financiacion';
+
+/** Forma normalizada común a propiedades y búsquedas (propiedad: min = max). */
+export interface RuedaNormalizado {
+  v: 1;
+  fuente: 'llm' | 'parser';
+  confianza: number; // 0..1
+  moneda: 'USD' | 'ARS' | null;
+  precio_min: number | null;
+  precio_max: number | null;
+  tipos: TipoCanonico[];
+  zonas: string[];
+  zonas_cercanas: string[];
+  dorm_min: number | null;
+  dorm_max: number | null; // MONOAMBIENTE = 0
+  banos_min: number | null;
+  m2_min: number | null;
+  m2_max: number | null;
+  lote_m2_min: number | null;
+  amenities: Amenity[];
+  formas_pago: FormaPago[];
+  requisitos: string[];
+}
+
+export type MatchEstado =
+  | 'nuevo' | 'revisado' | 'contactado' | 'pendiente' | 'interesado' | 'descartado';
+
+export type EstadoOrigen = 'sistema' | 'usuario';
+
+export type MotivoEstado = 'ok' | 'parcial' | 'falla' | 'sin_dato';
+
+export interface Motivo {
+  criterio: string;
+  estado: MotivoEstado;
+  texto: string;
+}
+
+export interface RuedaZona {
+  nombre: string;
+  alias: string[];
+  vecinas: string[];
+}
+
+export interface RuedaConfig {
+  pesos: {
+    precio: number;
+    zona: number;
+    tipo: number;
+    dormitorios: number;
+    m2: number;
+    caracteristicas: number;
+    forma_pago: number;
+    necesidades: number;
+  };
+  precio_tolerancia: number;
+  precio_fuera_tolerancia_elimina: boolean;
+  tipo_eliminatorio: boolean;
+  zona_cercana_credito: number;
+  zona_mismatch_multiplicador: number;
+  /** Tabla determinística de zonas (alias + vecindad simétrica). Autoritativa si ambas zonas son conocidas. */
+  zonas: RuedaZona[];
+  umbral: number;
+  peso_minimo_evaluado: number;
+  moneda_default: 'USD' | 'ARS';
+  ars_por_usd: number | null;
+}
+
+export interface RuedaMatch {
+  id: number;
+  busqueda_id: number;
+  propiedad_id: number;
+  score: number;
+  motivos: Motivo[];
+  estado: MatchEstado;
+  estado_origen: EstadoOrigen;
+  bajo_umbral: boolean;
+  notas: string | null;
+  first_seen_at: string;
+  estado_updated_at: string;
+  score_updated_at: string;
+  propiedad?: SupabasePropiedad;
+  busqueda?: PropiedadBusqueda;
+}

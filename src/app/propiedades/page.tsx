@@ -9,6 +9,7 @@ import PropiedadEditSidebar from '../components/PropiedadEditSidebar';
 import { SupabasePropiedad } from '../types';
 import { DocumentFilterOptions } from '../types';
 import { getAllPropiedades, deletePropiedad, updatePropiedad, createPropiedad } from '../services/propiedadesService';
+import { dispararRueda } from '../services/ruedaService';
 
 export default function PropertiesKanbanPage() {
   const [propiedades, setPropiedades] = useState<SupabasePropiedad[]>([]);
@@ -139,6 +140,7 @@ export default function PropertiesKanbanPage() {
         // Actualizar propiedad existente
         const updatedPropiedad = await updatePropiedad(propiedadToEdit.id, propiedadData);
         if (updatedPropiedad) {
+          void dispararRueda({ propiedadIds: [updatedPropiedad.id] });
           setPropiedades(prev => 
             prev.map(p => p.id === updatedPropiedad.id ? updatedPropiedad : p)
           );
@@ -153,6 +155,7 @@ export default function PropertiesKanbanPage() {
         // Crear nueva propiedad
         const newPropiedad = await createPropiedad(propiedadData as Omit<SupabasePropiedad, 'id'>);
         if (newPropiedad) {
+          void dispararRueda({ propiedadIds: [newPropiedad.id] });
           setPropiedades(prev => [newPropiedad, ...prev]);
           setFilteredPropiedades(prev => [newPropiedad, ...prev]);
         } else {

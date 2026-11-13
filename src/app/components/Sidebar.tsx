@@ -37,6 +37,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import LogoutButton from '@/app/components/LogoutButton';
 import ThemeToggle from '@/app/components/ThemeToggle';
+import { useRuedaNuevosCount } from '@/app/components/rueda/useRuedaNuevosCount';
 
 interface MenuItem {
   name: string;
@@ -118,6 +119,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
   const [collapsed, setCollapsed] = useState(true);
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
+  const ruedaNuevos = useRuedaNuevosCount();
 
   useEffect(() => {
     setMounted(true);
@@ -148,6 +150,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
   const renderLink = (item: MenuItem) => {
     const Icon = item.icon;
     const isActive = !item.external && pathname === item.path;
+    const badge = item.path === '/propiedades/busquedas' ? ruedaNuevos : 0;
     const className = cn(
       'group relative flex items-center rounded-md text-[13px] transition-colors',
       collapsed ? 'h-9 w-9 justify-center mx-auto' : 'h-8 gap-2.5 px-2.5',
@@ -165,6 +168,14 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapse }) => {
           strokeWidth={1.75}
         />
         {!collapsed && <span className="flex-1 truncate">{item.name}</span>}
+        {!collapsed && badge > 0 && (
+          <span className="ml-auto rounded-full bg-indigo-600 px-1.5 text-[10px] font-semibold leading-4 text-white" aria-label={`${badge} coincidencias nuevas`}>
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
+        {collapsed && badge > 0 && (
+          <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-indigo-600" aria-label={`${badge} coincidencias nuevas`} />
+        )}
         {!collapsed && item.external && (
           <ArrowUpRight className="h-3 w-3 shrink-0 text-neutral-300 opacity-0 transition-opacity group-hover:opacity-100" />
         )}

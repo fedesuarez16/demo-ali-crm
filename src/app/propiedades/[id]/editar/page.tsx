@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import AppLayout from '../../../components/AppLayout';
 import { getPropiedadById, updatePropiedad } from '../../../services/propiedadesService';
+import { dispararRueda } from '../../../services/ruedaService';
+import { PropiedadMatchesPanel } from '../../../components/rueda/PropiedadMatchesPanel';
 import { SupabasePropiedad } from '../../../types';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -81,6 +83,7 @@ export default function EditPropertyPage() {
     try {
       const updatedPropiedad = await updatePropiedad(id, propiedad);
       if (updatedPropiedad) {
+        void dispararRueda({ propiedadIds: [updatedPropiedad.id] });
         router.push('/propiedades');
       } else {
         alert('Error al guardar la propiedad');
@@ -396,6 +399,9 @@ export default function EditPropertyPage() {
                 </CardContent>
               </Card>
               
+              {/* Búsquedas que coinciden con esta propiedad (match inverso) */}
+              <PropiedadMatchesPanel propiedadId={id} />
+
               {/* Botones de acción */}
               <div className="flex justify-end space-x-3 pb-6">
                 <Link href="/propiedades">

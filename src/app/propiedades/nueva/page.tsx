@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppLayout from '../../components/AppLayout';
 import { createPropiedad } from '../../services/propiedadesService';
+import { dispararRueda } from '../../services/ruedaService';
 import { SupabasePropiedad } from '../../types';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -74,6 +75,7 @@ export default function NewPropertyPage() {
     try {
       const newPropiedad = await createPropiedad(propiedad);
       if (newPropiedad) {
+        void dispararRueda({ propiedadIds: [newPropiedad.id] });
         router.push('/propiedades');
       } else {
         alert('Error al guardar la propiedad');

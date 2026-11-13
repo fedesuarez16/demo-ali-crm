@@ -83,9 +83,9 @@ export async function getAllPropiedadBusquedas(): Promise<PropiedadBusqueda[]> {
 export async function insertPropiedadBusquedas(
   rows: Record<PropiedadBusquedaDbColumn, string>[],
   archivoOrigen?: string
-): Promise<{ inserted: number; error?: string }> {
+): Promise<{ inserted: number; ids: number[]; error?: string }> {
   if (rows.length === 0) {
-    return { inserted: 0 };
+    return { inserted: 0, ids: [] };
   }
 
   const origen = archivoOrigen ?? null;
@@ -93,17 +93,19 @@ export async function insertPropiedadBusquedas(
 
   try {
     let inserted = 0;
+    const ids: number[] = [];
     for (let i = 0; i < payloads.length; i += CHUNK) {
       const slice = payloads.slice(i, i + CHUNK);
-      const { error } = await (getSupabase() as any).from('propiedad_busquedas').insert(slice);
+      const { data, error } = await (getSupabase() as any).from('propiedad_busquedas').insert(slice).select('id');
       if (error) {
-        return { inserted, error: error.message };
+        return { inserted, ids, error: error.message };
       }
       inserted += slice.length;
+      for (const r of (data as any[]) || []) if (r?.id != null) ids.push(Number(r.id));
     }
-    return { inserted };
+    return { inserted, ids };
   } catch (e: any) {
-    return { inserted: 0, error: e?.message || 'Error al insertar' };
+    return { inserted: 0, ids: [], error: e?.message || 'Error al insertar' };
   }
 }
 
