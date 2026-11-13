@@ -512,6 +512,47 @@ export const getAllLeads = async (): Promise<Lead[]> => {
 };
 
 /**
+ * Trae solo los leads cuyo whatsapp_id coincide (por últimos 10 dígitos) con los teléfonos dados.
+ * Evita cargar la tabla completa cuando solo hay que cruzar una lista de chats con sus leads.
+ * whatsapp_id puede venir como "549221..." o "549221...@s.whatsapp.net", por eso se usa like.
+ */
+export const getLeadsByPhones = async (phones: string[]): Promise<Lead[]> => {
+  const suffixes = Array.from(new Set(
+    phones
+      .map(phone => (phone || '').replace(/\D/g, '').slice(-10))
+      .filter(suffix => suffix.length >= 8)
+  ));
+  if (suffixes.length === 0) return [];
+
+  const CHUNK_SIZE = 40; // mantiene la URL del filtro OR en un largo razonable
+  const chunks: string[][] = [];
+  for (let i = 0; i < suffixes.length; i += CHUNK_SIZE) {
+    chunks.push(suffixes.slice(i, i + CHUNK_SIZE));
+  }
+
+  try {
+    const results = await Promise.all(chunks.map(async (chunk) => {
+      const { data, error } = await (getSupabase() as any)
+        .from('leads')
+        .select('*')
+        .or(chunk.map(suffix => `whatsapp_id.like.*${suffix}*`).join(','))
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching leads by phones:', error.message);
+        return [];
+      }
+      return data || [];
+    }));
+
+    return results.flat().map(mapLeadRow);
+  } catch (e) {
+    console.error('Supabase not configured or failed to initialize:', e);
+    return [];
+  }
+};
+
+/**
  * Filtra leads según los criterios especificados
  */
 export const filterLeads = (options: FilterOptions): Lead[] => {
@@ -553,7 +594,7 @@ export const filterLeads = (options: FilterOptions): Lead[] => {
     }
     
     // Filtrar por propiedad de interés (campaña) si se especifica.
-    // Las opciones de filtro vienen de propiedades.direccion; se comparan con
+    // Las opciones de filtro vienen de pautas (/campanas-activas); se comparan con
     // leads.propiedad_interes usando huella numérica (mismo conjunto de números
     // = misma campaña). Para textos sin números, se usa igualdad normalizada.
     if (options.propiedadInteres) {
@@ -571,12 +612,17 @@ export const filterLeads = (options: FilterOptions): Lead[] => {
         const leadFp = campaignNumericFingerprint(rawLead);
         if (filterFp && leadFp) {
           campaignMatch = filterFp === leadFp;
-        } else if (!filterFp && !leadFp) {
+        } else if (!filterFp) {
+          // Campaña por nombre (ej. "Plaza Paso"): el lead matchea si su texto, sin los
+          // números, es ese nombre o empieza con él ("Plaza Paso e/ 13 y 44").
           const nf = normalizeCampaignName(rawFilter);
-          const nl = normalizeCampaignName(rawLead);
-          campaignMatch = !!nf && !!nl && nf === nl;
+          const nl = normalizeCampaignName(rawLead)
+            .split(' ')
+            .filter((w) => !/^\d+[a-z]?$/.test(w))
+            .join(' ');
+          campaignMatch = !!nf && !!nl && (nl === nf || nl.startsWith(`${nf} `));
         }
-        // si solo uno tiene dígitos, no hay match
+        // filtro con números y lead sin números: no hay match
       }
 
       if (!campaignMatch) {

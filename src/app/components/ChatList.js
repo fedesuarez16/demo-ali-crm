@@ -1,8 +1,74 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useChats } from '../../hooks/useChats';
-import { getAllLeads, updateLead, searchLeads } from '../services/leadService';
+import { getLeadsByPhones, updateLead, searchLeads } from '../services/leadService';
+import { Skeleton } from '../../components/ui/skeleton';
+
+// Preload con la misma forma que un ítem de la lista (mismo estilo que /leads)
+const ChatListSkeleton = ({ rows = 10 }) => (
+  <div className="flex flex-col h-full" aria-busy="true" aria-label="Cargando chats">
+    <div className="p-4 border-b border-gray-200">
+      <Skeleton className="h-9 w-full rounded-lg" />
+    </div>
+    <div className="flex-1 overflow-hidden p-2 space-y-0.5">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex gap-3 rounded-lg px-3 py-2.5 bg-white">
+          <Skeleton className="w-10 h-10 rounded-full flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="h-3 w-9" />
+            </div>
+            <Skeleton className="mt-1.5 h-3 w-4/5" />
+            <div className="mt-2 flex items-center gap-1">
+              <Skeleton className="h-4 w-24 rounded" />
+              <Skeleton className="h-4 w-8 rounded" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+const getInitials = (name) => {
+  const words = (name || '').trim().split(/\s+/).filter(word => /\p{L}/u.test(word));
+  if (words.length === 0) return null;
+  return (words[0][0] + (words[1]?.[0] || '')).toUpperCase();
+};
+
+// Foto de perfil del contacto (Chatwoot thumbnail). Si no hay o falla, iniciales; si no hay nombre, ícono de WhatsApp.
+const ChatAvatar = ({ url, name, isRead }) => {
+  const [failed, setFailed] = useState(false);
+
+  if (url && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={url}
+        alt=""
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        className="w-10 h-10 rounded-full object-cover flex-shrink-0 bg-gray-100"
+      />
+    );
+  }
+
+  const initials = getInitials(name);
+  return (
+    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-semibold ${
+      !isRead ? 'bg-blue-500' : 'bg-green-500'
+    }`}>
+      {initials || (
+        <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+        </svg>
+      )}
+    </div>
+  );
+};
 
 const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
   // Obtener chats sin filtrar por agente (mostrar todas las conversaciones)
@@ -445,42 +511,6 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
     setServerFoundChat(null);
   }, [targetPhoneNumber]);
 
-  // Cargar leads y crear un mapa de teléfono -> lead
-  useEffect(() => {
-    const loadLeads = async () => {
-      if (chats.length === 0) return;
-      
-      setIsLoadingLeads(true);
-      try {
-        const allLeads = await getAllLeads();
-        
-        // Crear un mapa de número de teléfono normalizado -> lead
-        const leadsByPhone = {};
-        
-        allLeads.forEach(lead => {
-          const phone = lead.telefono || lead.whatsapp_id || '';
-          if (phone) {
-            const normalizedPhone = normalizePhoneNumber(phone);
-            if (normalizedPhone) {
-              // Si ya existe un lead para este teléfono, mantener el primero
-              if (!leadsByPhone[normalizedPhone]) {
-                leadsByPhone[normalizedPhone] = lead;
-              }
-            }
-          }
-        });
-        
-        setLeadsMap(leadsByPhone);
-      } catch (error) {
-        console.error('Error loading leads:', error);
-      } finally {
-        setIsLoadingLeads(false);
-      }
-    };
-    
-    loadLeads();
-  }, [chats]);
-  
   // Función para obtener el lead asociado a un chat
   const getLeadForChat = (chat) => {
     const chatPhone = getChatPhoneNumber(chat);
@@ -500,74 +530,107 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
   const [searchedChats, setSearchedChats] = useState([]);
   const [isSearchingChats, setIsSearchingChats] = useState(false);
 
-  // Función auxiliar para cargar múltiples páginas de chats
-  const loadAllChats = async (maxPages = 20) => {
-    const allLoadedChats = [];
-    
-    try {
-      console.log('📥 Cargando chats para búsqueda exhaustiva...');
-      
-      for (let page = 1; page <= maxPages; page++) {
-        const response = await fetch(`/api/chats?page=${page}&per_page=50&assignee_id=all&status=all`);
-        
+  // Cargar SOLO los leads de los chats visibles (incremental) en vez de toda la tabla.
+  // Cada teléfono se consulta una sola vez; las nuevas tandas de chats piden solo lo que falta.
+  const lookedUpPhonesRef = useRef(new Set());
+  useEffect(() => {
+    const visibleChats = [...chats, ...searchedChats, ...(serverFoundChat ? [serverFoundChat] : [])];
+    const pendingPhones = [];
+
+    visibleChats.forEach(chat => {
+      const phone = normalizePhoneNumber(getChatPhoneNumber(chat) || '');
+      if (phone && !lookedUpPhonesRef.current.has(phone)) {
+        lookedUpPhonesRef.current.add(phone);
+        pendingPhones.push(phone);
+      }
+    });
+
+    if (pendingPhones.length === 0) return;
+
+    setIsLoadingLeads(true);
+    getLeadsByPhones(pendingPhones)
+      .then(leads => {
+        setLeadsMap(prev => {
+          const next = { ...prev };
+          leads.forEach(lead => {
+            const phone = normalizePhoneNumber(lead.telefono || lead.whatsapp_id || '');
+            // Si hay más de un lead para el teléfono, mantener el primero (más reciente)
+            if (phone && !next[phone]) {
+              next[phone] = lead;
+            }
+          });
+          return next;
+        });
+      })
+      .catch(error => {
+        console.error('Error loading leads:', error);
+        // Permitir reintentar estos teléfonos en la próxima carga
+        pendingPhones.forEach(phone => lookedUpPhonesRef.current.delete(phone));
+      })
+      .finally(() => setIsLoadingLeads(false));
+  }, [chats, searchedChats, serverFoundChat]);
+
+  // Scroll infinito: cuando el botón "Cargar más" entra en pantalla, pedir la siguiente tanda.
+  // loadMoreChats ya ignora la llamada si hay una carga en curso o no hay más.
+  const loadMoreSentinelRef = useRef(null);
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || searchQuery || !pagination?.has_more) return;
+
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0]?.isIntersecting) loadMoreChats();
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMoreChats, searchQuery, pagination?.has_more]);
+
+  // Cache de la carga exhaustiva: la búsqueda por teléfono y la búsqueda general
+  // la comparten, y búsquedas seguidas dentro de 60s no vuelven a pegarle a Chatwoot.
+  const allChatsCacheRef = useRef({ at: 0, promise: null });
+
+  // Carga hasta `maxBatches` tandas (cada tanda = 4 páginas de Chatwoot pedidas en paralelo, ~100 chats)
+  const loadAllChats = (maxBatches = 5) => {
+    const cache = allChatsCacheRef.current;
+    if (cache.promise && Date.now() - cache.at < 60_000) {
+      return cache.promise;
+    }
+
+    const promise = (async () => {
+      const allLoadedChats = [];
+      const seenIds = new Set();
+
+      for (let batch = 1; batch <= maxBatches; batch++) {
+        const response = await fetch(`/api/chats?page=${batch}&assignee_id=all&status=all`);
         if (!response.ok) {
-          console.warn(`⚠️ Error en página ${page}:`, response.status);
+          console.warn(`⚠️ Error en tanda ${batch}:`, response.status);
           break;
         }
 
         const data = await response.json();
-        
-        if (!data.success || !data.data || data.data.length === 0) {
-          console.log(`📄 No hay más datos en página ${page}`);
-          break;
-        }
+        if (!data.success) break;
 
-        console.log(`📥 Página ${page}: Cargados ${data.data.length} chats`);
-        allLoadedChats.push(...data.data);
+        (data.data || []).forEach(chat => {
+          if (!seenIds.has(chat.id)) {
+            seenIds.add(chat.id);
+            allLoadedChats.push(chat);
+          }
+        });
 
-        // IGNORAR lo que dice la API sobre paginación y continuar cargando
-        // Solo detener si recibimos 0 resultados
-        const receivedCount = data.data.length;
-        const requestedPerPage = 50;
-        
-        // Si recibimos 0 resultados, definitivamente no hay más
-        if (receivedCount === 0) {
-          console.log(`📄 No hay más datos (recibidos 0)`);
-          break;
-        }
-        
-        // Si recibimos menos de 50, puede que haya más, intentar al menos 2 páginas más
-        if (receivedCount < requestedPerPage) {
-          // Si es la primera página y recibimos menos de 50, continuar al menos 2 páginas más
-          if (page === 1 && receivedCount < requestedPerPage) {
-            console.log(`📄 Página 1: Recibidos ${receivedCount} < ${requestedPerPage}, pero continuando al menos 2 páginas más...`);
-            continue;
-          }
-          // Si ya intentamos varias páginas y seguimos recibiendo menos, puede que realmente no haya más
-          // Pero intentar al menos hasta la página 5
-          if (page < 5) {
-            console.log(`📄 Página ${page}: Recibidos ${receivedCount} < ${requestedPerPage}, pero continuando hasta página 5...`);
-            continue;
-          }
-          // Después de la página 5, si recibimos menos de 50, detener
-          if (page >= 5 && receivedCount < requestedPerPage) {
-            console.log(`📄 Después de página 5, recibidos ${receivedCount} < ${requestedPerPage}, deteniendo`);
-            break;
-          }
-        }
-        
-        // Si recibimos exactamente 50, definitivamente hay más
-        if (receivedCount === requestedPerPage) {
-          console.log(`➡️ Recibidos ${receivedCount} chats, continuando a página ${page + 1}...`);
-        }
+        if (!data.pagination?.has_more) break;
       }
 
-      console.log(`📊 Total de chats cargados: ${allLoadedChats.length}`);
       return allLoadedChats;
-    } catch (error) {
+    })().catch(error => {
       console.error('❌ Error loading all chats:', error);
-      return allLoadedChats; // Retornar lo que se haya cargado hasta el momento
-    }
+      allChatsCacheRef.current = { at: 0, promise: null };
+      return [];
+    });
+
+    allChatsCacheRef.current = { at: Date.now(), promise };
+    return promise;
   };
 
   // Función para buscar chats por cualquier término (nombre, teléfono, propiedad, mensaje, etc.)
@@ -581,7 +644,7 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
 
     try {
       // Cargar todos los chats disponibles
-      const allLoadedChats = await loadAllChats(20); // Cargar hasta 20 páginas (1000 chats)
+      const allLoadedChats = await loadAllChats(); // Cargar hasta 20 páginas (1000 chats)
       
       // Filtrar chats que coincidan con el query
       const foundChats = allLoadedChats.filter(chat => {
@@ -661,7 +724,7 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
 
     try {
       // Cargar todos los chats disponibles
-      const allLoadedChats = await loadAllChats(20);
+      const allLoadedChats = await loadAllChats();
 
       // Ahora buscar entre todos los chats cargados
       allLoadedChats.forEach(chat => {
@@ -1145,7 +1208,7 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
       <div className="flex items-center gap-1">
         {lead.propiedad_interes ? (
           <span 
-            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800 border border-purple-200 cursor-pointer hover:bg-purple-200 transition-colors max-w-[80px] truncate"
+            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800 border border-purple-200 cursor-pointer hover:bg-purple-200 transition-colors max-w-[160px] truncate"
             onClick={() => setIsEditing(true)}
             title={lead.propiedad_interes}
           >
@@ -1185,19 +1248,42 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
     );
   };
 
-  // Función para formatear la fecha
-  const formatDate = (timestamp) => {
-    if (!timestamp) return '';
-    // Chatwoot puede enviar timestamps en segundos o milisegundos
-    const date = new Date(timestamp > 1000000000000 ? timestamp : timestamp * 1000);
-    return new Intl.DateTimeFormat('es-AR', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date);
+  // Hora del último mensaje estilo WhatsApp: hoy → "14:32", ayer → "Ayer", última semana → "lun", resto → "12/10/26"
+  const formatChatTime = (timestampMs) => {
+    if (!timestampMs) return '';
+    const date = new Date(timestampMs);
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const dayMs = 24 * 60 * 60 * 1000;
+
+    if (timestampMs >= startOfToday) {
+      return new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit' }).format(date);
+    }
+    if (timestampMs >= startOfToday - dayMs) {
+      return 'Ayer';
+    }
+    if (timestampMs >= startOfToday - 6 * dayMs) {
+      return new Intl.DateTimeFormat('es-AR', { weekday: 'short' }).format(date).replace('.', '');
+    }
+    return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' }).format(date);
   };
+
+  // Texto de vista previa del último mensaje (con fallback para adjuntos)
+  const getLastMessagePreview = (chat) => {
+    const message = chat.last_non_activity_message;
+    if (!message) return 'Sin mensajes';
+    if (message.content && message.content.trim()) return message.content;
+    if (Array.isArray(message.attachments) && message.attachments.length > 0) {
+      const type = message.attachments[0]?.file_type;
+      if (type === 'image') return '📷 Foto';
+      if (type === 'audio') return '🎤 Audio';
+      if (type === 'video') return '🎥 Video';
+      return '📎 Archivo';
+    }
+    return 'Sin mensajes';
+  };
+
+  const stopPropagation = (e) => e.stopPropagation();
   
   // Obtener chats que coinciden con leads buscados
   const matchingChatsFromSearch = getMatchingChatsForSearchedLeads();
@@ -1217,14 +1303,7 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
     : localFilteredChats; // Sin búsqueda, mostrar todos los chats locales
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-500">Cargando chats...</p>
-        </div>
-      </div>
-    );
+    return <ChatListSkeleton />;
   }
 
   if (error) {
@@ -1333,7 +1412,7 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
       )}
 
       {/* Lista de chats - scrolleable */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+      <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
         {allFilteredChats.length === 0 && searchQuery ? (
           <div className="text-center py-8">
             {(isSearchingLeads || isSearchingChats) ? (
@@ -1364,97 +1443,71 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
           const isRead = isChatRead(chat);
           const isSelected = selectedChat?.id === chat.id;
           
+          const lead = getLeadForChat(chat);
+          const name = getContactName(chat);
+          const displayName = name || getContactPhone(chat) || getContactInfo(chat);
+          const lastMessageTime = formatChatTime(getLastMessageTimestamp(chat));
+          const lastMessageFromAgent = isLastMessageFromAgent(chat);
+          const hasTags = Boolean(lead);
+
           return (
-          <div 
-            key={chat.id} 
-              onClick={() => handleChatSelect(chat)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                // Toggle read/unread con clic derecho
-                if (isRead) {
-                  markAsUnread(chat.id);
-                } else {
-                  markAsRead(chat.id);
-                }
-              }}
-              className={`bg-white border-b border-gray-200 rounded-lg py-3 px-3 hover:shadow-sm transition-all cursor-pointer relative group ${
-                isSelected 
-                  ? 'border-gray-100 bg-green-50' 
-                : 'border-gray-200 hover:border-gray-300'
-              } ${!isRead ? 'bg-blue-50/30' : ''}`}
+          <div
+            key={chat.id}
+            onClick={() => handleChatSelect(chat)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              // Toggle read/unread con clic derecho
+              if (isRead) {
+                markAsUnread(chat.id);
+              } else {
+                markAsRead(chat.id);
+              }
+            }}
+            className={`group relative flex gap-3 rounded-lg px-3 py-2.5 cursor-pointer transition-colors border ${
+              isSelected
+                ? 'bg-green-50 border-green-200'
+                : !isRead
+                  ? 'bg-blue-50/40 border-transparent hover:bg-blue-50'
+                  : 'bg-white border-transparent hover:bg-gray-50'
+            }`}
           >
-              {/* Indicador de no leído - Punto azul en la esquina superior derecha */}
-              {!isRead && (
-                <div className="absolute top-2 right-2 w-2.5 h-2.5 bg-blue-500 rounded-full z-10"></div>
-              )}
-              
-            {/* Header del chat simplificado */}
-            <div className="flex justify-between items-center">
-                <div className="flex items-center flex-1 min-w-0">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center mr-2 flex-shrink-0 ${
-                    !isRead ? 'bg-blue-500' : 'bg-green-500'
-                  }`}>
-                  <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                  </svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  {(() => {
-                    const name = getContactName(chat);
-                    const phone = getContactPhone(chat);
-                    
-                    if (name && phone) {
-                      // Mostrar nombre y número
-                      return (
-                        <>
-                          <h3 className="font-medium text-gray-900 text-sm truncate">
-                            {name}
-                          </h3>
-                        
-                        </>
-                      );
-                    } else if (name) {
-                      // Solo nombre
-                      return (
-                        <h3 className="font-medium text-gray-900 text-sm truncate">
-                          {name}
-                        </h3>
-                      );
-                    } else if (phone) {
-                      // Solo número
-                      return (
-                        <h3 className="font-medium text-gray-900 text-sm truncate">
-                          {phone}
-                        </h3>
-                      );
-                    } else {
-                      // Fallback
-                      return (
-                        <h3 className="font-medium text-gray-900 text-sm truncate">
-                    {getContactInfo(chat)}
-                  </h3>
-                      );
-                    }
-                  })()}
-                </div>
+            <ChatAvatar
+              url={chat.avatar_url || chat.meta?.sender?.thumbnail}
+              name={name}
+              isRead={isRead}
+            />
+
+            <div className="flex-1 min-w-0">
+              {/* Fila 1: nombre + hora del último mensaje */}
+              <div className="flex items-baseline justify-between gap-2">
+                <h3 className={`text-sm truncate ${!isRead ? 'font-semibold text-gray-900' : 'font-medium text-gray-800'}`}>
+                  {displayName}
+                </h3>
+                {lastMessageTime && (
+                  <span className={`text-[11px] flex-shrink-0 tabular-nums ${!isRead ? 'text-blue-600 font-semibold' : 'text-gray-400'}`}>
+                    {lastMessageTime}
+                  </span>
+                )}
               </div>
-              
-              {/* Etiquetas y menú desplegable en la esquina derecha */}
-              <div className="flex items-center gap-1">
-                {(() => {
-                  const lead = getLeadForChat(chat);
-                  return (
-                    <>
-                      <SeguimientosCount lead={lead} />
-                      {lead?.toque_register && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
-                          {lead.toque_register}
-                        </span>
-                      )}
-                      <EditablePropiedadInteres lead={lead} />
-                      <ChatActionsMenu 
-                        chat={chat} 
-                        lead={lead} 
+
+              {/* Fila 2: vista previa del último mensaje + indicador de no leído */}
+              <div className="mt-0.5 flex items-center justify-between gap-2">
+                <p className={`text-xs truncate ${!isRead ? 'text-gray-700' : 'text-gray-500'}`}>
+                  {lastMessageFromAgent && (
+                    <span className="text-gray-400">Vos: </span>
+                  )}
+                  {getLastMessagePreview(chat)}
+                </p>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {!isRead && (
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" aria-label="No leído"></span>
+                  )}
+                  {/* Sin lead no hay fila de etiquetas: el menú va acá */}
+                  {!hasTags && (
+                    <div className="opacity-60 group-hover:opacity-100 transition-opacity" onClick={stopPropagation}>
+                      <ChatActionsMenu
+                        chat={chat}
+                        lead={lead}
                         isRead={isRead}
                         markAsRead={() => markAsRead(chat.id, getLastMessageTimestamp(chat))}
                         markAsUnread={() => markAsUnread(chat.id)}
@@ -1462,21 +1515,35 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
                         leadsMap={leadsMap}
                         setLeadsMap={setLeadsMap}
                       />
-                    </>
-                  );
-                })()}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Último mensaje y fecha simplificados */}
-            <div className="mt-1 flex justify-between items-center">
-              <div className="text-xs text-gray-500 truncate max-w-[200px]">
-                {chat.last_non_activity_message?.content || "No hay mensajes"}
-              </div>
-              
-              {chat.created_at && (
-                <div className="text-xs text-gray-400">
-                  {formatDate(chat.created_at.Date)}
+              {/* Fila 3: etiquetas del lead (propiedad, toque, seguimientos) + acciones */}
+              {hasTags && (
+                <div className="mt-1.5 flex items-center gap-1.5 min-w-0">
+                  <div className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden" onClick={stopPropagation}>
+                    <EditablePropiedadInteres lead={lead} />
+                    {lead.toque_register && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 flex-shrink-0">
+                        {lead.toque_register}
+                      </span>
+                    )}
+                    <SeguimientosCount lead={lead} />
+                  </div>
+                  <div className="flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity" onClick={stopPropagation}>
+                    <ChatActionsMenu
+                      chat={chat}
+                      lead={lead}
+                      isRead={isRead}
+                      markAsRead={() => markAsRead(chat.id, getLastMessageTimestamp(chat))}
+                      markAsUnread={() => markAsUnread(chat.id)}
+                      removeManualOverride={removeManualOverride}
+                      leadsMap={leadsMap}
+                      setLeadsMap={setLeadsMap}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -1487,7 +1554,7 @@ const ChatList = ({ onSelectChat, selectedChat, targetPhoneNumber }) => {
         
         {/* Botón "Cargar más" - Solo mostrar si no hay búsqueda activa */}
         {!searchQuery && pagination && pagination.has_more && (
-          <div className="flex justify-center py-4">
+          <div ref={loadMoreSentinelRef} className="flex justify-center py-4">
             <button
               onClick={loadMoreChats}
               disabled={loadingMore}

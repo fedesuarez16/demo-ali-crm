@@ -63,9 +63,8 @@ export const useChats = (defaultAssigneeId = null) => {
         params.append('status', activeFilters.status);
       }
       
-      // Agregar parámetros de paginación
+      // Paginación: cada página es una tanda de ~100 chats (4 páginas de Chatwoot en paralelo)
       params.append('page', page.toString());
-      params.append('per_page', '20');
       
       const queryString = params.toString();
       const url = `/api/chats?${queryString}`;
