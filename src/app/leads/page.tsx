@@ -19,7 +19,7 @@ import {
   updateLead,
   bulkReassignLeadEstado
 } from '../services/leadService';
-import { getAllPropiedadDirecciones } from '../services/propiedadesService';
+import { getNombresCampanas } from '../services/pautasService';
 import { exportLeadsToCSV } from '../utils/exportUtils';
 import { getKanbanColumns, saveKanbanColumns, saveColumnLabels, migrateColumnsFromLocalStorage, normalizeColumnName, getDistinctLeadEstados } from '../services/columnService';
 import { programarSeguimiento } from '../services/mensajeService';
@@ -136,8 +136,8 @@ export default function LeadsKanbanPage() {
       setTiposPropiedad(getUniquePropertyTypes());
       setMotivosInteres(getUniqueInterestReasons());
       
-      // Obtener direcciones de propiedades desde la tabla propiedades
-      const direcciones = await getAllPropiedadDirecciones();
+      // Campañas activas y desactivadas (tabla pautas): mismos nombres que /campanas-activas
+      const direcciones = await getNombresCampanas();
       setPropiedadesInteres(direcciones);
       
       setIsLoading(false);

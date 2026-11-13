@@ -14,7 +14,7 @@ import {
   getUniqueInterestReasons,
   updateLead
 } from '../../services/leadService';
-import { getAllPropiedadDirecciones } from '../../services/propiedadesService';
+import { getNombresCampanas } from '../../services/pautasService';
 import { programarSeguimiento } from '../../services/mensajeService';
 import { exportLeadsToCSV } from '../../utils/exportUtils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -156,8 +156,8 @@ export default function LeadsTablePage() {
       setTiposPropiedad(getUniquePropertyTypes());
       setMotivosInteres(getUniqueInterestReasons());
       
-      // Obtener direcciones de propiedades desde la tabla propiedades
-      const direcciones = await getAllPropiedadDirecciones();
+      // Campañas activas y desactivadas (tabla pautas): mismos nombres que /campanas-activas
+      const direcciones = await getNombresCampanas();
       setPropiedadesInteres(direcciones);
       
       setIsLoading(false);

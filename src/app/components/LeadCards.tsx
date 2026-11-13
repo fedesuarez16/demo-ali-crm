@@ -670,7 +670,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                                 {matchCount}
                               </div>
                             )}
-                            {((lead.seguimientos_count !== undefined && lead.seguimientos_count !== null && lead.seguimientos_count > 0) || true) && (
+                            {(
                               <div 
                                 className="absolute top-1 right-1 z-50 border border-gray-200 bg-gray-100 text-gray-500"
                                 style={{
@@ -691,7 +691,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                                   pointerEvents: 'none'
                                 }}
                               >
-                                {lead.seguimientos_count || 1}
+                                {lead.seguimientos_count ?? 0}
                               </div>
                             )}
                             
