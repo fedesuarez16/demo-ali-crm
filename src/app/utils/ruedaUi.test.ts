@@ -59,6 +59,14 @@ describe('ordenarMatches', () => {
     expect(ordenarMatches(arr).map((x) => x.id)).toEqual([2, 3, 1]);
     expect(arr.map((x) => x.id)).toEqual([1, 2, 3]);
   });
+
+  it('desempata por id asc: el orden no depende de cómo venga el array (empates de un mismo lote)', () => {
+    const t = '2026-11-13T23:10:31.898024+00:00';
+    const a = [m({ id: 256, score: 71, first_seen_at: t }), m({ id: 255, score: 71, first_seen_at: t }), m({ id: 257, score: 71, first_seen_at: t })];
+    const b = [m({ id: 257, score: 71, first_seen_at: t }), m({ id: 256, score: 71, first_seen_at: t }), m({ id: 255, score: 71, first_seen_at: t })];
+    expect(ordenarMatches(a).map((x) => x.id)).toEqual([255, 256, 257]);
+    expect(ordenarMatches(b).map((x) => x.id)).toEqual([255, 256, 257]);
+  });
 });
 
 describe('matchEsNuevo / resumenBadge', () => {

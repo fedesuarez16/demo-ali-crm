@@ -107,6 +107,7 @@ export async function GET(request: NextRequest) {
       .eq('bajo_umbral', false)
       .order('score', { ascending: false })
       .order('first_seen_at', { ascending: false })
+      .order('id', { ascending: true })
       .limit(1000);
     if (busquedaId !== null) q = q.eq('busqueda_id', busquedaId);
     if (propiedadId !== null) q = q.eq('propiedad_id', propiedadId);

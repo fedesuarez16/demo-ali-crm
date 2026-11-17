@@ -21,7 +21,9 @@ export function accionesDisponibles(estado: MatchEstado): { estados: MatchEstado
 /** score desc, first_seen_at desc. No muta. */
 export const ordenarMatches = (matches: RuedaMatch[]): RuedaMatch[] =>
   [...matches].sort(
-    (a, b) => b.score - a.score || Date.parse(b.first_seen_at) - Date.parse(a.first_seen_at),
+    // id asc desempata: los matches de un mismo lote comparten score y first_seen_at, y sin desempate
+    // el orden depende de cómo los devuelva Postgres (una fila recién actualizada vuelve última).
+    (a, b) => b.score - a.score || Date.parse(b.first_seen_at) - Date.parse(a.first_seen_at) || a.id - b.id,
   );
 
 export const matchEsNuevo = (m: Pick<RuedaMatch, 'estado'>): boolean => m.estado === 'nuevo';

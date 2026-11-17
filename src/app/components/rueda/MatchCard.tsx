@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Check, AlertTriangle, X, HelpCircle, ChevronDown, ExternalLink, Copy } from 'lucide-react';
 import type { MatchEstado, RuedaMatch } from '../../types';
 import { motivoIcono, matchEsNuevo, type MotivoIconoId } from '../../utils/ruedaUi';
@@ -55,6 +55,8 @@ export function MatchCard({ match, lado, onChange, casi = false }: Props) {
   const link = (p?.link ?? '').trim();
 
   const ejecutar = async (cambios: Parameters<typeof patchMatch>[1]) => {
+    // Cualquier acción explícita ya saca al match de "nuevo": no hace falta la revisión diferida.
+    revisionPendiente.current = false;
     setGuardando(true);
     setError(null);
     try {
@@ -66,11 +68,29 @@ export function MatchCard({ match, lado, onChange, casi = false }: Props) {
     }
   };
 
+  // Abrir un match nuevo lo marca como revisado, pero recién al CERRARLO (o al desmontar la card).
+  // Si se marcara al abrir, en la pestaña "Nuevos" (filtro estado='nuevo') el match sale de la lista
+  // y la card se desmonta: el desplegable "se abre y se cierra solo".
+  const revisionPendiente = useRef(false);
+
+  useEffect(() => {
+    const id = match.id;
+    return () => {
+      if (!revisionPendiente.current) return;
+      revisionPendiente.current = false;
+      void patchMatch(id, { via: 'apertura' }).catch(() => {});
+    };
+  }, [match.id]);
+
   const toggle = () => {
     const abrir = !abierto;
     setAbierto(abrir);
-    // Abrir un match nuevo lo marca como revisado (sin pasar a "usuario").
-    if (abrir && nuevo && !casi) void ejecutar({ via: 'apertura' });
+    if (abrir) {
+      if (nuevo && !casi) revisionPendiente.current = true;
+    } else if (revisionPendiente.current) {
+      revisionPendiente.current = false;
+      void ejecutar({ via: 'apertura' });
+    }
   };
 
   const copiar = async () => {
