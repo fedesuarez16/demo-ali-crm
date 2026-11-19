@@ -433,49 +433,35 @@ export const recalificarLead = async (leadId: string): Promise<boolean> => {
 export const getAllLeads = async (): Promise<Lead[]> => {
   try {
     const allLeads: any[] = [];
-    let from = 0;
-    const pageSize = 1000;
-    let hasMore = true;
-    
-    console.log('📥 Cargando todos los leads con paginación...');
-    
-    // Paginar para obtener todos los leads
-    while (hasMore) {
-      const to = from + pageSize - 1;
-      
-      const { data, error, count } = await getSupabase()
+    const pageSize = 1000; // máximo de filas por request en Supabase
+
+    const fetchPage = (from: number, withCount: boolean) =>
+      getSupabase()
         .from('leads')
-        .select('*', { count: 'exact' })
+        .select('*', withCount ? { count: 'exact' } : undefined)
         .order('created_at', { ascending: false })
-        .range(from, to);
-      
-      if (error) {
-        console.error('Error fetching leads from Supabase:', error.message);
-        // Si hay error, retornar lo que se haya cargado hasta ahora
-        break;
-      }
-      
-      if (data && data.length > 0) {
-        allLeads.push(...data);
-        console.log(`📥 Cargados ${allLeads.length} leads hasta ahora...`);
-        
-        // Si recibimos menos de pageSize, no hay más páginas
-        if (data.length < pageSize) {
-          hasMore = false;
-        } else {
-          from += pageSize;
+        .order('id', { ascending: false }) // desempate estable entre páginas
+        .range(from, from + pageSize - 1);
+
+    // Primera página con el total; el resto de las páginas se piden en paralelo
+    const first = await fetchPage(0, true);
+    if (first.error) {
+      console.error('Error fetching leads from Supabase:', first.error.message);
+    } else {
+      allLeads.push(...(first.data || []));
+      const total = first.count ?? allLeads.length;
+      const offsets: number[] = [];
+      for (let from = pageSize; from < total; from += pageSize) offsets.push(from);
+
+      const rest = await Promise.all(offsets.map(from => fetchPage(from, false)));
+      for (const page of rest) {
+        if (page.error) {
+          console.error('Error fetching leads page from Supabase:', page.error.message);
+          continue;
         }
-      } else {
-        hasMore = false;
-      }
-      
-      // Verificar si hay más datos usando el count
-      if (count !== null && allLeads.length >= count) {
-        hasMore = false;
+        allLeads.push(...(page.data || []));
       }
     }
-    
-    console.log(`✅ Total de leads cargados: ${allLeads.length}`);
     
     const normalized: Lead[] = allLeads.map(mapLeadRow);
     

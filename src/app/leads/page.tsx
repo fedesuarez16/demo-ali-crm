@@ -122,11 +122,12 @@ export default function LeadsKanbanPage() {
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      
-      // Simulamos una carga asíncrona para mostrar el efecto de carga
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const allLeads = await getAllLeads();
+
+      // Leads y campañas (tabla pautas) en paralelo
+      const [allLeads, direcciones] = await Promise.all([
+        getAllLeads(),
+        getNombresCampanas(),
+      ]);
       setLeads(allLeads);
       setFilteredLeads(allLeads);
       
@@ -137,7 +138,6 @@ export default function LeadsKanbanPage() {
       setMotivosInteres(getUniqueInterestReasons());
       
       // Campañas activas y desactivadas (tabla pautas): mismos nombres que /campanas-activas
-      const direcciones = await getNombresCampanas();
       setPropiedadesInteres(direcciones);
       
       setIsLoading(false);

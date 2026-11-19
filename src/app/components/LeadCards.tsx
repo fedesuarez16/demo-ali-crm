@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Lead, Property, LeadStatus } from '../types';
-import { findMatchingPropertiesForLead } from '../services/matchingService';
+import { isPropertyMatchingLead } from '../services/matchingService';
+import { getAllProperties } from '../services/propertyService';
 import LeadDetailSidebar from './LeadDetailSidebar';
 import { canonicalEstado } from '../services/columnService';
 
@@ -22,10 +23,45 @@ interface LeadCardsProps {
 /** min-w-[240px] + gap-2 (8px) en el flex del tablero */
 const KANBAN_COLUMN_SCROLL_STEP = 248;
 
+/** Cards que se renderizan por columna al inicio y en cada tanda al hacer scroll */
+const CARDS_PAGE_SIZE = 30;
+
+/**
+ * Marcador al final de una columna: cuando entra en pantalla pide la siguiente tanda.
+ * Se re-observa cada vez que cambia `remaining` para volver a disparar si sigue visible.
+ */
+const LoadMoreSentinel: React.FC<{ status: string; remaining: number; onShowMore: (status: string) => void }> = ({ status, remaining, onShowMore }) => {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some(entry => entry.isIntersecting)) onShowMore(status);
+      },
+      { rootMargin: '600px 0px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [status, remaining, onShowMore]);
+
+  return (
+    <div ref={ref} className="py-2 text-center">
+      <button
+        type="button"
+        onClick={() => onShowMore(status)}
+        className="text-[10px] text-slate-500 hover:text-slate-700"
+      >
+        Cargar más ({remaining})
+      </button>
+    </div>
+  );
+};
+
 const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEditLead, visibleColumns, columnColors = {}, columnLabels = {}, onSelectionChange, selectedLeadIds: externalSelectedIds, isSelectionMode: externalIsSelectionMode, onSelectionModeChange, onLeadDeleted }) => {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [matchingProperties, setMatchingProperties] = useState<Map<string, Property[]>>(new Map());
   const [isDraggingOver, setIsDraggingOver] = useState<Record<string, boolean>>({});
   const [internalSelectedIds, setInternalSelectedIds] = useState<Set<string>>(new Set());
   const [internalIsSelectionMode, setInternalIsSelectionMode] = useState(false);
@@ -118,18 +154,27 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
     }
   }, [leads, statusOrder]);
   
-  // Cargar propiedades coincidentes para todos los leads
-  useEffect(() => {
-    const loadMatchingProperties = async () => {
-      const matchesMap = new Map<string, Property[]>();
-      for (const lead of leads) {
-        const matches = await findMatchingPropertiesForLead(lead.id);
-        matchesMap.set(lead.id, matches);
-      }
-      setMatchingProperties(matchesMap);
-    };
-    loadMatchingProperties();
+  // Propiedades coincidentes por lead, calculadas en memoria.
+  // Antes se usaba findMatchingPropertiesForLead, que re-descargaba TODOS los leads de Supabase
+  // por cada lead (miles de requests en serie en cada cambio de la lista).
+  const matchingProperties = useMemo(() => {
+    const properties = getAllProperties();
+    const matchesMap = new Map<string, Property[]>();
+    for (const lead of leads) {
+      const matches = properties.filter(property => isPropertyMatchingLead(property, lead));
+      if (matches.length > 0) matchesMap.set(lead.id, matches);
+    }
+    return matchesMap;
   }, [leads]);
+
+  // Cantidad de cards renderizadas por columna (se amplía al hacer scroll)
+  const [visibleCountByStatus, setVisibleCountByStatus] = useState<Record<string, number>>({});
+  const showMoreInColumn = useCallback((status: string) => {
+    setVisibleCountByStatus(prev => ({
+      ...prev,
+      [status]: (prev[status] ?? CARDS_PAGE_SIZE) + CARDS_PAGE_SIZE,
+    }));
+  }, []);
 
   // Debe ejecutarse en todo render (antes de cualquier return): si no, al pasar de leads a 0 hooks React rompe
   const allColumnsToShow = useMemo(() => {
@@ -640,7 +685,7 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                     </div>
                   ) : (
                     <>
-                      {groupedLeads[status].map((lead: Lead) => {
+                      {groupedLeads[status].slice(0, visibleCountByStatus[status] ?? CARDS_PAGE_SIZE).map((lead: Lead) => {
                         const matchCount = matchingProperties.get(lead.id)?.length || 0;
                         const isSelected = selectedIds.has(lead.id);
                         
@@ -800,7 +845,15 @@ const LeadCards: React.FC<LeadCardsProps> = ({ leads, onLeadStatusChange, onEdit
                           </div>
                         );
                       })}
-                      
+
+                      {groupedLeads[status].length > (visibleCountByStatus[status] ?? CARDS_PAGE_SIZE) && (
+                        <LoadMoreSentinel
+                          status={status}
+                          remaining={groupedLeads[status].length - (visibleCountByStatus[status] ?? CARDS_PAGE_SIZE)}
+                          onShowMore={showMoreInColumn}
+                        />
+                      )}
+
                       {/* Área de drop adicional para llenar el espacio restante */}
                       <div className="flex-1 min-h-[100px]"></div>
                     </>
