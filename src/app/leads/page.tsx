@@ -21,7 +21,7 @@ import {
 } from '../services/leadService';
 import { getNombresCampanas } from '../services/pautasService';
 import { exportLeadsToCSV } from '../utils/exportUtils';
-import { getKanbanColumns, saveKanbanColumns, saveColumnLabels, migrateColumnsFromLocalStorage, normalizeColumnName, getDistinctLeadEstados } from '../services/columnService';
+import { getKanbanColumns, saveKanbanColumns, saveColumnLabels, migrateColumnsFromLocalStorage, normalizeColumnName, canonicalEstado } from '../services/columnService';
 import { programarSeguimiento } from '../services/mensajeService';
 import { getPlantillas, type PlantillaSeguimiento } from '../services/plantillasService';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -89,14 +89,10 @@ export default function LeadsKanbanPage() {
         // Primero intentar migrar desde localStorage si existe
         await migrateColumnsFromLocalStorage();
 
-        // Cargar columnas y estados distintos en paralelo
-        const [
-          { customColumns: loadedCustom, visibleColumns: loadedVisible, columnColors: loadedColors, columnLabels: loadedLabels },
-          rawEstados,
-        ] = await Promise.all([
-          getKanbanColumns(),
-          getDistinctLeadEstados(),
-        ]);
+        // Los estados distintos se derivan de los leads ya cargados (ver loadData),
+        // así no se descarga la tabla leads dos veces.
+        const { customColumns: loadedCustom, visibleColumns: loadedVisible, columnColors: loadedColors, columnLabels: loadedLabels } =
+          await getKanbanColumns();
 
         // Normalizar las columnas visibles
         const normalizedVisible = loadedVisible
@@ -107,7 +103,6 @@ export default function LeadsKanbanPage() {
         setVisibleColumns(normalizedVisible.length > 0 ? normalizedVisible : [...BASE_STATES]);
         setColumnColors(loadedColors);
         setColumnLabels(loadedLabels);
-        setDistinctEstados(rawEstados);
       } catch (error) {
         console.error('Error loading columns from Supabase:', error);
         // Fallback a valores por defecto (sin "frío")
@@ -130,6 +125,13 @@ export default function LeadsKanbanPage() {
       ]);
       setLeads(allLeads);
       setFilteredLeads(allLeads);
+
+      const estadosSet = new Set<string>();
+      for (const lead of allLeads) {
+        const canonical = canonicalEstado((lead.estado || '').toString().trim());
+        if (canonical) estadosSet.add(canonical);
+      }
+      setDistinctEstados(Array.from(estadosSet));
       
       // Cargar opciones para los filtros
       setZonas(getUniqueZones());
