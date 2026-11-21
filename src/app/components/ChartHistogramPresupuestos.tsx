@@ -13,7 +13,7 @@ const USD_FORMATTER = new Intl.NumberFormat('es-AR', {
 });
 
 const chartConfig: ChartConfig = {
-  count: { label: 'Consultas', color: '#10B981' },
+  count: { label: 'Consultas', color: '#2a78d6' },
 };
 
 export interface HistogramBin {
@@ -59,7 +59,7 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
       <div className="mb-1 flex items-center gap-2 font-medium text-slate-800">
         <span
           className="inline-block h-2 w-2 rounded-full"
-          style={{ background: '#10B981' }}
+          style={{ background: '#2a78d6' }}
           aria-hidden="true"
         />
         {USD_FORMATTER.format(datum.from)} – {USD_FORMATTER.format(datum.to)}
@@ -92,19 +92,13 @@ export function ChartHistogramPresupuestos({
   return (
     <ChartContainer
       config={chartConfig}
-      className={`h-[320px] w-full${className ? ` ${className}` : ''}`}
+      className={`h-[320px] w-full bg-transparent p-0${className ? ` ${className}` : ''}`}
     >
       <BarChart
         data={chartData}
         margin={{ top: 16, right: 16, left: 0, bottom: 8 }}
         barCategoryGap="12%"
       >
-        <defs>
-          <linearGradient id="histogram-presupuestos-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#10B981" stopOpacity={0.95} />
-            <stop offset="100%" stopColor="#10B981" stopOpacity={0.55} />
-          </linearGradient>
-        </defs>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
         <XAxis
           dataKey="tick"
@@ -128,7 +122,7 @@ export function ChartHistogramPresupuestos({
           cursor={{ fill: 'rgba(148, 163, 184, 0.10)' }}
           content={<CustomTooltip />}
         />
-        <Bar dataKey="count" fill="url(#histogram-presupuestos-fill)" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="count" fill="#2a78d6" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ChartContainer>
   );

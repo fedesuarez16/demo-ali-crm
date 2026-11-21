@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useId, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
 import { ChartContainer } from '@/components/ui/chart';
 import type { ChartConfig } from '@/components/ui/chart';
@@ -8,15 +8,15 @@ import { canonicalEstado } from '@/app/services/columnService';
 import type { Lead } from '@/app/types';
 
 const FALLBACK_COLORS: Record<string, string> = {
-  'frío':     '#4169E1',
-  'tibio':    '#FFA500',
-  'caliente': '#FF4500',
-  'llamada':  '#10B981',
-  'visita':   '#3B82F6',
-  'vender':   '#F59E0B',
+  'frío':     '#2a78d6',
+  'tibio':    '#eda100',
+  'caliente': '#e34948',
+  'llamada':  '#1baf7a',
+  'visita':   '#6250d6',
+  'vender':   '#eb6834',
 };
 
-const FALLBACK_CUSTOM_COLOR = '#8B5CF6';
+const FALLBACK_CUSTOM_COLOR = '#94a3b8';
 
 const BASE_ORDER: readonly string[] = [
   'frío', 'tibio', 'caliente', 'llamada', 'visita', 'vender',
@@ -65,7 +65,6 @@ interface BarDatum {
   count:     number;
   percent:   number;
   color:     string;
-  gradientId: string;
 }
 
 export interface ChartBarLeadsPorEstadoProps {
@@ -123,9 +122,6 @@ export function ChartBarLeadsPorEstado({
   estadoOrder,
   className,
 }: ChartBarLeadsPorEstadoProps) {
-  const reactId = useId();
-  const gradientPrefix = `bar-gradient-${reactId.replace(/[:]/g, '')}`;
-
   const data = useMemo<BarDatum[]>(() => {
     const counts = new Map<string, number>();
 
@@ -149,10 +145,9 @@ export function ChartBarLeadsPorEstado({
           count,
           percent:    total > 0 ? count / total : 0,
           color,
-          gradientId: `${gradientPrefix}-${k.replace(/[^a-zA-Z0-9]/g, '_')}`,
         };
       });
-  }, [leads, columnColors, estadoOrder, gradientPrefix]);
+  }, [leads, columnColors, estadoOrder]);
 
   if (data.length === 0) {
     return (
@@ -170,18 +165,10 @@ export function ChartBarLeadsPorEstado({
     return (
       <ChartContainer
         config={chartConfig}
-        className={`w-full${className ? ` ${className}` : ''}`}
+        className={`w-full bg-transparent p-0${className ? ` ${className}` : ''}`}
         style={{ height: data.length * rowHeight + 32 }}
       >
         <BarChart data={data} layout="vertical" margin={{ top: 4, right: 24, left: 0, bottom: 4 }} barCategoryGap={6}>
-          <defs>
-            {data.map(d => (
-              <linearGradient key={d.gradientId} id={d.gradientId} x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%"   stopColor={d.color} stopOpacity={0.55} />
-                <stop offset="100%" stopColor={d.color} stopOpacity={0.95} />
-              </linearGradient>
-            ))}
-          </defs>
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
           <XAxis
             type="number"
@@ -203,9 +190,9 @@ export function ChartBarLeadsPorEstado({
             cursor={{ fill: 'rgba(148, 163, 184, 0.10)' }}
             content={<CustomTooltip />}
           />
-          <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+          <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={22}>
             {data.map((d) => (
-              <Cell key={d.estado} fill={`url(#${d.gradientId})`} />
+              <Cell key={d.estado} fill={d.color} />
             ))}
           </Bar>
         </BarChart>
@@ -216,20 +203,12 @@ export function ChartBarLeadsPorEstado({
   return (
     <ChartContainer
       config={chartConfig}
-      className={`h-[320px] w-full${className ? ` ${className}` : ''}`}
+      className={`h-[320px] w-full bg-transparent p-0${className ? ` ${className}` : ''}`}
     >
       <BarChart
         data={data}
         margin={{ top: 16, right: 16, left: 0, bottom: 16 }}
       >
-        <defs>
-          {data.map(d => (
-            <linearGradient key={d.gradientId} id={d.gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor={d.color} stopOpacity={0.95} />
-              <stop offset="100%" stopColor={d.color} stopOpacity={0.55} />
-            </linearGradient>
-          ))}
-        </defs>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
         <XAxis
           dataKey="label"
@@ -252,9 +231,9 @@ export function ChartBarLeadsPorEstado({
           cursor={{ fill: 'rgba(148, 163, 184, 0.10)' }}
           content={<CustomTooltip />}
         />
-        <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+        <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={56}>
           {data.map((d) => (
-            <Cell key={d.estado} fill={`url(#${d.gradientId})`} />
+            <Cell key={d.estado} fill={d.color} />
           ))}
         </Bar>
       </BarChart>
