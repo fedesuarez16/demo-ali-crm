@@ -9,6 +9,7 @@ import {
   Users,
   MessageSquare,
   Clock,
+  CalendarDays,
   Building2,
   SearchCheck,
   Megaphone,
@@ -68,6 +69,7 @@ const menuCategories: MenuCategory[] = [
       { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
       { name: 'Gastos', path: '/gastos', icon: Wallet },
       { name: 'Leads', path: '/leads', icon: Users },
+      { name: 'Calendario', path: '/calendario', icon: CalendarDays },
     ],
   },
   {

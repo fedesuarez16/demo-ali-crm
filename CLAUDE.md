@@ -30,6 +30,11 @@ OPENAI_API_KEY                 # used by /api/ai-chat and embeddings
 OPENAI_EMBEDDING_MODEL         # optional, default text-embedding-3-small (1536 dims)
 ANTHROPIC_API_KEY              # server-only, regular API key (sk-ant-api...); /api/leads/[id]/reanalizar re-extracts lead data from the Chatwoot chat
 ANTHROPIC_EXTRACTION_MODEL     # optional, default claude-haiku-5-5
+GOOGLE_CLIENT_ID               # OAuth client (Web) del proyecto GCP del Workspace; consent screen "Internal"
+GOOGLE_CLIENT_SECRET
+GOOGLE_REDIRECT_URI            # optional, default <origin>/api/calendario/google/callback (debe estar registrado en GCP)
+CALENDARIO_SECRET              # server-only, >=32 chars; cifra los tokens de Google y firma el state OAuth. Cambiarlo obliga a reconectar
+CALENDARIO_API_TOKEN           # server-only; Bearer de n8n para /api/calendario/* (credencial n8n "CRM Team Ali - Calendario API")
 WHATSAPP_ACCESS_TOKEN          # Meta Cloud API (optional features)
 WHATSAPP_PHONE_NUMBER_ID
 REDIS_HOST / REDIS_PORT / REDIS_PASSWORD / REDIS_DB
@@ -101,7 +106,16 @@ The CRM has no per-user accounts. `/login` posts to `/api/crm-auth`, which check
 
 `/dashboard`, `/gastos` and `/api/gastos/**` share one password (`DASHBOARD_PASSWORD`), independent of the CRM login. `src/middleware.ts` verifies an HMAC-signed httpOnly cookie (`panel_session`, 12 h, see `src/lib/panelAuth.ts`) and redirects pages to `/acceso-panel?next=`; APIs get 401. The cookie is issued by `POST /api/panel-auth` only to clients with a valid `crm_session`; one login opens both sections. To protect another route, add it to `PANEL_SECTIONS` (and the middleware matcher if it's an API).
 
-### RLS is open
+### Google Calendar: the CRM owns OAuth, n8n calls the CRM
+
+People link their Google Workspace calendar from `/calendario`. The flow goes `/api/calendario/google/conectar` → Google → `/api/calendario/google/callback`. Tokens are stored AES-GCM-encrypted in `calendario_personas`. The bot never holds Google credentials. The `RAG Agent` tools `consultar_disponibilidad` and `agendar_evento` call `/api/calendario/disponibilidad` and `/api/calendario/eventos` with `Authorization: Bearer CALENDARIO_API_TOKEN`.
+
+Event types (`calendario_tipos_evento`) are configurable: duración, buffer, anticipación, horario per weekday in local time, and responsable. The bot can only book types with `agendable_por_bot`. The slot math lives in the pure `src/lib/calendario/disponibilidad.ts`, which is tested. If the calendar fails, the prompt falls back to the old flow ("agendo llamada1" without an exact time).
+
+### RLS is open (except `calendario_personas`)
+
+`calendario_personas` has RLS **enabled with NO policies** on purpose, because it holds Google tokens. Only the service role (server routes) can touch it. Never add a `USING (true)` policy there.
+
 
 All migrations create `FOR ALL USING (true) WITH CHECK (true)` policies — this is intentional for a single-tenant internal CRM using the anon key. Do not add user-scoped policies without coordinating a real auth layer.
 
